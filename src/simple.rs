@@ -184,8 +184,9 @@ fn pad10_1(x: usize, m: usize) -> Vec<bool> {
 }
 
 fn xor_long(s: &mut [bool], other: &[bool]){
-    for (si, oi) in s.iter_mut().zip(other) {
-        *si ^= *oi;
+    let n = s.len().min(other.len());
+    for i in 0..n {
+        s[i] ^= other[i];
     }
 }
 fn sponge_absorb(chunks: Vec<&[bool]>, s: &mut [bool; B]) {
@@ -206,10 +207,19 @@ fn sponge_squeze(d: usize, r: usize, z: &mut Vec<bool>, s: &mut [bool; B]) {
     }
 }
 
+fn chunks(r: usize, bs: &Vec<bool>) -> Vec<&[bool]> {
+    let mut res = Vec::new();
+    let n = bs.len() / r;
+    for i in 0..n {
+        res.push(&bs[r*i..r*(i+1)]);
+    }
+    return res
+}
+
 fn sponge(r: usize, bs: &mut Vec<bool>, d: usize) {
     let m = bs.len();
     bs.extend(pad10_1(r,m));
-    let chunks = bs.chunks(r).collect::<Vec<_>>();
+    let chunks = chunks(r, bs);
     let mut s = [false; B];
     sponge_absorb(chunks, &mut s);
     bs.clear();
