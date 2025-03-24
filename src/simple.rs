@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{collections::VecDeque, ops::{Index, IndexMut}};
+use std::collections::VecDeque;
 
 const L: usize = 6;
 const W: usize = 1<<L;
@@ -22,17 +22,13 @@ impl Default for StateArray {
     }
 }
 
-impl Index<(u8, u8, usize)> for StateArray {
-    type Output := bool;
-
-    fn index(&self, index: (u8, u8, usize)) -> &Self::Output {
+impl  StateArray {
+    fn index(&self, index: (u8, u8, usize)) -> &bool {
         let (x,y,z) = index;
         &self.0[W*(5*(y as usize) + x as usize) + z]
     }
-}
 
-impl IndexMut<(u8, u8, usize)> for StateArray {
-    fn index_mut(&mut self, index: (u8, u8, usize)) -> &mut Self::Output {
+    fn index_mut(&mut self, index: (u8, u8, usize)) -> &mut bool {
         let (x,y,z) = index;
         &mut self.0[W*(5*(y as usize) + x as usize) + z]
     }
@@ -40,7 +36,7 @@ impl IndexMut<(u8, u8, usize)> for StateArray {
 
 fn theta(a: &StateArray) -> StateArray {
     fn theta_c(a: &StateArray, x: u8, z: usize) -> bool {
-        a[(x,0,z)] ^ a[(x,1,z)] ^ a[(x,2,z)] ^ a[(x,3,z)] ^ a[(x,4,z)]
+        a.index((x,0,z)) ^ a.index((x,1,z)) ^ a.index((x,2,z)) ^ a.index((x,3,z)) ^ a.index((x,4,z))
     }
     fn theta_d(a: &StateArray, x: u8, z: usize) -> bool {
         let x1 = (x as i8 - 1).rem_euclid(5) as u8;
@@ -54,7 +50,7 @@ fn theta(a: &StateArray) -> StateArray {
             for y in 0..5 {
                 #[inline] fn theta_apply_a_inner2(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
                     for z in 0..W {
-                        res[(x,y,z)] = a[(x,y,z)] ^ theta_d(a, x, z);
+                        *res.index_mut((x,y,z)) = a.index((x,y,z)) ^ theta_d(a, x, z);
                     }
                 } theta_apply_a_inner2(res, &a, x, y);
             }
@@ -74,7 +70,7 @@ fn rho(a: &StateArray) -> StateArray {
         fn rho_inner(res: &mut StateArray, a: &StateArray, t: usize, x: u8, y: u8) {
             for z in 0..W {
                 let z2 = (z as isize - rho_offset(t)).rem_euclid(W as isize) as usize;
-                res[(x,y,z)] = a[(x,y,z2)];
+                *res.index_mut((x,y,z)) = *a.index((x,y,z2));
             }
         }
         rho_inner(&mut res, a, t, x, y);
@@ -94,7 +90,7 @@ fn pi(a: &StateArray) -> StateArray {
                     for z in 0..W {
                         let x2 = (x + 3*y) % 5;
                         let y2 = x;
-                        res[(x,y,z)] = a[(x2,y2,z)];
+                        *res.index_mut((x,y,z)) = *a.index((x2,y2,z));
                     }
                 }
                 pi_inner2(res, a, x, y);
@@ -116,7 +112,8 @@ fn chi(a: &StateArray) -> StateArray {
                     for z in 0..W {
                         let x1 = (x+1)%5;
                         let x2 = (x+2)%5;
-                        res[(x,y,z)] = a[(x,y,z)] ^ ((a[(x1,y,z)] ^ true) & a[(x2,y,z)]);
+                        *res.index_mut((x,y,z)) = a.index((x,y,z)) ^
+                            ((a.index((x1,y,z)) ^ true) & a.index((x2,y,z)));
                     }
                 }
                 chi_inner2(res, a, x, y);
@@ -151,7 +148,7 @@ fn iota_rc_init(ir: usize, rc: &mut [bool; W]) {
 }
 fn iota_a(res: &mut StateArray, a: &StateArray, rc: &[bool; W]){
     for z in 0..W {
-        res[(0,0,z)] = a[(0,0,z)] ^ rc[z];
+        *res.index_mut((0,0,z)) = a.index((0,0,z)) ^ rc[z];
     }
 }
 fn iota(ir: usize, a: &StateArray) -> StateArray {
