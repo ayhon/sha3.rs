@@ -1,12 +1,17 @@
 #![allow(dead_code)]
 
-use std::{collections::VecDeque, iter::repeat, ops::{Index, IndexMut}};
+use std::{collections::VecDeque, ops::{Index, IndexMut}};
 
 const L: usize = 6;
 const W: usize = 1<<L;
 const B: usize = 5*5*W;
 const NR: usize = 24;
 
+fn add_to_vec<'a, A: Copy>(dst: &'a mut Vec<A>, src: &'a [A], n: usize) {
+    for i in 0..n {
+        dst.push(src[i]);
+    }
+}
 
 #[derive(Clone)]
 struct StateArray([bool; B]);
@@ -175,12 +180,18 @@ fn keccak_p(s: &mut [bool; B]) {
 
 fn pad10_1(x: usize, m: usize) -> Vec<bool> {
     let j = (- (m as isize) - 2).rem_euclid(x as isize);
-    return [true].into_iter()
-                 .chain(
-                    repeat(false).take(j as usize)
-                 )
-                 .chain([true])
-                 .collect();
+    let mut res = vec![true];
+    for _ in 0..j {
+        res.push(false);
+    }
+    res.push(true);
+    return res;
+    // return [true].into_iter()
+    //              .chain(
+    //                 repeat(false).take(j as usize)
+    //              )
+    //              .chain([true])
+    //              .collect();
 }
 
 fn xor_long(s: &mut [bool], other: &[bool]){
@@ -197,7 +208,8 @@ fn sponge_absorb(chunks: Vec<&[bool]>, s: &mut [bool; B]) {
 }
 fn sponge_squeze(d: usize, r: usize, z: &mut Vec<bool>, s: &mut [bool; B]) {
     loop {
-        z.extend(s.iter().take(r));
+        // z.extend(s.iter().take(r));
+        add_to_vec::<bool>(z, s, r);
         if d <= z.len() {
             z.truncate(d);
             break
