@@ -192,7 +192,7 @@ fn pad10_1(x: usize, m: usize) -> Vec<bool> {
 }
 
 fn xor_long(s: &mut [bool], other: &[bool]){
-    let n = s.len().min(other.len());
+    let n = if s.len() < other.len() { s.len() } else { other.len() };
     for i in 0..n {
         s[i] ^= other[i];
     }
