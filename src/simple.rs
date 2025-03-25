@@ -8,9 +8,10 @@ const B: usize = 5*5*W;
 const NR: usize = 24;
 
 fn add_to_vec<'a, A: Copy>(dst: &'a mut Vec<A>, src: &'a [A], n: usize) {
-    let mut iter = 0..n;
-    while let Some(i) = iter.next() {
+    let mut i= 0;
+    while i < n {
         dst.push(src[i]);
+        i += 1;
     }
 }
 
@@ -63,19 +64,23 @@ fn theta(a: &StateArray) -> StateArray {
         binxor(theta_c(a,x1,z), theta_c(a, x2, z2))
     }
     let mut res = StateArray::default();
-    let mut iter = 0..5;
-    while let Some(x) =  iter.next() {
+    let mut x = 0;
+    while x < 5 {
         #[inline] fn theta_apply_a_inner(res: &mut StateArray, a: &StateArray, x: u8){
-            let mut iter = 0..5;
-            while let Some(y) = iter.next() {
+            
+            let mut y = 0;
+            while y < 5 {
                 #[inline] fn theta_apply_a_inner2(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
-                    let mut iter = 0..W;
-                    while let Some(z) =  iter.next() {
+                    let mut z = 0;
+                    while z < W {
                         *res.index_mut((x,y,z)) = binxor(*a.index((x,y,z)), theta_d(a, x, z));
+                        z += 1;
                     }
                 } theta_apply_a_inner2(res, &a, x, y);
+                y += 1;
             }
         } theta_apply_a_inner(&mut res, &a, x);
+        x += 1;
     }
     return res;
 }
@@ -86,81 +91,91 @@ fn rho_offset(t: usize) -> isize {
 fn rho(a: &StateArray) -> StateArray {
     let (mut x, mut y) = (1,0);
     let mut res = a.clone();
-    let mut iter = 0..24;
-    while let Some( t ) = iter.next() {
+    let mut t = 0;
+    while t < 24 {
         #[inline]
         fn rho_inner(res: &mut StateArray, a: &StateArray, t: usize, x: u8, y: u8) {
-            let mut iter = 0..W;
-            while let Some( z ) = iter.next() {
+            let mut z = 0;
+            while z < W {
                 let z2 = (z as isize - rho_offset(t)).rem_euclid(W as isize) as usize;
                 *res.index_mut((x,y,z)) = *a.index((x,y,z2));
+                 z  += 1;
             }
         }
         rho_inner(&mut res, a, t, x, y);
         (x,y) = (y, (2*x + 3*y) % 5);
+        t  += 1;
     }
     return res
 }
 
 fn pi(a: &StateArray) -> StateArray {
     let mut res = a.clone();
-    let mut iter = 0..5;
-    while let Some( x ) = iter.next() {
+    let mut x = 0;
+    while x < 5 {
         #[inline]
         fn pi_inner(res: &mut StateArray, a:&StateArray, x: u8){
-            let mut iter = 0..5;
-            while let Some( y ) = iter.next() {
+            let mut y = 0;
+            while y < 5 {
                 #[inline]
                 fn pi_inner2(res: &mut StateArray, a:&StateArray, x: u8, y: u8){
-                    let mut iter = 0..W;
-                    while let Some( z ) = iter.next() {
+                    let mut z = 0;
+                    while z < W {
                         let x2 = (x + 3*y) % 5;
                         let y2 = x;
                         *res.index_mut((x,y,z)) = *a.index((x2,y2,z));
+                        z += 1;
                     }
                 }
                 pi_inner2(res, a, x, y);
+                y += 1;
             }
         }
         pi_inner(&mut res, a, x);
+        x += 1;
     }
     return res;
 }
 
 fn chi(a: &StateArray) -> StateArray {
     let mut res = a.clone();
-    let mut iter = 0..5;
-    while let Some( x ) = iter.next() {
+    let mut x = 0;
+    while x < 5 {
         #[inline]
         fn chi_inner(res: &mut StateArray, a: &StateArray, x: u8){
-            let mut iter = 0..5;
-            while let Some( y ) = iter.next() {
+            let mut y = 0;
+            while y < 5 {
                 #[inline]
                 fn chi_inner2(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
-                    let mut iter = 0..W;
-                    while let Some( z ) = iter.next() {
+                    let mut z = 0;
+                    while z < W {
                         let x1 = (x+1)%5;
                         let x2 = (x+2)%5;
                         *res.index_mut((x,y,z)) = binxor(*a.index((x,y,z)),
                             binxor(*a.index((x1,y,z)), true) & a.index((x2,y,z)));
+                        z += 1;
                     }
                 }
                 chi_inner2(res, a, x, y);
+                y += 1;
             }
         }
         chi_inner(&mut res, a, x);
+        x += 1;
     }
     return res;
 }
 
 fn iota_rc_loop(t: usize, r: &mut VecDeque<bool>){
-    for _ in 1..=t {
+    let mut i = 1;
+    while i <= t {
         r.push_front(false);
         r[0] = binxor(r[0], r[8]);
         r[4] = binxor(r[4], r[8]);
         r[5] = binxor(r[5], r[8]);
         r[6] = binxor(r[6], r[8]);
         r.pop_back();
+        i += 1;
     }
 }
 
@@ -173,16 +188,18 @@ fn iota_rc_point(t: usize) -> bool {
 }
 
 fn iota_rc_init(ir: usize, rc: &mut [bool; W]) {
-    let mut iter = 0..=L;
-    while let Some( j ) = iter.next() {
+    let mut j = 0;
+    while j < L {
         rc[(1<<j) - 1] = iota_rc_point(j + 7*ir);
+        j += 1;
     }
 }
 
 fn iota_a(res: &mut StateArray, a: &StateArray, rc: &[bool; W]){
-    let mut iter = 0..W;
-    while let Some( z ) = iter.next() {
+    let mut z = 0;
+    while z < W {
         *res.index_mut((0,0,z)) = binxor(*a.index((0,0,z)),rc[z]);
+        z += 1;
     }
 }
 
@@ -204,18 +221,22 @@ fn round(a: &mut StateArray, ir: usize) {
 
 fn keccak_p(s: &mut [bool; B]) {
     let mut a = StateArray(*s);
-    for ir in 0..24 {
+    let mut ir = 0;
+    while ir < 24 {
         round(&mut a, ir);
+        ir += 1;
     }
     *s = a.0;
 }
 
 fn pad10_1(x: usize, m: usize) -> Vec<bool> {
     let j = ((x as isize - 1) + (m as isize) - 2).rem_euclid(x as isize);
-    let mut res = vec![true];
-    let mut iter = 0..j;
-    while let Some( _ ) = iter.next() {
+    let mut res = Vec::new();
+    res.push(true);
+    let mut i = 0;
+    while i < j {
         res.push(false);
+        i += 1;
     }
     res.push(true);
     return res;
@@ -224,19 +245,21 @@ fn pad10_1(x: usize, m: usize) -> Vec<bool> {
 fn xor_long(s: &mut [bool], other: &[bool]){
     // TODO: Remove once fixed in Aeneas
     let n = if s.len() < other.len() { s.len() } else { other.len() };
-    let mut iter = 0..n;
-    while let Some( i ) = iter.next() {
+    let mut i = 0;
+    while i < n {
         s[i] = binxor(s[i], other[i]);
+        i += 1;
     }
 }
 
 fn sponge_absorb(bs: &Vec<bool>, r: usize, s: &mut [bool; B]) {
     let n = bs.len() / r;
-    let mut iter = 0..n;
-    while let Some( i ) = iter.next() {
+    let mut i = 0;
+    while i < n {
         let chunk = &bs[r*i..r*(i+1)];
         xor_long(s, chunk);
-        keccak_p(s)
+        keccak_p(s);
+        i += 1;
     }
 }
 
