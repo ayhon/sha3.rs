@@ -1,10 +1,8 @@
 #![allow(dead_code)]
 
-use std::collections::VecDeque;
-
-const L: usize = 6;
-const W: usize = 1<<L;
-const B: usize = 5*5*W;
+const L:  usize = 6;
+const W:  usize = 1<<L;
+const B:  usize = 5*5*W;
 const NR: usize = 24;
 
 fn add_to_vec<'a, A: Copy>(dst: &'a mut Vec<A>, src: &'a [A], n: usize) {
@@ -19,13 +17,27 @@ fn binxor(a: bool, b: bool) -> bool {
     (a && !b) || (b && !a)
 }
 
+fn rem_euclid_i8(a: i8, b: i8) -> i8 {
+    let a = a % b;
+    if a < 0 { if b < 0 { a - b } else { a + b } } else { a }
+}
+fn rem_euclid_isize(a: isize, b: isize) -> isize {
+    let a = a % b;
+    if a < 0 { if b < 0 { a - b } else { a + b } } else { a }
+}
 
-#[derive(Clone)]
+
 struct StateArray([bool; B]);
 
 impl Default for StateArray {
     fn default() -> Self {
         Self([false; B])
+    }
+}
+
+impl Clone for StateArray {
+    fn clone(&self) -> Self {
+        Self(self.0)
     }
 }
 
@@ -58,9 +70,9 @@ fn theta(a: &StateArray) -> StateArray {
         )
     }
     fn theta_d(a: &StateArray, x: u8, z: usize) -> bool {
-        let x1 = (x as i8 - 1).rem_euclid(5) as u8;
-        let x2 = (x       + 1).rem_euclid(5);
-        let z2 = (z as isize - 1).rem_euclid(W as isize) as usize;
+        let x1 = rem_euclid_i8(x as i8 - 1,5) as u8;
+        let x2 = (x + 1) % 5;
+        let z2 = rem_euclid_isize(z as isize - 1, W as isize) as usize;
         binxor(theta_c(a,x1,z), theta_c(a, x2, z2))
     }
     let mut res = StateArray::default();
@@ -97,7 +109,7 @@ fn rho(a: &StateArray) -> StateArray {
         fn rho_inner(res: &mut StateArray, a: &StateArray, t: usize, x: u8, y: u8) {
             let mut z = 0;
             while z < W {
-                let z2 = (z as isize - rho_offset(t)).rem_euclid(W as isize) as usize;
+                let z2 = rem_euclid_isize(z as isize - rho_offset(t), W as isize) as usize;
                 *res.index_mut((x,y,z)) = *a.index((x,y,z2));
                  z  += 1;
             }
@@ -152,7 +164,7 @@ fn chi(a: &StateArray) -> StateArray {
                         let x1 = (x+1)%5;
                         let x2 = (x+2)%5;
                         *res.index_mut((x,y,z)) = binxor(*a.index((x,y,z)),
-                            binxor(*a.index((x1,y,z)), true) & a.index((x2,y,z)));
+                            binxor(*a.index((x1,y,z)), true) && *a.index((x2,y,z)));
                         z += 1;
                     }
                 }
@@ -166,25 +178,27 @@ fn chi(a: &StateArray) -> StateArray {
     return res;
 }
 
-fn iota_rc_loop(t: usize, r: &mut VecDeque<bool>){
-    let mut i = 1;
-    while i <= t {
-        r.push_front(false);
-        r[0] = binxor(r[0], r[8]);
-        r[4] = binxor(r[4], r[8]);
-        r[5] = binxor(r[5], r[8]);
-        r[6] = binxor(r[6], r[8]);
-        r.pop_back();
-        i += 1;
-    }
-}
+// const IOTA_RC_POINTS: [u64; 4] = [0x018d17fe09e5ab0e, 0x46cdf47b76a752a4, 0xc59cc786e87afbb0, 0xacad2037c9c0258e];
+const IOTA_RC_POINTS: [bool; 255] = [true, false, false, false, false, false, false, false, true, false, true, true, false, false, false, true, true, true,
+ true, false, true, false, false, false, false, true, true, true, true, true, true, true, true, false, false, true,
+ false, false, false, false, true, false, true, false, false, true, true, true, true, true, false, true, false, true,
+ false, true, false, true, true, true, false, false, false, false, false, true, true, false, false, false, true, false,
+ true, false, true, true, false, false, true, true, false, false, true, false, true, true, true, true, true, true,
+ false, true, true, true, true, false, false, true, true, false, true, true, true, false, true, true, true, false,
+ false, true, false, true, false, true, false, false, true, false, true, false, false, false, true, false, false, true,
+ false, true, true, false, true, false, false, false, true, true, false, false, true, true, true, false, false, true,
+ true, true, true, false, false, false, true, true, false, true, true, false, false, false, false, true, false, false,
+ false, true, false, true, true, true, false, true, false, true, true, true, true, false, true, true, false, true, true,
+ true, true, true, false, false, false, false, true, true, false, true, false, false, true, true, false, true, false,
+ true, true, false, true, true, false, true, false, true, false, false, false, false, false, true, false, false, true,
+ true, true, false, true, true, false, false, true, false, false, true, false, false, true, true, false, false, false,
+ false, false, false, true, true, true, false, true, false, false, true, false, false, false, true, true, true, false,
+ false, false];
 
 fn iota_rc_point(t: usize) -> bool {
     let t = t % 255;
-    if t == 0 { return true; }
-    let mut r = VecDeque::from([true, false, false, false, false, false, false, false]);
-    iota_rc_loop(t, &mut r);
-    return r[0];
+    // ((IOTA_RC_POINTS[t / 64] >> (t % 4)) & 1) == 1
+    IOTA_RC_POINTS[t]
 }
 
 fn iota_rc_init(ir: usize, rc: &mut [bool; W]) {
@@ -230,7 +244,7 @@ fn keccak_p(s: &mut [bool; B]) {
 }
 
 fn pad10_1(x: usize, m: usize) -> Vec<bool> {
-    let j = ((x as isize - 1) + (m as isize) - 2).rem_euclid(x as isize);
+    let j = rem_euclid_isize(- (m as isize) - 2,x as isize);
     let mut res = Vec::new();
     res.push(true);
     let mut i = 0;
@@ -268,7 +282,7 @@ fn sponge_squeze(d: usize, r: usize, z: &mut Vec<bool>, s: &mut [bool; B]) {
         // z.extend(s.iter().take(r));
         add_to_vec::<bool>(z, s, r);
         if d <= z.len() {
-            z.truncate(d);
+            *z = z[0..d].to_vec();
             break
         } else {
             keccak_p(s);
@@ -285,7 +299,7 @@ fn sponge(r: usize, bs: &mut Vec<bool>, d: usize) {
     my_extend(bs, &pad10_1(r,m));
     let mut s = [false; B];
     sponge_absorb(bs, r, &mut s);
-    bs.clear();
+    *bs = Vec::new();
     sponge_squeze(d, r, bs, &mut s);
 }
 
