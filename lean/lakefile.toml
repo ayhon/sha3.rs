@@ -1,0 +1,14 @@
+name = "shars"
+version = "0.1.0"
+defaultTargets = ["Shars"]
+
+[[lean_lib]]
+name = "Shars"
+
+[[require]]
+name = "aeneas"
+path = "/home/ayhon/inria/aeneas/backends/lean"
+
+[[require]]
+name = "Sha3"
+path = "/home/ayhon/inria/sha3-lean"
