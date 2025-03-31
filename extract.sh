@@ -28,7 +28,6 @@ case $cmd in
       charon "simple"
       aeneas "simple"
       mv Simple.lean "$DEFINITIONS_DIR/"
-      rm simple.llbc
     ;;
 
   "custom")
