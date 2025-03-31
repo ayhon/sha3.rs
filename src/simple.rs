@@ -58,7 +58,7 @@ impl StateArray {
 }
 
 fn theta(a: &StateArray) -> StateArray {
-    fn theta_c(a: &StateArray, x: u8, z: usize) -> bool {
+    fn c(a: &StateArray, x: u8, z: usize) -> bool {
         binxor(
             *a.index((x,0,z)),
             binxor(
@@ -73,29 +73,29 @@ fn theta(a: &StateArray) -> StateArray {
             )
         )
     }
-    fn theta_d(a: &StateArray, x: u8, z: usize) -> bool {
+    fn d(a: &StateArray, x: u8, z: usize) -> bool {
         let x1 = (x + 4) % 5;
         let x2 = (x + 1) % 5;
         let z2 = (z + (W-1)) % W;
-        binxor(theta_c(a,x1,z), theta_c(a, x2, z2))
+        binxor(c(a,x1,z), c(a, x2, z2))
     }
     let mut res = StateArray::default();
     let mut x = 0;
     while x < 5 {
-        #[inline] fn theta_apply_a_inner(res: &mut StateArray, a: &StateArray, x: u8){
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: u8){
             
             let mut y = 0;
             while y < 5 {
-                #[inline] fn theta_apply_a_inner2(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
+                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
                     let mut z = 0;
                     while z < W {
-                        *res.index_mut((x,y,z)) = binxor(*a.index((x,y,z)), theta_d(a, x, z));
+                        *res.index_mut((x,y,z)) = binxor(*a.index((x,y,z)), d(a, x, z));
                         z += 1;
                     }
-                } theta_apply_a_inner2(res, &a, x, y);
+                } inner(res, &a, x, y);
                 y += 1;
             }
-        } theta_apply_a_inner(&mut res, &a, x);
+        } inner(&mut res, &a, x);
         x += 1;
     }
     return res;
@@ -109,16 +109,14 @@ fn rho(a: &StateArray) -> StateArray {
     let mut res = a.clone();
     let mut t = 0;
     while t < 24 {
-        #[inline]
-        fn rho_inner(res: &mut StateArray, a: &StateArray, t: usize, x: u8, y: u8) {
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, t: usize, x: u8, y: u8) {
             let mut z = 0;
             while z < W {
                 let z2 = (z + (W - rho_offset(t))) % W;
                 *res.index_mut((x,y,z)) = *a.index((x,y,z2));
                  z  += 1;
             }
-        }
-        rho_inner(&mut res, a, t, x, y);
+        } inner(&mut res, a, t, x, y);
         (x,y) = (y, (2*x + 3*y) % 5);
         t  += 1;
     }
@@ -129,12 +127,10 @@ fn pi(a: &StateArray) -> StateArray {
     let mut res = a.clone();
     let mut x = 0;
     while x < 5 {
-        #[inline]
-        fn pi_inner(res: &mut StateArray, a:&StateArray, x: u8){
+        #[inline] fn inner(res: &mut StateArray, a:&StateArray, x: u8){
             let mut y = 0;
             while y < 5 {
-                #[inline]
-                fn pi_inner2(res: &mut StateArray, a:&StateArray, x: u8, y: u8){
+                #[inline] fn inner(res: &mut StateArray, a:&StateArray, x: u8, y: u8){
                     let mut z = 0;
                     while z < W {
                         let x2 = (x + 3*y) % 5;
@@ -142,12 +138,10 @@ fn pi(a: &StateArray) -> StateArray {
                         *res.index_mut((x,y,z)) = *a.index((x2,y2,z));
                         z += 1;
                     }
-                }
-                pi_inner2(res, a, x, y);
+                } inner(res, a, x, y);
                 y += 1;
             }
-        }
-        pi_inner(&mut res, a, x);
+        } inner(&mut res, a, x);
         x += 1;
     }
     return res;
@@ -157,12 +151,10 @@ fn chi(a: &StateArray) -> StateArray {
     let mut res = a.clone();
     let mut x = 0;
     while x < 5 {
-        #[inline]
-        fn chi_inner(res: &mut StateArray, a: &StateArray, x: u8){
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: u8){
             let mut y = 0;
             while y < 5 {
-                #[inline]
-                fn chi_inner2(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
+                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
                     let mut z = 0;
                     while z < W {
                         let x1 = (x+1)%5;
@@ -171,12 +163,10 @@ fn chi(a: &StateArray) -> StateArray {
                             binxor(*a.index((x1,y,z)), true) && *a.index((x2,y,z)));
                         z += 1;
                     }
-                }
-                chi_inner2(res, a, x, y);
+                } inner(res, a, x, y);
                 y += 1;
             }
-        }
-        chi_inner(&mut res, a, x);
+        } inner(&mut res, a, x);
         x += 1;
     }
     return res;
@@ -246,19 +236,6 @@ fn keccak_p(s: &mut [bool; B]) {
     }
     *s = a.0;
 }
-
-// fn pad10_1(x: usize, m: usize) -> Vec<bool> {
-//     let j = x - (m + 2)%x;
-//     let mut res = Vec::new();
-//     res.push(true);
-//     let mut i = 0;
-//     while i < j {
-//         res.push(false);
-//         i += 1;
-//     }
-//     res.push(true);
-//     return res;
-// }
 
 fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
     let n = bs.len() / r;
