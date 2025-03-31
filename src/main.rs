@@ -11,31 +11,35 @@ fn main() -> std::io::Result<()> {
     loop {
         let Some(op) = iter.next() else {break};
         let msg = iter.next().unwrap_or("".to_string());
-        let mut bs: Vec<bool> = get_vec_of_bits(&msg);
-        match op.as_str() {
+        let bs: Vec<bool> = get_vec_of_bits(&msg);
+        let output = match op.as_str() {
             "SHA3_224" => {
-                sha3::simple::sha3_224(&mut bs);
+                sha3::simple::sha3_224(&bs).to_vec()
             }
             "SHA3_256" => {
-                sha3::simple::sha3_256(&mut bs);
+                sha3::simple::sha3_256(&bs).to_vec()
             }
             "SHA3_384" => {
-                sha3::simple::sha3_384(&mut bs);
+                sha3::simple::sha3_384(&bs).to_vec()
             }
             "SHA3_512" => {
-                sha3::simple::sha3_512(&mut bs);
+                sha3::simple::sha3_512(&bs).to_vec()
             }
             "SHAKE128" => {
                 let Some(Ok(d)) = iter.next().map(|x| usize::from_str_radix(&x, 10)) else {break};
-                sha3::simple::shake128(&mut bs, d);
+                let mut output = Vec::new(); for _ in 0..d { output.push(false); }
+                sha3::simple::shake128(&bs, &mut output);
+                output.to_vec()
             }
             "SHAKE256" => {
                 let Some(Ok(d)) = iter.next().map(|x| usize::from_str_radix(&x, 10)) else {break};
-                sha3::simple::shake256(&mut bs, d);
+                let mut output = Vec::new(); for _ in 0..d { output.push(false); }
+                sha3::simple::shake256(&bs, &mut output);
+                output.to_vec()
             }
             _ => break
-        }
-        println!("{}", hex_of_vec_of_bits(&bs));
+        };
+        println!("{}", hex_of_vec_of_bits(&output));
     }
     return Ok(())
 }
