@@ -18,23 +18,17 @@ fn binxor(a: bool, b: bool) -> bool {
     (a && !b) || (b && !a)
 }
 
-fn xor_long(s: &mut [bool], other: &[bool]){
-    // TODO: Remove once fixed in Aeneas
-    let n = s.len().min(other.len());
-    let mut i = 0;
-    while i < n {
-        s[i] = binxor(s[i], other[i]);
-        i += 1;
-    }
-}
 fn xor_long_at(s: &mut [bool], other: &[bool], pos: usize){
     // TODO: Remove once fixed in Aeneas
-    let n = s.len().min(other.len());
+    let n = (s.len()).min(other.len() + pos);
     let mut i = pos;
     while i < n {
         s[i] = binxor(s[i], other[i-pos]);
         i += 1;
     }
+}
+fn xor_long(s: &mut [bool], other: &[bool]){
+    xor_long_at(s, other, 0);
 }
 
 struct StateArray([bool; B]);
@@ -276,17 +270,24 @@ fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
         i += 1;
     }
     let rest = &bs[r*n..];
+    let nb_left = rest.len() + suffix.len();
+    // rest.len() < r
     xor_long(s, rest);
     xor_long_at(s, suffix, rest.len());
-    let leftover = (rest.len() + suffix.len()).saturating_sub(r);
+    let leftover = nb_left.saturating_sub(r);
+    // if nb_left > r
     if leftover > 0 {
-        keccak_p(s);
+        // We have already xored `r` points into the state `s`.
+        // Absorb and move on.
+        keccak_p(s); 
+        // suffix.len() - leftover → elements to be xored
         xor_long(s, &suffix[leftover..]);
         xor_long_at(s, &[true], suffix.len() - leftover);
         xor_long_at(s, &[true], r-1);
     } else {
-        xor_long_at(s, &[true], rest.len() + suffix.len());
-        if rest.len() + 1 < r {
+        // then nb_left < r 
+        xor_long_at(s, &[true], nb_left);
+        if nb_left + 1 < r {
             xor_long_at(s, &[true], r-1);
         } else {
             keccak_p(s);
@@ -484,7 +485,7 @@ mod tests {
         let r = 887;
         let expected = "1f02d16c290a40d5eb8f708b8a04de66315913658544543137137822c71ec9d12e3499f2c0486e39126759c61e8979c4cec10365223a3cb3205dd5b8865acdf848fac7a39c991f12bbe7a1fae54a1dd109fec526869b4611ffba7111c605a97cee27b929ebb3ebe43beb4ddf9c90007df48cda768ffee6a10280dd6f665a418e3a99ffe02aa488ef50a864bcc6e61d9f5274c54f9e0bd9b71cb8dc4f2f783625450dd18045cfbec76d9f9bb6270afd92c0fec4931a0d93b6c357e666382557f0b2aeb9de1892c5a0";
         sponge_absorb(&input, r, &mut actual, &[]);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected);
+        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected, "Failed for r={r}");
 
         // length 24
         actual = [false; B];
