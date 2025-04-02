@@ -16,7 +16,7 @@ namespace simple
 /- [simple::W]
    Source: 'src/simple.rs', lines 4:0-4:23 -/
 @[global_simps] def W_body : Result Usize := 1#usize <<< L
-@[global_simps, irreducible] def W : Usize := eval_global W_body
+@[global_simps, irreducible] def W : Usize := eval_global W_body (by native_decide)
 
 /- [simple::B]
    Source: 'src/simple.rs', lines 5:0-5:24 -/
@@ -24,7 +24,7 @@ namespace simple
 def B_body : Result Usize := do
                              let i ← 5#usize * 5#usize
                              i * W
-@[global_simps, irreducible] def B : Usize := eval_global B_body
+@[global_simps, irreducible] def B : Usize := eval_global B_body (by native_decide)
 
 /- [simple::NR]
    Source: 'src/simple.rs', lines 6:0-6:21 -/
@@ -32,7 +32,7 @@ def B_body : Result Usize := do
 @[global_simps, irreducible] def NR : Usize := eval_global NR_body
 
 /- [simple::add_to_vec]: loop 0:
-   Source: 'src/simple.rs', lines 1:0-13:5 -/
+   Source: 'src/simple.rs', lines 1:0-14:5 -/
 def add_to_vec_loop
   {A : Type} (coremarkerCopyInst : core.marker.Copy A) (dst : Slice A)
   (o : Usize) (src : Slice A) (n : Usize) (i : Usize) :
@@ -55,7 +55,7 @@ def add_to_vec_loop
 partial_fixpoint
 
 /- [simple::add_to_vec]:
-   Source: 'src/simple.rs', lines 8:0-15:1 -/
+   Source: 'src/simple.rs', lines 9:0-16:1 -/
 @[reducible]
 def add_to_vec
   {A : Type} (coremarkerCopyInst : core.marker.Copy A) (dst : Slice A)
@@ -65,7 +65,7 @@ def add_to_vec
   add_to_vec_loop coremarkerCopyInst dst o src n 0#usize
 
 /- [simple::binxor]:
-   Source: 'src/simple.rs', lines 17:0-19:1 -/
+   Source: 'src/simple.rs', lines 18:0-20:1 -/
 def binxor (a : Bool) (b : Bool) : Result Bool :=
   if a
   then if b
@@ -76,7 +76,7 @@ def binxor (a : Bool) (b : Bool) : Result Bool :=
        else ok false
 
 /- [simple::xor_long_at]: loop 0:
-   Source: 'src/simple.rs', lines 25:4-28:5 -/
+   Source: 'src/simple.rs', lines 26:4-29:5 -/
 def xor_long_at_loop
   (s : Slice Bool) (other : Slice Bool) (pos : Usize) (n : Usize)
   (pos1 : Usize) :
@@ -96,7 +96,7 @@ def xor_long_at_loop
 partial_fixpoint
 
 /- [simple::xor_long_at]:
-   Source: 'src/simple.rs', lines 21:0-29:1 -/
+   Source: 'src/simple.rs', lines 22:0-30:1 -/
 def xor_long_at
   (s : Slice Bool) (other : Slice Bool) (pos : Usize) : Result (Slice Bool) :=
   do
@@ -107,12 +107,12 @@ def xor_long_at
   xor_long_at_loop s other pos n pos
 
 /- [simple::xor_long]:
-   Source: 'src/simple.rs', lines 30:0-32:1 -/
+   Source: 'src/simple.rs', lines 31:0-33:1 -/
 def xor_long (s : Slice Bool) (other : Slice Bool) : Result (Slice Bool) :=
   xor_long_at s other 0#usize
 
 /- [simple::StateArray]
-   Source: 'src/simple.rs', lines 34:0-34:29 -/
+   Source: 'src/simple.rs', lines 35:0-35:29 -/
 @[reducible] def StateArray := (Array Bool 1600#usize)
 
 /- Trait declaration: [core::default::Default]
@@ -122,160 +122,160 @@ structure core.default.Default (Self : Type) where
   default : Result Self
 
 /- [simple::{core::default::Default for simple::StateArray}::default]:
-   Source: 'src/simple.rs', lines 37:4-39:5 -/
+   Source: 'src/simple.rs', lines 38:4-40:5 -/
 def DefaultsimpleStateArray.default : Result StateArray :=
   let a := Array.repeat 1600#usize false
   ok a
 
 /- Trait implementation: [simple::{core::default::Default for simple::StateArray}]
-   Source: 'src/simple.rs', lines 36:0-40:1 -/
+   Source: 'src/simple.rs', lines 37:0-41:1 -/
 @[reducible]
 def core.default.DefaultsimpleStateArray : core.default.Default StateArray := {
   default := DefaultsimpleStateArray.default
 }
 
 /- [simple::{core::clone::Clone for simple::StateArray}#1::clone]:
-   Source: 'src/simple.rs', lines 43:4-45:5 -/
+   Source: 'src/simple.rs', lines 44:4-46:5 -/
 def ClonesimpleStateArray.clone (self : StateArray) : Result StateArray :=
   ok self
 
 /- Trait implementation: [simple::{core::clone::Clone for simple::StateArray}#1]
-   Source: 'src/simple.rs', lines 42:0-46:1 -/
+   Source: 'src/simple.rs', lines 43:0-47:1 -/
 @[reducible]
 def core.clone.ClonesimpleStateArray : core.clone.Clone StateArray := {
   clone := ClonesimpleStateArray.clone
 }
 
 /- [simple::{simple::StateArray}#2::index]:
-   Source: 'src/simple.rs', lines 49:4-52:5 -/
+   Source: 'src/simple.rs', lines 50:4-53:5 -/
 def StateArray.index
-  (self : StateArray) (index : (U8 × U8 × Usize)) : Result Bool :=
+  (self : StateArray) (index : (Usize × Usize × Usize)) : Result Bool :=
   do
   let (x, y, z) := index
-  let i ← (↑(UScalar.cast .Usize y) : Result Usize)
-  let i1 ← 5#usize * i
-  let i2 ← (↑(UScalar.cast .Usize x) : Result Usize)
-  let i3 ← i1 + i2
-  let i4 ← W * i3
-  let i5 ← i4 + z
-  Array.index_usize self i5
+  let i ← 5#usize * y
+  let i1 ← i + x
+  let i2 ← W * i1
+  let i3 ← i2 + z
+  Array.index_usize self i3
 
 /- [simple::{simple::StateArray}#2::index_mut]:
-   Source: 'src/simple.rs', lines 54:4-57:5 -/
+   Source: 'src/simple.rs', lines 55:4-58:5 -/
 def StateArray.index_mut
-  (self : StateArray) (index : (U8 × U8 × Usize)) :
+  (self : StateArray) (index : (Usize × Usize × Usize)) :
   Result (Bool × (Bool → StateArray))
   :=
   do
   let (x, y, z) := index
-  let i ← (↑(UScalar.cast .Usize y) : Result Usize)
-  let i1 ← 5#usize * i
-  let i2 ← (↑(UScalar.cast .Usize x) : Result Usize)
-  let i3 ← i1 + i2
-  let i4 ← W * i3
-  let i5 ← i4 + z
-  let (b, index_mut_back) ← Array.index_mut_usize self i5
+  let i ← 5#usize * y
+  let i1 ← i + x
+  let i2 ← W * i1
+  let i3 ← i2 + z
+  let (b, index_mut_back) ← Array.index_mut_usize self i3
   let back := fun ret => let a := index_mut_back ret
                          a
   ok (b, back)
 
-/- [simple::theta::theta_c]:
-   Source: 'src/simple.rs', lines 61:4-75:5 -/
-def theta.theta_c (a : StateArray) (x : U8) (z : Usize) : Result Bool :=
+/- [simple::theta::c]:
+   Source: 'src/simple.rs', lines 62:4-76:5 -/
+def theta.c (a : StateArray) (x : Usize) (z : Usize) : Result Bool :=
   do
-  let b ← StateArray.index a (x, 0#u8, z)
-  let b1 ← StateArray.index a (x, 1#u8, z)
-  let b2 ← StateArray.index a (x, 2#u8, z)
-  let b3 ← StateArray.index a (x, 3#u8, z)
-  let b4 ← StateArray.index a (x, 4#u8, z)
+  let b ← StateArray.index a (x, 0#usize, z)
+  let b1 ← StateArray.index a (x, 1#usize, z)
+  let b2 ← StateArray.index a (x, 2#usize, z)
+  let b3 ← StateArray.index a (x, 3#usize, z)
+  let b4 ← StateArray.index a (x, 4#usize, z)
   let b5 ← binxor b3 b4
   let b6 ← binxor b2 b5
   let b7 ← binxor b1 b6
   binxor b b7
 
-/- [simple::theta::theta_d]:
-   Source: 'src/simple.rs', lines 76:4-81:5 -/
-def theta.theta_d (a : StateArray) (x : U8) (z : Usize) : Result Bool :=
+/- [simple::theta::d]:
+   Source: 'src/simple.rs', lines 77:4-82:5 -/
+def theta.d (a : StateArray) (x : Usize) (z : Usize) : Result Bool :=
   do
-  let i ← x + 4#u8
-  let x1 ← i % 5#u8
-  let i1 ← x + 1#u8
-  let x2 ← i1 % 5#u8
+  let i ← x + 4#usize
+  let x1 ← i % 5#usize
+  let i1 ← x + 1#usize
+  let x2 ← i1 % 5#usize
   let i2 ← W - 1#usize
   let i3 ← z + i2
   let z2 ← i3 % W
-  let b ← theta.theta_c a x1 z
-  let b1 ← theta.theta_c a x2 z2
+  let b ← theta.c a x1 z
+  let b1 ← theta.c a x2 z2
   binxor b b1
 
-/- [simple::theta::theta_apply_a_inner::theta_apply_a_inner2]: loop 0:
-   Source: 'src/simple.rs', lines 91:20-94:21 -/
-def theta.theta_apply_a_inner.theta_apply_a_inner2_loop
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) (z : Usize) :
+/- [simple::theta::inner::inner]: loop 0:
+   Source: 'src/simple.rs', lines 92:20-95:21 -/
+def theta.inner.inner_loop
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) (z : Usize) :
   Result StateArray
   :=
   if z < W
   then
     do
     let b ← StateArray.index a (x, y, z)
-    let b1 ← theta.theta_d a x z
+    let b1 ← theta.d a x z
     let b2 ← binxor b b1
     let (_, index_mut_back) ← StateArray.index_mut res (x, y, z)
     let z1 ← z + 1#usize
     let res1 := index_mut_back b2
-    theta.theta_apply_a_inner.theta_apply_a_inner2_loop res1 a x y z1
+    theta.inner.inner_loop res1 a x y z1
   else ok res
 partial_fixpoint
 
-/- [simple::theta::theta_apply_a_inner::theta_apply_a_inner2]:
-   Source: 'src/simple.rs', lines 89:26-95:17 -/
+/- [simple::theta::inner::inner]:
+   Source: 'src/simple.rs', lines 90:26-96:17 -/
 @[reducible]
-def theta.theta_apply_a_inner.theta_apply_a_inner2
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) : Result StateArray :=
-  theta.theta_apply_a_inner.theta_apply_a_inner2_loop res a x y 0#usize
+def theta.inner.inner
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) :
+  Result StateArray
+  :=
+  theta.inner.inner_loop res a x y 0#usize
 
-/- [simple::theta::theta_apply_a_inner]: loop 0:
-   Source: 'src/simple.rs', lines 88:12-97:13 -/
-def theta.theta_apply_a_inner_loop
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) : Result StateArray :=
-  if y < 5#u8
+/- [simple::theta::inner]: loop 0:
+   Source: 'src/simple.rs', lines 89:12-98:13 -/
+def theta.inner_loop
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) :
+  Result StateArray
+  :=
+  if y < 5#usize
   then
     do
-    let res1 ← theta.theta_apply_a_inner.theta_apply_a_inner2 res a x y
-    let y1 ← y + 1#u8
-    theta.theta_apply_a_inner_loop res1 a x y1
+    let res1 ← theta.inner.inner res a x y
+    let y1 ← y + 1#usize
+    theta.inner_loop res1 a x y1
   else ok res
 partial_fixpoint
 
-/- [simple::theta::theta_apply_a_inner]:
-   Source: 'src/simple.rs', lines 85:18-98:9 -/
+/- [simple::theta::inner]:
+   Source: 'src/simple.rs', lines 86:18-99:9 -/
 @[reducible]
-def theta.theta_apply_a_inner
-  (res : StateArray) (a : StateArray) (x : U8) : Result StateArray :=
-  theta.theta_apply_a_inner_loop res a x 0#u8
+def theta.inner
+  (res : StateArray) (a : StateArray) (x : Usize) : Result StateArray :=
+  theta.inner_loop res a x 0#usize
 
 /- [simple::theta]: loop 0:
-   Source: 'src/simple.rs', lines 84:4-100:5 -/
+   Source: 'src/simple.rs', lines 85:4-101:5 -/
 def theta_loop
-  (a : StateArray) (res : StateArray) (x : U8) : Result StateArray :=
-  if x < 5#u8
+  (a : StateArray) (res : StateArray) (x : Usize) : Result StateArray :=
+  if x < 5#usize
   then
     do
-    let res1 ← theta.theta_apply_a_inner res a x
-    let x1 ← x + 1#u8
+    let res1 ← theta.inner res a x
+    let x1 ← x + 1#usize
     theta_loop a res1 x1
   else ok res
 partial_fixpoint
 
 /- [simple::theta]:
-   Source: 'src/simple.rs', lines 60:0-102:1 -/
+   Source: 'src/simple.rs', lines 61:0-103:1 -/
 def theta (a : StateArray) : Result StateArray :=
   do
   let res ← DefaultsimpleStateArray.default
-  theta_loop a res 0#u8
+  theta_loop a res 0#usize
 
 /- [simple::rho_offset]:
-   Source: 'src/simple.rs', lines 104:0-106:1 -/
+   Source: 'src/simple.rs', lines 105:0-107:1 -/
 def rho_offset (t : Usize) : Result Usize :=
   do
   let i ← t + 1#usize
@@ -284,11 +284,11 @@ def rho_offset (t : Usize) : Result Usize :=
   let i3 ← i2 / 2#usize
   i3 % W
 
-/- [simple::rho::rho_inner]: loop 0:
+/- [simple::rho::inner]: loop 0:
    Source: 'src/simple.rs', lines 115:12-119:13 -/
-def rho.rho_inner_loop
-  (res : StateArray) (a : StateArray) (t : Usize) (x : U8) (y : U8) (z : Usize)
-  :
+def rho.inner_loop
+  (res : StateArray) (a : StateArray) (t : Usize) (x : Usize) (y : Usize)
+  (z : Usize) :
   Result StateArray
   :=
   if z < W
@@ -302,124 +302,129 @@ def rho.rho_inner_loop
     let (_, index_mut_back) ← StateArray.index_mut res (x, y, z)
     let z1 ← z + 1#usize
     let res1 := index_mut_back b
-    rho.rho_inner_loop res1 a t x y z1
+    rho.inner_loop res1 a t x y z1
   else ok res
 partial_fixpoint
 
-/- [simple::rho::rho_inner]:
-   Source: 'src/simple.rs', lines 113:8-120:9 -/
+/- [simple::rho::inner]:
+   Source: 'src/simple.rs', lines 113:18-120:9 -/
 @[reducible]
-def rho.rho_inner
-  (res : StateArray) (a : StateArray) (t : Usize) (x : U8) (y : U8) :
+def rho.inner
+  (res : StateArray) (a : StateArray) (t : Usize) (x : Usize) (y : Usize) :
   Result StateArray
   :=
-  rho.rho_inner_loop res a t x y 0#usize
+  rho.inner_loop res a t x y 0#usize
 
 /- [simple::rho]: loop 0:
-   Source: 'src/simple.rs', lines 111:4-124:5 -/
+   Source: 'src/simple.rs', lines 112:4-123:5 -/
 def rho_loop
-  (a : StateArray) (x : U8) (y : U8) (res : StateArray) (t : Usize) :
+  (a : StateArray) (x : Usize) (y : Usize) (res : StateArray) (t : Usize) :
   Result StateArray
   :=
   if t < 24#usize
   then
     do
-    let res1 ← rho.rho_inner res a t x y
-    let i ← 2#u8 * x
-    let i1 ← 3#u8 * y
+    let res1 ← rho.inner res a t x y
+    let i ← 2#usize * x
+    let i1 ← 3#usize * y
     let i2 ← i + i1
-    let lhs ← i2 % 5#u8
+    let lhs ← i2 % 5#usize
     let t1 ← t + 1#usize
     rho_loop a y lhs res1 t1
   else ok res
 partial_fixpoint
 
 /- [simple::rho]:
-   Source: 'src/simple.rs', lines 107:0-126:1 -/
+   Source: 'src/simple.rs', lines 108:0-125:1 -/
 def rho (a : StateArray) : Result StateArray :=
   do
   let res ← ClonesimpleStateArray.clone a
-  rho_loop a 1#u8 0#u8 res 0#usize
+  rho_loop a 1#usize 0#usize res 0#usize
 
-/- [simple::pi::pi_inner::pi_inner2]: loop 0:
-   Source: 'src/simple.rs', lines 139:20-144:21 -/
-def pi.pi_inner.pi_inner2_loop
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) (z : Usize) :
+/- [simple::pi::inner::inner]: loop 0:
+   Source: 'src/simple.rs', lines 136:20-141:21 -/
+def pi.inner.inner_loop
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) (z : Usize) :
   Result StateArray
   :=
   if z < W
   then
     do
-    let i ← 3#u8 * y
+    let i ← 3#usize * y
     let i1 ← x + i
-    let x2 ← i1 % 5#u8
+    let x2 ← i1 % 5#usize
     let b ← StateArray.index a (x2, x, z)
     let (_, index_mut_back) ← StateArray.index_mut res (x, y, z)
     let z1 ← z + 1#usize
     let res1 := index_mut_back b
-    pi.pi_inner.pi_inner2_loop res1 a x y z1
+    pi.inner.inner_loop res1 a x y z1
   else ok res
 partial_fixpoint
 
-/- [simple::pi::pi_inner::pi_inner2]:
-   Source: 'src/simple.rs', lines 137:16-145:17 -/
+/- [simple::pi::inner::inner]:
+   Source: 'src/simple.rs', lines 134:26-142:17 -/
 @[reducible]
-def pi.pi_inner.pi_inner2
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) : Result StateArray :=
-  pi.pi_inner.pi_inner2_loop res a x y 0#usize
+def pi.inner.inner
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) :
+  Result StateArray
+  :=
+  pi.inner.inner_loop res a x y 0#usize
 
-/- [simple::pi::pi_inner]: loop 0:
-   Source: 'src/simple.rs', lines 135:12-148:13 -/
-def pi.pi_inner_loop
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) : Result StateArray :=
-  if y < 5#u8
+/- [simple::pi::inner]: loop 0:
+   Source: 'src/simple.rs', lines 133:12-144:13 -/
+def pi.inner_loop
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) :
+  Result StateArray
+  :=
+  if y < 5#usize
   then
     do
-    let res1 ← pi.pi_inner.pi_inner2 res a x y
-    let y1 ← y + 1#u8
-    pi.pi_inner_loop res1 a x y1
+    let res1 ← pi.inner.inner res a x y
+    let y1 ← y + 1#usize
+    pi.inner_loop res1 a x y1
   else ok res
 partial_fixpoint
 
-/- [simple::pi::pi_inner]:
-   Source: 'src/simple.rs', lines 133:8-149:9 -/
+/- [simple::pi::inner]:
+   Source: 'src/simple.rs', lines 131:18-145:9 -/
 @[reducible]
-def pi.pi_inner
-  (res : StateArray) (a : StateArray) (x : U8) : Result StateArray :=
-  pi.pi_inner_loop res a x 0#u8
+def pi.inner
+  (res : StateArray) (a : StateArray) (x : Usize) : Result StateArray :=
+  pi.inner_loop res a x 0#usize
 
 /- [simple::pi]: loop 0:
-   Source: 'src/simple.rs', lines 131:4-152:5 -/
-def pi_loop (a : StateArray) (res : StateArray) (x : U8) : Result StateArray :=
-  if x < 5#u8
+   Source: 'src/simple.rs', lines 130:4-147:5 -/
+def pi_loop
+  (a : StateArray) (res : StateArray) (x : Usize) : Result StateArray :=
+  if x < 5#usize
   then
     do
-    let res1 ← pi.pi_inner res a x
-    let x1 ← x + 1#u8
+    let res1 ← pi.inner res a x
+    let x1 ← x + 1#usize
     pi_loop a res1 x1
   else ok res
 partial_fixpoint
 
 /- [simple::pi]:
-   Source: 'src/simple.rs', lines 128:0-154:1 -/
+   Source: 'src/simple.rs', lines 127:0-149:1 -/
 def pi (a : StateArray) : Result StateArray :=
   do
   let res ← ClonesimpleStateArray.clone a
-  pi_loop a res 0#u8
+  pi_loop a res 0#usize
 
-/- [simple::chi::chi_inner::chi_inner2]: loop 0:
-   Source: 'src/simple.rs', lines 167:20-173:21 -/
-def chi.chi_inner.chi_inner2_loop
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) (z : Usize) :
+/- [simple::chi::inner::inner]: loop 0:
+   Source: 'src/simple.rs', lines 160:20-166:21 -/
+def chi.inner.inner_loop
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) (z : Usize) :
   Result StateArray
   :=
   if z < W
   then
     do
-    let i ← x + 1#u8
-    let x1 ← i % 5#u8
-    let i1 ← x + 2#u8
-    let x2 ← i1 % 5#u8
+    let i ← x + 1#usize
+    let x1 ← i % 5#usize
+    let i1 ← x + 2#usize
+    let x2 ← i1 % 5#usize
     let b ← StateArray.index a (x, y, z)
     let b1 ← StateArray.index a (x1, y, z)
     let b2 ← binxor b1 true
@@ -431,66 +436,70 @@ def chi.chi_inner.chi_inner2_loop
       let (_, index_mut_back) ← StateArray.index_mut res (x, y, z)
       let z1 ← z + 1#usize
       let res1 := index_mut_back b4
-      chi.chi_inner.chi_inner2_loop res1 a x y z1
+      chi.inner.inner_loop res1 a x y z1
     else
       do
       let b3 ← binxor b false
       let (_, index_mut_back) ← StateArray.index_mut res (x, y, z)
       let z1 ← z + 1#usize
       let res1 := index_mut_back b3
-      chi.chi_inner.chi_inner2_loop res1 a x y z1
+      chi.inner.inner_loop res1 a x y z1
   else ok res
 partial_fixpoint
 
-/- [simple::chi::chi_inner::chi_inner2]:
-   Source: 'src/simple.rs', lines 165:16-174:17 -/
+/- [simple::chi::inner::inner]:
+   Source: 'src/simple.rs', lines 158:26-167:17 -/
 @[reducible]
-def chi.chi_inner.chi_inner2
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) : Result StateArray :=
-  chi.chi_inner.chi_inner2_loop res a x y 0#usize
+def chi.inner.inner
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) :
+  Result StateArray
+  :=
+  chi.inner.inner_loop res a x y 0#usize
 
-/- [simple::chi::chi_inner]: loop 0:
-   Source: 'src/simple.rs', lines 163:12-177:13 -/
-def chi.chi_inner_loop
-  (res : StateArray) (a : StateArray) (x : U8) (y : U8) : Result StateArray :=
-  if y < 5#u8
+/- [simple::chi::inner]: loop 0:
+   Source: 'src/simple.rs', lines 157:12-169:13 -/
+def chi.inner_loop
+  (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) :
+  Result StateArray
+  :=
+  if y < 5#usize
   then
     do
-    let res1 ← chi.chi_inner.chi_inner2 res a x y
-    let y1 ← y + 1#u8
-    chi.chi_inner_loop res1 a x y1
+    let res1 ← chi.inner.inner res a x y
+    let y1 ← y + 1#usize
+    chi.inner_loop res1 a x y1
   else ok res
 partial_fixpoint
 
-/- [simple::chi::chi_inner]:
-   Source: 'src/simple.rs', lines 161:8-178:9 -/
+/- [simple::chi::inner]:
+   Source: 'src/simple.rs', lines 155:18-170:9 -/
 @[reducible]
-def chi.chi_inner
-  (res : StateArray) (a : StateArray) (x : U8) : Result StateArray :=
-  chi.chi_inner_loop res a x 0#u8
+def chi.inner
+  (res : StateArray) (a : StateArray) (x : Usize) : Result StateArray :=
+  chi.inner_loop res a x 0#usize
 
 /- [simple::chi]: loop 0:
-   Source: 'src/simple.rs', lines 159:4-181:5 -/
+   Source: 'src/simple.rs', lines 154:4-172:5 -/
 def chi_loop
-  (a : StateArray) (res : StateArray) (x : U8) : Result StateArray :=
-  if x < 5#u8
+  (a : StateArray) (res : StateArray) (x : Usize) : Result StateArray :=
+  if x < 5#usize
   then
     do
-    let res1 ← chi.chi_inner res a x
-    let x1 ← x + 1#u8
+    let res1 ← chi.inner res a x
+    let x1 ← x + 1#usize
     chi_loop a res1 x1
   else ok res
 partial_fixpoint
 
 /- [simple::chi]:
-   Source: 'src/simple.rs', lines 156:0-183:1 -/
+   Source: 'src/simple.rs', lines 151:0-174:1 -/
 def chi (a : StateArray) : Result StateArray :=
   do
   let res ← ClonesimpleStateArray.clone a
-  chi_loop a res 0#u8
+  chi_loop a res 0#usize
 
 /- [simple::IOTA_RC_POINTS]
-   Source: 'src/simple.rs', lines 186:0-200:15 -/
+   Source: 'src/simple.rs', lines 177:0-191:15 -/
 @[global_simps]
 def IOTA_RC_POINTS_body : Result (Array Bool 255#usize) :=
   ok
@@ -518,19 +527,19 @@ def IOTA_RC_POINTS_body : Result (Array Bool 255#usize) :=
     false, false, true, false, false, true, true, false, false, false, false,
     false, false, true, true, true, false, true, false, false, true, false,
     false, false, true, true, true, false, false, false
-    ])
+    ] (by native_decide))
 @[global_simps, irreducible]
-def IOTA_RC_POINTS : Array Bool 255#usize := eval_global IOTA_RC_POINTS_body
+def IOTA_RC_POINTS : Array Bool 255#usize := eval_global IOTA_RC_POINTS_body (by native_decide)
 
 /- [simple::iota_rc_point]:
-   Source: 'src/simple.rs', lines 202:0-206:1 -/
+   Source: 'src/simple.rs', lines 193:0-197:1 -/
 def iota_rc_point (t : Usize) : Result Bool :=
   do
   let t1 ← t % 255#usize
   Array.index_usize IOTA_RC_POINTS t1
 
 /- [simple::iota_rc_init]: loop 0:
-   Source: 'src/simple.rs', lines 210:4-213:5 -/
+   Source: 'src/simple.rs', lines 201:4-204:5 -/
 def iota_rc_init_loop
   (ir : Usize) (rc : Array Bool 64#usize) (j : Usize) :
   Result (Array Bool 64#usize)
@@ -550,14 +559,14 @@ def iota_rc_init_loop
 partial_fixpoint
 
 /- [simple::iota_rc_init]:
-   Source: 'src/simple.rs', lines 208:0-214:1 -/
+   Source: 'src/simple.rs', lines 199:0-205:1 -/
 @[reducible]
 def iota_rc_init
   (ir : Usize) (rc : Array Bool 64#usize) : Result (Array Bool 64#usize) :=
   iota_rc_init_loop ir rc 0#usize
 
 /- [simple::iota_a]: loop 0:
-   Source: 'src/simple.rs', lines 218:4-221:5 -/
+   Source: 'src/simple.rs', lines 209:4-212:5 -/
 def iota_a_loop
   (res : StateArray) (a : StateArray) (rc : Array Bool 64#usize) (z : Usize) :
   Result StateArray
@@ -565,10 +574,10 @@ def iota_a_loop
   if z < W
   then
     do
-    let b ← StateArray.index a (0#u8, 0#u8, z)
+    let b ← StateArray.index a (0#usize, 0#usize, z)
     let b1 ← Array.index_usize rc z
     let b2 ← binxor b b1
-    let (_, index_mut_back) ← StateArray.index_mut res (0#u8, 0#u8, z)
+    let (_, index_mut_back) ← StateArray.index_mut res (0#usize, 0#usize, z)
     let z1 ← z + 1#usize
     let res1 := index_mut_back b2
     iota_a_loop res1 a rc z1
@@ -576,7 +585,7 @@ def iota_a_loop
 partial_fixpoint
 
 /- [simple::iota_a]:
-   Source: 'src/simple.rs', lines 216:0-222:1 -/
+   Source: 'src/simple.rs', lines 207:0-213:1 -/
 @[reducible]
 def iota_a
   (res : StateArray) (a : StateArray) (rc : Array Bool 64#usize) :
@@ -585,7 +594,7 @@ def iota_a
   iota_a_loop res a rc 0#usize
 
 /- [simple::iota]:
-   Source: 'src/simple.rs', lines 224:0-230:1 -/
+   Source: 'src/simple.rs', lines 215:0-221:1 -/
 def iota (ir : Usize) (a : StateArray) : Result StateArray :=
   do
   let rc := Array.repeat 64#usize false
@@ -594,7 +603,7 @@ def iota (ir : Usize) (a : StateArray) : Result StateArray :=
   iota_a res a rc1
 
 /- [simple::round]:
-   Source: 'src/simple.rs', lines 232:0-238:1 -/
+   Source: 'src/simple.rs', lines 223:0-229:1 -/
 def round (a : StateArray) (ir : Usize) : Result StateArray :=
   do
   let a1 ← theta a
@@ -604,7 +613,7 @@ def round (a : StateArray) (ir : Usize) : Result StateArray :=
   iota ir a4
 
 /- [simple::keccak_p]: loop 0:
-   Source: 'src/simple.rs', lines 243:4-246:5 -/
+   Source: 'src/simple.rs', lines 234:4-237:5 -/
 def keccak_p_loop (a : StateArray) (ir : Usize) : Result Unit :=
   if ir < 24#usize
   then do
@@ -615,14 +624,14 @@ def keccak_p_loop (a : StateArray) (ir : Usize) : Result Unit :=
 partial_fixpoint
 
 /- [simple::keccak_p]:
-   Source: 'src/simple.rs', lines 240:0-248:1 -/
+   Source: 'src/simple.rs', lines 231:0-239:1 -/
 def keccak_p (s : Array Bool 1600#usize) : Result (Array Bool 1600#usize) :=
   do
   keccak_p_loop s 0#usize
   ok s
 
 /- [simple::sponge_absorb]: loop 0:
-   Source: 'src/simple.rs', lines 266:4-271:5 -/
+   Source: 'src/simple.rs', lines 244:4-249:5 -/
 def sponge_absorb_loop
   (bs : Slice Bool) (r : Usize) (s : Array Bool 1600#usize)
   (suffix : Slice Bool) (n : Usize) (i : Usize) :
@@ -743,7 +752,7 @@ def sponge_absorb_loop
 partial_fixpoint
 
 /- [simple::sponge_absorb]:
-   Source: 'src/simple.rs', lines 263:0-298:1 -/
+   Source: 'src/simple.rs', lines 241:0-276:1 -/
 def sponge_absorb
   (bs : Slice Bool) (r : Usize) (s : Array Bool 1600#usize)
   (suffix : Slice Bool) :
@@ -763,7 +772,7 @@ def core.marker.CopyBool : core.marker.Copy Bool := {
 }
 
 /- [simple::sponge_squeeze]: loop 0:
-   Source: 'src/simple.rs', lines 304:4-313:5 -/
+   Source: 'src/simple.rs', lines 282:4-291:5 -/
 def sponge_squeeze_loop
   (r : Usize) (z : Slice Bool) (s : Array Bool 1600#usize) (i : Usize) :
   Result (Slice Bool)
@@ -781,7 +790,7 @@ def sponge_squeeze_loop
 partial_fixpoint
 
 /- [simple::sponge_squeeze]:
-   Source: 'src/simple.rs', lines 301:0-314:1 -/
+   Source: 'src/simple.rs', lines 279:0-292:1 -/
 @[reducible]
 def sponge_squeeze
   (r : Usize) (z : Slice Bool) (s : Array Bool 1600#usize) :
@@ -790,7 +799,7 @@ def sponge_squeeze
   sponge_squeeze_loop r z s 0#usize
 
 /- [simple::sponge]:
-   Source: 'src/simple.rs', lines 316:0-320:1 -/
+   Source: 'src/simple.rs', lines 294:0-298:1 -/
 def sponge
   (r : Usize) (bs : Slice Bool) (output : Slice Bool) (suffix : Slice Bool) :
   Result (Slice Bool)
@@ -801,7 +810,7 @@ def sponge
   sponge_squeeze r output s1
 
 /- [simple::SHA3_SUFFIX]
-   Source: 'src/simple.rs', lines 322:0-322:45 -/
+   Source: 'src/simple.rs', lines 300:0-300:45 -/
 @[global_simps]
 def SHA3_SUFFIX_body : Result (Array Bool 2#usize) :=
   ok (Array.make 2#usize [ false, true ])
@@ -809,7 +818,7 @@ def SHA3_SUFFIX_body : Result (Array Bool 2#usize) :=
 def SHA3_SUFFIX : Array Bool 2#usize := eval_global SHA3_SUFFIX_body
 
 /- [simple::sha3_224]:
-   Source: 'src/simple.rs', lines 323:0-323:141 -/
+   Source: 'src/simple.rs', lines 301:0-301:141 -/
 def sha3_224 (bs : Slice Bool) : Result (Array Bool 224#usize) :=
   do
   let output := Array.repeat 224#usize false
@@ -823,7 +832,7 @@ def sha3_224 (bs : Slice Bool) : Result (Array Bool 224#usize) :=
   ok (to_slice_mut_back s2)
 
 /- [simple::sha3_256]:
-   Source: 'src/simple.rs', lines 324:0-324:141 -/
+   Source: 'src/simple.rs', lines 302:0-302:141 -/
 def sha3_256 (bs : Slice Bool) : Result (Array Bool 256#usize) :=
   do
   let output := Array.repeat 256#usize false
@@ -837,7 +846,7 @@ def sha3_256 (bs : Slice Bool) : Result (Array Bool 256#usize) :=
   ok (to_slice_mut_back s2)
 
 /- [simple::sha3_384]:
-   Source: 'src/simple.rs', lines 325:0-325:141 -/
+   Source: 'src/simple.rs', lines 303:0-303:141 -/
 def sha3_384 (bs : Slice Bool) : Result (Array Bool 384#usize) :=
   do
   let output := Array.repeat 384#usize false
@@ -851,7 +860,7 @@ def sha3_384 (bs : Slice Bool) : Result (Array Bool 384#usize) :=
   ok (to_slice_mut_back s2)
 
 /- [simple::sha3_512]:
-   Source: 'src/simple.rs', lines 326:0-326:141 -/
+   Source: 'src/simple.rs', lines 304:0-304:141 -/
 def sha3_512 (bs : Slice Bool) : Result (Array Bool 512#usize) :=
   do
   let output := Array.repeat 512#usize false
@@ -865,7 +874,7 @@ def sha3_512 (bs : Slice Bool) : Result (Array Bool 512#usize) :=
   ok (to_slice_mut_back s2)
 
 /- [simple::SHAKE_SUFFIX]
-   Source: 'src/simple.rs', lines 328:0-328:42 -/
+   Source: 'src/simple.rs', lines 306:0-306:42 -/
 @[global_simps]
 def SHAKE_SUFFIX_body : Result (Array Bool 4#usize) :=
   ok (Array.repeat 4#usize true)
@@ -873,7 +882,7 @@ def SHAKE_SUFFIX_body : Result (Array Bool 4#usize) :=
 def SHAKE_SUFFIX : Array Bool 4#usize := eval_global SHAKE_SUFFIX_body
 
 /- [simple::shake128]:
-   Source: 'src/simple.rs', lines 329:0-329:99 -/
+   Source: 'src/simple.rs', lines 307:0-307:99 -/
 def shake128 (bs : Slice Bool) (output : Slice Bool) : Result (Slice Bool) :=
   do
   let i ← 2#usize * 128#usize
@@ -882,7 +891,7 @@ def shake128 (bs : Slice Bool) (output : Slice Bool) : Result (Slice Bool) :=
   sponge i1 bs output s
 
 /- [simple::shake256]:
-   Source: 'src/simple.rs', lines 330:0-330:99 -/
+   Source: 'src/simple.rs', lines 308:0-308:99 -/
 def shake256 (bs : Slice Bool) (output : Slice Bool) : Result (Slice Bool) :=
   do
   let i ← 2#usize * 256#usize

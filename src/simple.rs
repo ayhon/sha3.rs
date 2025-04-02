@@ -5,6 +5,7 @@ const W:  usize = 1<<L;
 const B:  usize = 5*5*W;
 const NR: usize = 24;
 
+/// Adds n elements of src to dst at offset o
 fn add_to_vec<'a, A: Copy>(dst: &'a mut [A], o: usize, src: &'a [A], n: usize) -> usize {
     let mut i= 0;
     while i < n && o + i < dst.len() {
@@ -46,19 +47,19 @@ impl Clone for StateArray {
 }
 
 impl StateArray {
-    fn index(&self, index: (u8, u8, usize)) -> &bool {
+    fn index(&self, index: (usize, usize, usize)) -> &bool {
         let (x,y,z) = index;
         &self.0[W*(5*(y as usize) + x as usize) + z]
     }
 
-    fn index_mut(&mut self, index: (u8, u8, usize)) -> &mut bool {
+    fn index_mut(&mut self, index: (usize, usize, usize)) -> &mut bool {
         let (x,y,z) = index;
         &mut self.0[W*(5*(y as usize) + x as usize) + z]
     }
 }
 
 fn theta(a: &StateArray) -> StateArray {
-    fn c(a: &StateArray, x: u8, z: usize) -> bool {
+    fn c(a: &StateArray, x: usize, z: usize) -> bool {
         binxor(
             *a.index((x,0,z)),
             binxor(
@@ -73,7 +74,7 @@ fn theta(a: &StateArray) -> StateArray {
             )
         )
     }
-    fn d(a: &StateArray, x: u8, z: usize) -> bool {
+    fn d(a: &StateArray, x: usize, z: usize) -> bool {
         let x1 = (x + 4) % 5;
         let x2 = (x + 1) % 5;
         let z2 = (z + (W-1)) % W;
@@ -82,11 +83,11 @@ fn theta(a: &StateArray) -> StateArray {
     let mut res = StateArray::default();
     let mut x = 0;
     while x < 5 {
-        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: u8){
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize){
             
             let mut y = 0;
             while y < 5 {
-                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
+                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize, y: usize){
                     let mut z = 0;
                     while z < W {
                         *res.index_mut((x,y,z)) = binxor(*a.index((x,y,z)), d(a, x, z));
@@ -109,7 +110,7 @@ fn rho(a: &StateArray) -> StateArray {
     let mut res = a.clone();
     let mut t = 0;
     while t < 24 {
-        #[inline] fn inner(res: &mut StateArray, a: &StateArray, t: usize, x: u8, y: u8) {
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, t: usize, x: usize, y: usize) {
             let mut z = 0;
             while z < W {
                 let z2 = (z + (W - rho_offset(t))) % W;
@@ -127,10 +128,10 @@ fn pi(a: &StateArray) -> StateArray {
     let mut res = a.clone();
     let mut x = 0;
     while x < 5 {
-        #[inline] fn inner(res: &mut StateArray, a:&StateArray, x: u8){
+        #[inline] fn inner(res: &mut StateArray, a:&StateArray, x: usize){
             let mut y = 0;
             while y < 5 {
-                #[inline] fn inner(res: &mut StateArray, a:&StateArray, x: u8, y: u8){
+                #[inline] fn inner(res: &mut StateArray, a:&StateArray, x: usize, y: usize){
                     let mut z = 0;
                     while z < W {
                         let x2 = (x + 3*y) % 5;
@@ -151,10 +152,10 @@ fn chi(a: &StateArray) -> StateArray {
     let mut res = a.clone();
     let mut x = 0;
     while x < 5 {
-        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: u8){
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize){
             let mut y = 0;
             while y < 5 {
-                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: u8, y: u8){
+                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize, y: usize){
                     let mut z = 0;
                     while z < W {
                         let x1 = (x+1)%5;
