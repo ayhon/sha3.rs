@@ -298,6 +298,35 @@ example: (2^32)-1 <= Std.Usize.max := by
   simp [Std.Usize.max, Std.Usize.numBits_eq]
   obtain h | h := System.Platform.numBits_eq <;> rw [h] <;> omega
 
+theorem Aeneas.Std.Usize.max_bound
+: 2^32 - 1 <= Std.Usize.max
+:= by
+  rw [Std.Usize.max_def, Std.Usize.numBits, Std.UScalarTy.numBits]
+  cases System.Platform.numBits_eq <;> simp [*]
+
+theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
+: n*y + x < n*m
+:= by
+  have n_pos: n > 0 := by apply Nat.pos_of_ne_zero; intro h; simp [h] at x_lt
+  have m_pos: m > 0 := by apply Nat.pos_of_ne_zero; intro h; simp [h] at y_lt
+  calc n*y + x
+    _ = n * y + x := rfl
+    _ ≤ n * (m-1) + x := by
+      apply Nat.add_le_add_right 
+      apply Nat.mul_le_mul_left
+      apply Nat.le_pred_iff_lt m_pos |>.mpr
+      exact y_lt
+    _ ≤ n * (m-1) + (n-1) := by
+      apply Nat.add_le_add_left
+      apply Nat.le_pred_iff_lt n_pos |>.mpr
+      exact x_lt
+    _ < n * m := by 
+      simp [Nat.mul_sub, ←Nat.add_sub_assoc n_pos]
+      have: n*m >= n := by 
+        conv => arg 2; rw [←Nat.mul_one n]
+        apply Nat.mul_le_mul (Nat.le_refl n) m_pos
+      simp [Nat.sub_add_cancel this]
+      exact And.intro n_pos m_pos
 
 @[progress]
 theorem  simple.StateArray.index.spec
@@ -312,30 +341,35 @@ theorem  simple.StateArray.index.spec
   let* ⟨ i, i_post ⟩ ← Aeneas.Std.Usize.mul_spec
   let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
   let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  · simp [*, simple.W.spec, Std.Usize.max]
-    simp [Spec.w]
-    simp [Std.Usize.max, Std.Usize.numBits_eq]
-    obtain h | h := System.Platform.numBits_eq <;> rw [h] <;> ring_nf
-    all_goals calc ↑y * 2 ^ ↑6 * 5 + ↑x * 2 ^ ↑6 
-       _ ≤ 5 * 2 ^ ↑6 * 5 + ↑x * 2 ^ ↑6  := by sorry
-       _ ≤ 5 * 2 ^ ↑6 * 5 + 5 * 2 ^ ↑6  := by sorry
-       _ ≤ _ := by native_decide
+  · simp [*, simple.W.spec]
+    apply le_of_lt 
+    calc Spec.w 6 * (5 * ↑y + ↑x)
+     _ ≤ Spec.w 6 * (5 * 5) := by
+          apply Nat.mul_le_mul_left (k := Spec.w 6)
+          exact Nat.le_of_lt (Nat.lt_packing_right x_idx y_idx)
+     _ < 2^32 - 1 := by simp [Spec.w]; decide
+     _ ≤ Std.Usize.max := Std.Usize.max_bound
   let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
-  · simp [*, simple.W.spec, Std.Usize.max]
-    simp [Spec.w]
-    simp [Std.Usize.max, Std.Usize.numBits_eq]
-    obtain h | h := System.Platform.numBits_eq <;> rw [h] <;> ring_nf
-    all_goals calc ↑y * 2 ^ ↑6 * 5 + ↑x * 2 ^ ↑6 + ↑z
-       _ ≤ 5 * 2 ^ ↑6 * 5 + ↑x * 2 ^ ↑6 + ↑z := by sorry
-       _ ≤ 5 * 2 ^ ↑6 * 5 + 5 * 2 ^ ↑6 + Spec.w 6 := by sorry
-       _ ≤ _ := by native_decide
+  · simp [*, simple.W.spec]
+    apply le_of_lt 
+    calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
+     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by 
+          apply Nat.add_le_add_right (k := ↑z)
+          apply Nat.mul_le_mul_left (k := Spec.w 6)
+          exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
+     _ < Spec.w 6 * (5 * 5) := by
+          apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
+     _ < 2^32 - 1 := by simp [Spec.w]; decide
+     _ ≤ Std.Usize.max := Std.Usize.max_bound
   have: Spec.w 6 * (5 * ↑y + ↑x) + ↑z < 1600 := by
     simp [Spec.w]
-    ring_nf
-    calc ↑y * 2 ^ ↑6 * 5 + ↑x * 2 ^ ↑6 + ↑z
-       _ ≤ 4 * 2 ^ ↑6 * 5 + ↑x * 2 ^ ↑6 + ↑z := by sorry
-       _ ≤ 4 * 2 ^ ↑6 * 5 + 4 * 2 ^ ↑6 + (Spec.w 6 -1) := by sorry
-       _ < _ := by simp [Spec.w]; native_decide
+    calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
+     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by 
+          apply Nat.add_le_add_right (k := ↑z)
+          apply Nat.mul_le_mul_left (k := Spec.w 6)
+          exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
+     _ < Spec.w 6 * (5 * 5) := by
+          apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
   let* ⟨ res, res_post ⟩ ← Aeneas.Std.Array.index_usize_spec
   · simp [*, simple.W.spec, Std.Usize.max]
   rw [Spec.Keccak.StateArray.get]
@@ -346,10 +380,7 @@ theorem  simple.StateArray.index.spec
   conv => arg 2; arg 2; arg 2; rw [Nat.mod_eq_of_lt z_idx]
   simp [simple.W.spec]
   have self_length: self.val.length = 1600 := by simp
-  simp [List.getElem?_eq_getElem (self_length ▸ this)]
-  -- TODO: Not sure how to make Lean accept this, I suspect the issue comes with the rewriting
-  try (rw [BitVec.getElem_ofBoolListLE])
-  sorry
+  simp [toSpec]
 
 /- @[progress] -/
 /- theorem Aeneas.Std.UScalar.cast.spec{src_ty : Std.UScalarTy} (tgt_ty : Std.UScalarTy) (x : Std.UScalar src_ty) : -/
@@ -365,86 +396,52 @@ theorem  simple.StateArray.index.spec
 /-   simp [Std.toResult, hcast] -/
 /-   rw [IScalar.val, BitVec.toInt_setWidth, bv_toNat] -/
 
-
-@[progress]
-theorem simple.StateArray.index_mut.spec
-  (self : simple.StateArray)(x y z: Std.Usize)
-(x_idx: x.val < 5)
-(y_idx: y.val < 5)
-(z_idx: z.val < Spec.w 6)
-: ∃ val upd, self.index_mut (x,y,z) = .ok (val, upd) ∧ 
-    val = self.toSpec.get x.val y.val z.val ∧
-    ∀ b, (upd b).toSpec = self.toSpec.set x.val y.val z.val b
-:= by 
-  rw [index_mut]
-  let* ⟨ i, i_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
-  simp [*] at i1_post
-  let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  · simp [*]; sorry
-  simp [*] at i2_post
-  let* ⟨ c, c_post ⟩ ← Aeneas.Std.Usize.add_spec
-  · simp [*]; sorry
-  simp [*] at c_post
-  let* ⟨ celem, celem_post ⟩ ← Aeneas.Std.Array.index_mut_usize_spec
-  · simp [*]; sorry
+@[ext]
+theorem BitVec.ext{bv1 bv2: BitVec n}
+{point_eq: ∀ (i: Fin n), bv1[i] = bv2[i]}
+: bv1 = bv2 
+:= by
+  obtain ⟨⟨a, a_lt⟩⟩ := bv1
+  obtain ⟨⟨b, b_lt⟩⟩ := bv2
   simp
-  sorry
+  simp [BitVec.getElem_eq_testBit_toNat] at point_eq
+  apply Nat.eq_of_testBit_eq
+  intro i
+  if h: i < n then
+    exact point_eq ⟨i, h⟩
+  else
+    have: a < 2 ^i := calc
+      a < 2 ^n := a_lt
+      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
+    simp [Nat.testBit_lt_two_pow this]
+    have: b < 2 ^i := calc
+      b < 2 ^n := b_lt
+      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
+    simp [Nat.testBit_lt_two_pow this]
 
-theorem Bool.xor_eq_ne(a b: Bool): (a ^^ b) = (a != b) := by cases a <;> cases b <;> decide
-
-@[progress]
-theorem simple.theta.theta_c.spec(input : simple.StateArray)(x z: Std.Usize)
-(x_idx: x.val < 5)
-(z_idx: z.val < Spec.w 6)
-: ∃ output, theta.c input x z = .ok output ∧ output = Spec.Keccak.θ.C input.toSpec x z
-:= by rw [theta.c]; progress*; simp [*, Spec.Keccak.θ.C]
-
-theorem Aeneas.Std.Usize.max_bound
-: 2^32 - 1 <= Std.Usize.max
+@[ext]
+theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
+{point_eq: ∀ (x y: Fin 5)(z: Fin (w l)), a.get x y z = b.get x y z}
+: a = b
 := by
-  rw [Std.Usize.max_def, Std.Usize.numBits, Std.UScalarTy.numBits]
-  cases System.Platform.numBits_eq <;> simp [*]
+  obtain ⟨a⟩ := a
+  obtain ⟨b⟩ := b
+  have bv_point_eq: ∀ (c: Fin (Spec.b l)), a[c] = b[c] := by 
+    simp [get] at point_eq
+    intro c
+    have := point_eq (decodeIndex c).1 (decodeIndex c).2.1 (decodeIndex c).2.2
+    simp [Spec.Keccak.StateArray.decode_encode c] at this
+    assumption
+  simp
+  apply BitVec.ext (point_eq := bv_point_eq)
 
-@[progress]
-theorem simple.theta.theta_d.spec(input : simple.StateArray)(x z: Std.Usize)
-(x_idx: x.val < 5)
-(z_idx: z.val < Spec.w 6)
-: ∃ output, theta.d input x z = .ok output ∧ output = Spec.Keccak.θ.D input.toSpec x z
-:= by
-  rw [theta.d]
-  progress* by ((try simp [W.spec]); scalar_tac)
-  · trans (2^32 -1)
-    · simp [W.spec] at *
-      try scalar_tac
-      sorry --TODO: Weird that it fails here
-    · exact Aeneas.Std.Usize.max_bound
-  · simp [*]
-    rw [←i2_post, W.spec]
-    apply Nat.mod_lt
-    decide
-  rw [Spec.Keccak.θ.D]
-  simp [*]
-  congr 2
-  · have : (x.val + 4) % 5 = (x.val - 1) % 5 := by sorry
-    rw [Nat.cast, NatCast.natCast, Fin.instNatCast, ]
-    simp only
-    apply Fin.eq_of_val_eq
-    simp only [Fin.val_ofNat']
-    natify
-    simp only [Fin.ofNat']
-    simp
-    rw [@NatCast.natCast (Fin 5) Fin.instNatCast]
-    rw [Fin.instNatCast, NatCast.natCast]
-    simp
-    sorry
-  · sorry
-  · sorry
+theorem Spec.Keccak.StateArray.get_ofFn{f: Fin 5 × Fin 5 × Fin (w l) → Spec.Bit}(x y: Fin 5)(z: Fin (w l))
+: (StateArray.ofFn f).get x y z = f (x,y,z)
+:= by simp [ofFn, get, BitVec.ofFn, encode_decode]
 
 theorem Bool.toNat_mod2_self(b: Bool)
 : b.toNat % 2 = b.toNat
 := by cases b <;> simp
-
 
 theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
 :  {j_lt: j < n}
@@ -498,6 +495,136 @@ theorem Spec.Keccak.StateArray.get_set(a: Spec.Keccak.StateArray l)(x x' y y': F
   case isFalse h =>
     have : ¬ (x = x' ∧ y = y' ∧ z = z') := by rintro ⟨rfl,rfl,rfl⟩; exact h rfl
     simp [this]
+
+
+@[progress]
+theorem simple.StateArray.index_mut.spec
+  (self : simple.StateArray)(x y z: Std.Usize)
+(x_idx: x.val < 5)
+(y_idx: y.val < 5)
+(z_idx: z.val < Spec.w 6)
+: ∃ val upd, self.index_mut (x,y,z) = .ok (val, upd) ∧ 
+    val = self.toSpec.get x.val y.val z.val ∧
+    ∀ b, (upd b).toSpec = self.toSpec.set x.val y.val z.val b
+:= by 
+  rw [index_mut]
+  let* ⟨ i, i_post ⟩ ← Aeneas.Std.Usize.mul_spec
+  let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
+  simp only [*] at i1_post
+  let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
+  · simp [*, W.spec]
+    -- TODO: Hmm, this should be using transitivity to get <, no?
+    apply le_of_lt
+    calc Spec.w 6 * (5 * y.val + x.val)
+      _ < Spec.w 6 * (5 * 5) := by 
+          apply Nat.mul_lt_mul_left (by simp [Spec.w]: 0 < Spec.w 6) |>.mpr
+          exact Nat.lt_packing_right x_idx y_idx
+      _ < 2^32 - 1 := by decide
+      _ ≤ Std.Usize.max := Std.Usize.max_bound
+  simp only [*] at i2_post
+  let* ⟨ c, c_post ⟩ ← Aeneas.Std.Usize.add_spec
+  · simp [*, W.spec]
+    apply le_of_lt
+    calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
+     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by 
+          apply Nat.add_le_add_right (k := ↑z)
+          apply Nat.mul_le_mul_left (k := Spec.w 6)
+          exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
+     _ < Spec.w 6 * (5 * 5) := by
+          apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
+     _ < 2^32 - 1 := by simp [Spec.w]; decide
+     _ ≤ Std.Usize.max := Std.Usize.max_bound
+  simp only [*] at c_post
+  have c_idx :↑c < Std.Array.length self := by
+    simp [*, W.spec]
+    calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
+     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by 
+          apply Nat.add_le_add_right (k := ↑z)
+          apply Nat.mul_le_mul_left (k := Spec.w 6)
+          exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
+     _ < Spec.w 6 * (5 * 5) := by
+          apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
+  let* ⟨ celem, celem_post ⟩ ← Aeneas.Std.Array.index_mut_usize_spec
+  simp [-Bool.forall_bool,celem_post]
+  simp only [Std.Array.length] at c_idx
+  have c_encode: c.val = @Spec.Keccak.StateArray.encodeIndex 6 x.val.cast y.val.cast z.val.cast := by
+    simp [Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt z_idx, c_post, W.spec]
+  constructor
+  · simp [Spec.Keccak.StateArray.get, ←c_encode]
+    simp [toSpec]
+  · intro b
+    ext i j k
+    simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.set, ←c_encode]
+    /- let c2 := Spec.Keccak.StateArray.encodeIndex i j k -/
+    /- have c2_encode: c2 = Spec.Keccak.StateArray.encodeIndex i j k := rfl -/
+    /- rw [←c2_encode] -/
+    simp [toSpec, Spec.Keccak.StateArray.set, Std.Array.set]
+    /- have h := BitVec.setWidth_eq (BitVec.ofBoolListLE self.val) -/
+    /- have : self.val.length = 1600 := by simp only [List.Vector.length_val, Std.UScalar.ofNat_val_eq] -/
+    simp [BitVec.getElem_set]
+    if h: c.val = Spec.Keccak.StateArray.encodeIndex i j k then
+      rw [←h]
+      simp [Nat.mod_eq_of_lt (by simpa [Spec.b, Spec.w, self.property] using c_idx: c.val < Spec.b 6), ←c_encode]
+      have c_set_idx: c.val < (self.val.set c.val b).length := by simpa using c_idx
+      simp [List.getElem?_eq_getElem c_set_idx]
+    else
+      rw [c_encode] at h
+      simp [h]
+      have:(Spec.Keccak.StateArray.encodeIndex i j k).val < (self.val.set ↑c b).length := by 
+        have := (Spec.Keccak.StateArray.encodeIndex i j k).isLt
+        simp only [List.length_set]
+        simp only [Spec.b, Spec.w] at this
+        simp
+        exact this
+      rw [←c_encode] at h
+      simp [List.getElem?_set_ne h]
+
+theorem Bool.xor_eq_ne(a b: Bool): (a ^^ b) = (a != b) := by cases a <;> cases b <;> decide
+
+@[progress]
+theorem simple.theta.theta_c.spec(input : simple.StateArray)(x z: Std.Usize)
+(x_idx: x.val < 5)
+(z_idx: z.val < Spec.w 6)
+: ∃ output, theta.c input x z = .ok output ∧ output = Spec.Keccak.θ.C input.toSpec x z
+:= by rw [theta.c]; progress*; simp [*, Spec.Keccak.θ.C]
+
+@[progress]
+theorem simple.theta.theta_d.spec(input : simple.StateArray)(x z: Std.Usize)
+(x_idx: x.val < 5)
+(z_idx: z.val < Spec.w 6)
+: ∃ output, theta.d input x z = .ok output ∧ output = Spec.Keccak.θ.D input.toSpec x z
+:= by
+  rw [theta.d]
+  progress* by ((try simp [W.spec]); scalar_tac)
+  · trans (2^32 -1)
+    · have: i2.val = W.val - 1 := by scalar_tac
+      simp [W.spec, Spec.w] at *
+      simp [this, Fin.val_ofNat']
+      --TODO: Weird that `scalar_tac` fails here
+      /- scalar_tac -/
+      calc _
+        _ ≤ (2^6 - 1) + (2^(6: Fin 7).val - 1) := 
+          Nat.add_le_add_right (Nat.le_pred_iff_lt (Nat.two_pow_pos 6) |>.mpr z_idx) (k := 2^(6: Fin 7).val - 1)
+        _ ≤ 2^32 - 1 := by decide
+    · exact Aeneas.Std.Usize.max_bound
+  · simp [*]
+    rw [←i2_post, W.spec]
+    apply Nat.mod_lt
+    decide
+  rw [Spec.Keccak.θ.D]
+  simp [*]
+  congr 2
+  · apply Fin.eq_of_val_eq
+    simp [Fin.sub_def, Nat.add_comm]
+  · apply Fin.eq_of_val_eq
+    simp [Fin.add_def]
+  · apply Fin.eq_of_val_eq
+    simp [Fin.sub_def, ←i2_post, W.spec]
+    have: i2.val = W.val - 1 := by scalar_tac
+    simp [this, W.spec, Nat.add_comm]
+
+
+
 
 @[progress]
 theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: Std.Usize)
@@ -579,7 +706,9 @@ theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: St
 termination_by (Spec.w 6 + 1) - z.val
 -- TODO: I need to do this to impose the order to be ≤, but it should be fine to use <, since
 -- z is not incremented if `z = Spec.w 6`. Why does this happen then?
-decreasing_by scalar_decr_tac
+decreasing_by 
+
+  scalar_decr_tac
 
 @[progress]
 theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
@@ -597,7 +726,7 @@ theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
   case isTrue y_idx =>
     let* ⟨ res_z, res_z_post ⟩ ← simple.theta.inner.inner_loop.spec
     let* ⟨ y_succ, y_succ_post ⟩ ← Aeneas.Std.Usize.add_spec
-    let* ⟨ res, res_post ⟩ ← spec (a := a) -- ← I do this instead of `· exact a`
+    let* ⟨ res, res_post ⟩ ← spec (a := a) (y := y_succ) -- ← I do this instead of `· exact a`
     intro x' y' z'
     simp [res_post, y_succ_post, res_z_post]
 
@@ -622,7 +751,9 @@ theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
     intro x' y' z'
     simp [Nat.not_le_of_gt y'.isLt]
 termination_by (5 +1) - y.val
-decreasing_by scalar_decr_tac
+decreasing_by 
+  
+  scalar_decr_tac
 
 @[progress]
 theorem simple.theta_loop.spec(input a: simple.StateArray)(x: Std.Usize)
@@ -659,49 +790,6 @@ theorem simple.theta_loop.spec(input a: simple.StateArray)(x: Std.Usize)
 termination_by 5+1 - x.val
 decreasing_by scalar_decr_tac
 
-@[ext]
-theorem BitVec.ext{bv1 bv2: BitVec n}
-{point_eq: ∀ (i: Fin n), bv1[i] = bv2[i]}
-: bv1 = bv2 
-:= by
-  obtain ⟨⟨a, a_lt⟩⟩ := bv1
-  obtain ⟨⟨b, b_lt⟩⟩ := bv2
-  simp
-  simp [BitVec.getElem_eq_testBit_toNat] at point_eq
-  apply Nat.eq_of_testBit_eq
-  intro i
-  if h: i < n then
-    exact point_eq ⟨i, h⟩
-  else
-    have: a < 2 ^i := calc
-      a < 2 ^n := a_lt
-      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
-    simp [Nat.testBit_lt_two_pow this]
-    have: b < 2 ^i := calc
-      b < 2 ^n := b_lt
-      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
-    simp [Nat.testBit_lt_two_pow this]
-
-@[ext]
-theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
-{point_eq: ∀ (x y: Fin 5)(z: Fin (w l)), a.get x y z = b.get x y z}
-: a = b
-:= by
-  obtain ⟨a⟩ := a
-  obtain ⟨b⟩ := b
-  have bv_point_eq: ∀ (c: Fin (Spec.b l)), a[c] = b[c] := by 
-    simp [get] at point_eq
-    intro c
-    have := point_eq (decodeIndex c).1 (decodeIndex c).2.1 (decodeIndex c).2.2
-    simp [Spec.Keccak.StateArray.decode_encode c] at this
-    assumption
-  simp
-  apply BitVec.ext (point_eq := bv_point_eq)
-
-theorem Spec.Keccak.StateArray.get_ofFn{f: Fin 5 × Fin 5 × Fin (w l) → Spec.Bit}(x y: Fin 5)(z: Fin (w l))
-: (StateArray.ofFn f).get x y z = f (x,y,z)
-:= by simp [ofFn, get, BitVec.ofFn, encode_decode]
-
 @[progress]
 theorem simple.theta.spec(input: simple.StateArray)
 : ∃ output, theta input = .ok output ∧ output.toSpec = Spec.Keccak.θ input.toSpec
@@ -711,12 +799,89 @@ theorem simple.theta.spec(input: simple.StateArray)
   ext x y z
   simp [res_post x y z, Spec.Keccak.StateArray.get_ofFn]
 
+theorem Array.getElem?_chunks_exact(k: Nat)(arr: Array α)(i: Nat)
+: i < arr.size / k
+→ Vector.toArray <$> (arr.chunks_exact k)[i]? = some (arr.extract (k*i) (k*(i+1)))
+:= by sorry
+
 @[progress]
-theorem sponge.spec (r : Std.Usize) (bs : Vec Bool) (d : Std.Usize) (r_ne_zero: r.val ≠ 0)
+private theorem auxiliary.Slice.index(start stop: Std.Usize)(arr: Std.Slice α)(k i: Nat)
+: start.val = k * i
+→ stop.val = k * (i + 1)
+→ i < arr.length / k
+→ k > 0
+→ ∃ output,
+  Std.core.slice.index.SliceIndexRangeUsizeSlice.index {start, end_ := stop} arr = .ok output ∧
+  output.val = arr.val.slice start.val stop.val
+:= by
+  intro start_def stop_def i_bnd k_pos
+  simp [Std.core.slice.index.SliceIndexRangeUsizeSlice.index]
+
+  have start_lt_stop: start.val < stop.val := by simp [start_def, stop_def, Nat.mul_lt_mul_left k_pos |>.mpr]
+  have stop_le_len: stop.val ≤ arr.length := 
+    calc stop.val
+      _ = k * (i + 1) := stop_def
+      _ ≤ k * (arr.length / k) := Nat.mul_le_mul_left k i_bnd
+      _ ≤ arr.length := Nat.mul_div_le arr.length k
+  
+  simp [le_of_lt start_lt_stop, stop_le_len]
+
+/- @[progress] -/
+theorem simple.sponge_absorb_loop.spec
+  (bs : Std.Slice Bool) (r : Std.Usize) [NeZero r.val](output : Aeneas.Std.Array Bool 1600#usize)
+  (suffix : Std.Slice Bool)(n i : Std.Usize)
+: n = bs.length / r
+→ ∃ output,
+  sponge_absorb_loop bs r output suffix n i = .ok output ∧
+  output.val = (Spec.sponge.absorb (f:=Spec.Keccak.P 6 24) (pad:=Spec.«pad10*1») r.val (Array.mk <| bs.val ++ suffix.val)).toArray.toList
+:= by
+  intro n_def
+  unfold simple.sponge_absorb_loop
+  split
+  case isTrue h =>
+    let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.mul_spec
+    · simp [n_def] at h
+      calc r * i.val
+        _ ≤ r * (bs.length / r) := Nat.mul_le_mul_left r.val (le_of_lt h)
+        _ ≤ bs.length := Nat.mul_div_le bs.length r.val
+        _ ≤ Std.Usize.max := bs.property
+    let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.add_spec
+    let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.mul_spec
+    · simp [n_def, i2_post] at h ⊢
+      calc r * (i.val + 1)
+        _ ≤ r * (bs.length / r) := Nat.mul_le_mul_left r.val h
+        _ ≤ bs.length := Nat.mul_div_le bs.length r.val
+        _ ≤ Std.Usize.max := bs.property
+    -- TODO: Should probably use a separate progress theorem for this.
+    simp [Std.core.slice.index.Slice.index]
+    let* ⟨ chunk, chunk_post ⟩ ← auxiliary.Slice.index
+    · exact r.val.pos_of_neZero
+    progress
+  case isFalse h =>
+    let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.mul_spec
+    · sorry
+    sorry
+
+@[progress]
+theorem simple.sponge_absorb.spec
+  (bs : Std.Slice Bool) (r : Std.Usize) [NeZero r.val](output : Aeneas.Std.Array Bool 1600#usize)
+  (suffix : Std.Slice Bool)
 : ∃ output,
-  sha3.simple.sponge r bs d = .ok output ∧
-  output.val = (@Spec.sponge _ (f := Spec.Keccak.P 6 (nᵣ := 24)) (pad := Spec.«pad10*1») r.val ⟨r_ne_zero⟩ bs.toBitArray d.val).toList
-:= sorry
+  sponge_absorb bs r output suffix = .ok output ∧
+  output.val = (Spec.sponge.absorb (f:=Spec.Keccak.P 6 24) (pad:=Spec.«pad10*1») r.val (Array.mk <| bs.val ++ suffix.val)).toArray.toList
+:= by
+  sorry
+
+-- @[progress]
+theorem simple.sponge.spec (r : Std.Usize) (bs output suffix: Std.Slice Bool) 
+[NeZero r.val]
+/- (r_ne_zero: r.val ≠ 0) -/
+: ∃ output,
+  simple.sponge r bs output suffix = .ok output ∧
+  output.val = (Spec.sponge (f := Spec.Keccak.P 6 (nᵣ := 24)) (pad := Spec.«pad10*1») r.val (Array.mk <| bs.val ++ suffix.val ) output.length).toArray.toList
+:= by
+
+  sorry
 
 
 section FinalResult
