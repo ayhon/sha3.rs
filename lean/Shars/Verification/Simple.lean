@@ -2,19 +2,23 @@ import Aeneas
 import Shars.Definitions.Simple
 import Sha3.Spec
 /- import Sha3.Utils -/
+import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
+import Init.Data.Nat.Basic
+
+section Refinement
 
 set_option maxHeartbeats 1000000
+
+attribute [-simp] List.getElem!_eq_getElem?_getD
+attribute [local simp] Aeneas.Std.Slice.set
+
+notation "‹" term "›'" => (by scalar_tac: term)
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec 
 section Auxiliary/- {{{ -/
-
-theorem getElem_of_getElem?_in_bounds{xs: List α}{i: Nat}
-(i_idx: i < xs.length)
-: xs[i]? = some (xs[i])
-:= by simp only [List.getElem?_eq_some_getElem_iff]
 
 @[progress]
 theorem simple.add_to_vec_loop.spec(dst: Vec Bool)(other: Vec Bool)(o n i: Std.Usize)
@@ -23,9 +27,9 @@ theorem simple.add_to_vec_loop.spec(dst: Vec Bool)(other: Vec Bool)(o n i: Std.U
 → ∃ nb_added output,
   add_to_vec_loop core.marker.CopyBool dst o other n i = .ok (nb_added, output) ∧
   nb_added = Nat.min (n.val) (dst.length - o.val) - i.val + i.val ∧
-  ∀ (j: Fin dst.length), 
-    if o.val + i.val ≤ j ∧ j < o.val + n.val then output.val[j]! = other.val[j-o.val]!
-    else  output.val[j]! = dst.val[j]!
+  ∀ j: Nat, j < dst.length →
+    output.val[j]! = if o.val + i.val ≤ j ∧ j < o.val + n.val then other.val[j-o.val]!
+    else dst.val[j]!
 := by/- {{{ -/
   intro no_overflow o_other_idx
   rw [add_to_vec_loop]
@@ -35,61 +39,33 @@ theorem simple.add_to_vec_loop.spec(dst: Vec Bool)(other: Vec Bool)(o n i: Std.U
     split
     case isTrue oi_idx => 
       let* ⟨ t, t_post ⟩ ← Aeneas.Std.Slice.index_usize_spec
-      simp [*] at t_post
       let* ⟨ dst', dst'_post ⟩ ← Aeneas.Std.Slice.update_spec
-      simp [*] at dst'_post
-      let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
+      fsimp [*] at dst'_post
+    let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
       let* ⟨ nb_added, output, nb_added_post, output_post ⟩ ← spec
-      simp [*] at nb_added_post output_post
-      simp [nb_added_post]
-      apply And.intro
-      · have: n.val.min (dst.length - o) >= (i.val + 1) := by scalar_tac
-        rw [Nat.add_comm, ←Nat.add_sub_assoc this]
-        conv => arg 2; rw [Nat.add_comm, ←Nat.add_sub_assoc (Nat.le_of_lt this)]
-        simp
-      intro j
-      have dst'_length: dst'.length = dst.length := by simp [dst'_post]
-      let j': Fin (dst').length := ⟨j.val, by simp [dst'_length] ⟩
-      replace output_post := output_post j'
-      split
-      case isTrue j_in_range =>
-        -- If j ≥ o + (i + 1) then by induction hypothesis we conclude
-        -- Otherwise, we have j = o + i and by dst'_post we have
-        --   output[o+i]! = (dst.set (o + i) (other[i]))[o+1]!
-        --   and by List.getElem_set we have output[o+1] = other[i]
-        if ih: o.val + (i.val + 1) ≤ j then
-          simp [ih, j', j_in_range] at output_post
-          exact output_post
-        else
-          have j_val: j = o.val + i := by scalar_tac
-          have: ↑o + ↑i < (dst).length := by scalar_tac
-          simp [ih, j', j_val, j_in_range, List.getElem?_set, this] at output_post
-          simpa [j_val] using output_post
-      case isFalse =>
-        have j_not_range: ¬ (↑o + (i.val + 1) ≤ ↑j ∧ ↑j < o.val + ↑n) := by scalar_tac
-        have j_not_updated: ¬ o.val + i.val = j.val := by scalar_tac
-        rw [if_neg j_not_range] at output_post
-        simp [List.getElem?_set, j_not_updated] at output_post
-        rw [if_neg j_not_updated] at output_post
-        simpa [j'] using output_post
-    case isFalse oi_oob=>
-      simp [oi_post] at oi_oob ⊢
-      if h: n < dst.length - o.val then
-        scalar_tac
-      else
-        apply And.intro
+      simp [*] at *
+      constructor
+      · scalar_tac
+      · intro j j_idx
+        rw [output_post j j_idx]; clear output_post
+        split_all
+        · rfl
         · scalar_tac
-        · intros; scalar_tac -- TODO: Maybe this could be included in `scalar_tac`
+    · simp [‹j = o + i›']
+          simp_lists
+        · simp_lists
+    case isFalse oi_oob=>
+      simp [*] at *
+      constructor
+      · scalar_tac
+      · intros j _
+        simp_ifs
   case isFalse =>
     simp
-    if h: n < dst.length - o.val then
-      apply And.intro
-      · scalar_tac
-      · intros; scalar_tac
-    else
-      apply And.intro
-      · scalar_tac
-      · intros; scalar_tac
+    constructor
+    · scalar_tac
+    · intro j _ 
+      simp_ifs
 termination_by n.val - i.val
 decreasing_by scalar_decr_tac/- }}} -/
 
@@ -100,9 +76,9 @@ theorem simple.add_to_vec.spec(dst: Std.Slice Bool)(other: Vec Bool)(o n: Std.Us
 → ∃ nb_added output,
   add_to_vec core.marker.CopyBool dst o other n = .ok (nb_added, output) ∧
   nb_added = Nat.min (n.val) (dst.length - o.val) ∧
-  ∀ (j: Fin dst.length), 
-    if o.val ≤ j ∧ j < o.val + n.val then output.val[j]! = other.val[j-o.val]!
-    else  output.val[j]! = dst.val[j]!
+  ∀ j < dst.length, 
+    output.val[j]! = if o.val ≤ j ∧ j < o.val + n.val then other.val[j-o.val]!
+    else  dst.val[j]!
 := by simpa using add_to_vec_loop.spec dst other o n (i := 0#usize)
 
 @[progress]
@@ -118,73 +94,50 @@ theorem simple.xor_long_at_loop.spec(a b: Std.Slice Bool)(pos n i: Std.Usize)
 → ∃ output,/- {{{ -/
   xor_long_at_loop a b pos n i = .ok output ∧ 
   output.length = a.length ∧
-  ∀ (j: Fin a.length), 
-    if i ≤ j.val ∧ j.val < n then output[j]! = (a[j]! ^^ b[j-pos.val]!)
-    else output[j]! = a[j]!
+  ∀ j <a.length, output[j]! =
+    if i ≤ j ∧ j < n then (a[j]! ^^ b[j-pos.val]!)
+    else a[j]!
 := by
   intro no_overflow n_def i_ge_pos
   rw [xor_long_at_loop]
-  split
-  case isTrue i_bnd =>
-    have i_a_idx: i.val < a.length := by scalar_tac
-    let* ⟨ ai, ai_post ⟩ ← Aeneas.Std.Slice.index_usize_spec
-    simp [*] at ai_post
-    let* ⟨ i', i'_post ⟩ ← Aeneas.Std.Usize.sub_spec
-    have i'_b_idx: i'.val < b.length := by scalar_tac
-    let* ⟨ bi, bi_post ⟩ ← Aeneas.Std.Slice.index_usize_spec
-    simp [*] at bi_post
-    let* ⟨ ci, ci_post ⟩ ← simple.binxor.spec
-    simp [*] at ci_post
-    let* ⟨ c, c_post ⟩ ← Aeneas.Std.Slice.update_spec
-    simp [*] at c_post
-    let* ⟨ i_succ, i_succ_post ⟩ ← Aeneas.Std.Usize.add_spec
-    simp [*] at i_succ_post
-    let* ⟨ rest, rest_len, rest_post ⟩ ← spec
-    simp [*] at rest_post
-
-    apply And.intro 
-    · simp [c_post, rest_len]
-
-    intro j
-    let j': Fin c.length := ⟨j.val, by simp [c_post]⟩
-    replace rest_post := rest_post j'
-    split
-    case isTrue j_range =>
-      simp [i'_post] at j_range
-      have cond : j' < a.length ∧ ↑j' < b.length + ↑pos := by scalar_tac
-      if h: i'.val + pos.val + 1 ≤ j' then
-        have not_set: ¬ i'.val + pos.val = j.val := by scalar_tac
-        simp [And.intro h cond] at rest_post
-        simp [List.getElem_set] at rest_post
-        rw [if_neg not_set] at rest_post
-        simpa using rest_post
-      else
-        have j_val: j'.val = i'.val + pos.val := by scalar_tac
-        simp [h, j_val] at rest_post cond
-        conv at rest_post =>
-          arg 2
-          -- (1) When doing getElem?_set I lose the ?
-          simp [List.getElem?_set, cond] 
-        simp
-        have: j.val = i'.val + pos.val := (rfl: j.val = j'.val) ▸ j_val
-        simp [this]
-        -- NOTE: I need this to match to the goal, because of (1)
-        have: i'.val < b.length := by scalar_tac
-        rw [List.getElem?_eq_getElem this]
-        exact rest_post
-    case isFalse j_oob =>
-      simp at rest_post
-      have cond: ¬ (i'.val + pos.val + 1 ≤ j'.val ∧ j'.val < a.length ∧ j'.val < b.length + pos.val) := by scalar_tac
-      simp [cond] at rest_post; clear cond
-      simp only [Std.Slice.length, not_and_or, not_le, not_lt, n_def, i'_post] at j_oob
-      have not_set: ¬ (i'.val + pos.val = j.val) := by scalar_tac
-      rw [@List.getElem?_set_ne _ a.val _ _ not_set _ ] at rest_post
-      simpa using rest_post
-  case isFalse i_oob =>
-    simp at i_oob ⊢; intro j h1 h2
-    scalar_tac
+  progress* <;> simp [*]
+  · intro j j_lt
+    replace res_post_2 := res_post_2 j (by simp [*]); simp at res_post_2; simp [*]; clear res_post_2
+    split_all
+    · simp_lists
+    · scalar_tac
+    · simp [‹j = i.val + pos›']
+      simp_lists
+    · simp_lists
+  · intro j j_lt
+    simp_ifs
 termination_by n.val - i.val
 decreasing_by scalar_decr_tac/- }}} -/
+
+---
+@[simp, scalar_tac_simps]
+theorem OrdUsize.min_val (x y : Std.Usize) : (Std.core.cmp.impls.OrdUsize.min x y).val = Nat.min x.val y.val := by
+  simp [Std.core.cmp.impls.OrdUsize.min]; split <;> simp [*] <;> omega
+
+-- TODO: derive automatically with `progress_pure_def` applied to `Std.core.cmp.impls.OrdUsize.min`
+@[progress]
+theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
+  ∃ z, Std.toResult (Std.core.cmp.impls.OrdUsize.min x y) = .ok z ∧ z = Std.core.cmp.impls.OrdUsize.min x y := by
+  simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult]
+
+attribute [scalar_tac a.val] Fin.is_le'
+
+attribute [scalar_tac_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_le
+
+@[scalar_tac_simps]
+theorem not_and_equiv_or_not (a b : Prop) : ¬ (a ∧ b) ↔ ¬ a ∨ ¬ b := by tauto
+---
+
+@[simp_lists_simps]
+theorem and_imp_of_ite{cond P Q: Prop}[Decidable cond]: (if cond then P else Q) = ((cond → P) ∧ ((¬ cond) → Q)) := by
+  split <;> simp [*]
+
+attribute [simp_lists_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_le
 
 @[progress]
 theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
@@ -192,80 +145,64 @@ theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
 → ∃ output,
   xor_long_at a b pos = .ok output ∧ 
   output.length = a.length ∧
-  ∀ (j: Fin a.length), 
-    if pos ≤ j.val ∧ j.val < pos.val + b.length then output[j]! = (a[j]! ^^ b[j.val-pos.val]!)
+  ∀ j < a.length, 
+    if pos.val ≤ j ∧ j < pos.val + b.length then output[j]! = (a[j]! ^^ b[j-pos.val]!)
     else output[j]! = a[j]!
 := by/- {{{ -/
   intro no_overflowa
   rw [xor_long_at]
+
   let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.add_spec
-  simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult, xor_long_at]
-  have min_works: ↑(if a.length < ↑i2 then a.len else i2) = a.length.min (b.length + ↑pos) := by
-    split <;> scalar_tac
-  let* ⟨ res, res_len, res_post ⟩ ← xor_long_at_loop.spec
-  rw [min_works] at res_post
-  apply And.intro res_len
-  intro j
-  replace res_post := res_post j
-  split
-  case isTrue cond =>
-    have: j < a.length.min (b.len + pos) := by scalar_tac
-    simp [cond, min_works, this] at res_post
-    rw [Nat.add_comm] at res_post
-    rw [if_pos cond.right] at res_post
-    assumption
-  case isFalse h =>
-    have: ¬ (pos.val ≤ j.val ∧ j.val < b.length + ↑pos) := by scalar_tac
-    simp [this] at res_post
-    assumption/- }}} -/
+  let* ⟨ n, n_post ⟩ ← Std.core.cmp.impls.OrdUsize.min_spec
+  let* ⟨ res, res_post_1, res_post_2 ⟩ ← simple.xor_long_at_loop.spec
+  simp_lists [*] at *
+  intro j _
+  rw [res_post_2 j (by scalar_tac)]
+  constructor
+  · intro _; simp_ifs
+  · intro _; simp_ifs
+
+
+@[simp_lists_simps]   
+theorem getElem!_zipWith[Inhabited α][Inhabited β](f: α → α → β)(xs ys: List α)
+: ∀ i < xs.length.min ys.length,
+  (xs.zipWith f ys)[i]! = f xs[i]! ys[i]!
+:= by
+  intro i i_idx
+  cases xs <;> cases ys <;> cases i <;> simp at *
+  apply getElem!_zipWith
+  apply Nat.le_min.mpr
+  assumption
+
+attribute [scalar_tac_simps] List.length_zipWith
 
 @[progress]
 theorem simple.xor_long.spec(a b: Std.Slice Bool)
 : ∃ c, 
-  xor_long a b = .ok c ∧ c = a.val.zipWith (· ^^ ·) b ++ a.val.drop b.length
+  xor_long a b = .ok c ∧ c = a.val.zipWith xor b ++ a.val.drop b.length
 := by/- {{{ -/
   rw [xor_long]
-  let* ⟨ res, res_len, res_post ⟩ ← simple.xor_long_at.spec
-  simp at res_post
-  ext i : 1
-  if i_idx: i < a.length.min (b.length) then
-    have i_a_idx := Nat.lt_min.mp i_idx |>.left
-    have i_b_idx := Nat.lt_min.mp i_idx |>.right
-    replace res_post := res_post ⟨i, by scalar_tac⟩
-    simp [Nat.lt_min.mp i_idx] at res_post
-    conv => 
-      arg 2
-      rw [@List.getElem?_append_left _ _ _ _ (by simp [List.length_zipWith, i_idx])]
+  progress* by scalar_tac
 
-    simp [List.getElem?_zipWith]
-    simp [List.getElem?_eq_getElem i_a_idx]
-    simp [List.getElem?_eq_getElem i_b_idx]
-    -- TODO: Prove something about indices and res[i]? beign some (res[i])
-    have i_res_idx: i < res.length := res_len ▸ Nat.lt_min.mp i_idx |>.left
-    simp [List.getElem?_eq_getElem i_res_idx] at res_post ⊢
-    assumption
+  apply List.ext_getElem!
+  · simp [*]; scalar_tac
+
+  intro i
+  replace res_post_2 := res_post_2 i
+  if i_idx: i < a.length.min (b.length) then
+    simp_ifs at res_post_2
+    replace res_post_2 := res_post_2 (by scalar_tac)
+    simp [*, getElem!_zipWith]
+    simpa using res_post_2
   else
-    conv => 
-      arg 2
-      rw [@List.getElem?_append_right _ _ _ _ (by simp [List.length_zipWith]; scalar_tac)]
-    simp [List.length_zipWith]
     if i_a_idx: i < a.length then
-      replace res_post := res_post ⟨i, i_a_idx⟩
-      simp [List.getElem?_eq_getElem  (res_len ▸ (i_a_idx))] at res_post ⊢
-      if h: a.length > b.length then
-        have: ¬ i < b.length := by scalar_tac
-        simp [this] at res_post
-        have : b.length + (i - Nat.min a.length b.length) = i:= by scalar_tac
-        rw [this]
-        simp [List.getElem?_eq_getElem i_a_idx] at res_post ⊢
-        assumption
-      else
-        -- NOTE: Over here, I need to simp `i_a_idx` so that scalar_tac uses it properly
-        simp at i_a_idx
-        scalar_tac
+      simp [*] at *
+      simp [*] at *
+      rw [res_post_2]
+      congr
+      scalar_tac
     else
-      simp [List.getElem?_eq_none  (res_len ▸ (Nat.le_of_not_lt (i_a_idx)))] at res_post ⊢
-      scalar_tac/- }}} -/
+      simp_lists
 
 end Auxiliary/- }}} -/
 
@@ -328,6 +265,21 @@ theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
       simp [Nat.sub_add_cancel this]
       exact And.intro n_pos m_pos
 
+attribute [scalar_tac_simps] simple.W.spec Spec.w Spec.b
+
+@[scalar_tac 5 * y + x]
+theorem something_not_named_yet
+: x ≥ 5 ∨ y ≥ 5 ∨ Spec.w 6 * (5 * y + x) ≤ Spec.w 6 * 24
+:= by
+  if x ≥ 5 then left; assumption
+  else if y ≥ 5 then right; left; assumption
+  else
+    rename_i x_idx y_idx
+    simp at x_idx y_idx
+    right; right
+    apply Nat.mul_le_mul_left (k := Spec.w 6)
+    exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
+
 @[progress]
 theorem  simple.StateArray.index.spec
   (self : StateArray)(x y z: Std.Usize)
@@ -340,6 +292,7 @@ theorem  simple.StateArray.index.spec
   rw [index]
   let* ⟨ i, i_post ⟩ ← Aeneas.Std.Usize.mul_spec
   let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
+  simp [i_post] at i1_post
   let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
   · simp [*, simple.W.spec]
     apply le_of_lt 
@@ -371,44 +324,34 @@ theorem  simple.StateArray.index.spec
      _ < Spec.w 6 * (5 * 5) := by
           apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
   let* ⟨ res, res_post ⟩ ← Aeneas.Std.Array.index_usize_spec
-  · simp [*, simple.W.spec, Std.Usize.max]
-  rw [Spec.Keccak.StateArray.get]
+  simp [*, simple.W.spec, Std.Usize.max]
+  simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt z_idx, toSpec, List.getElem!_eq_getElem?_getD]
 
-  simp [*, Spec.Keccak.StateArray.encodeIndex]
-  -- TODO: These are some ugly `conv`s
-  conv => arg 2; arg 2; arg 1; arg 2; rw [Nat.mod_eq_of_lt x_idx]; arg 1; arg 2; rw [Nat.mod_eq_of_lt y_idx]
-  conv => arg 2; arg 2; arg 2; rw [Nat.mod_eq_of_lt z_idx]
-  simp [simple.W.spec]
-  have self_length: self.val.length = 1600 := by simp
-  simp [toSpec]
+example(bv: BitVec n)(i: Nat)(i_idx: i < n)
+: bv[i]! = bv[i]'i_idx
+:= by 
+  exact getElem!_pos bv i i_idx
 
-/- @[progress] -/
-/- theorem Aeneas.Std.UScalar.cast.spec{src_ty : Std.UScalarTy} (tgt_ty : Std.UScalarTy) (x : Std.UScalar src_ty) : -/
-/-   ∃ y, Std.toResult (Std.UScalar.cast tgt_ty x) = Std.Result.ok y ∧ y.val = (x: Nat) % 2 ^ tgt_ty.numBits -/
-/- := by /1- {{{ -1/ -/
-/-   simp [Std.toResult, cast] -/
-/-   rw [UScalar.val, BitVec.toNat_setWidth, bv_toNat] -/
-
-/- @[progress] -/
-/- theorem Aeneas.Std.UScalar.hcast.spec{src_ty : Std.UScalarTy} (tgt_ty : Std.IScalarTy) (x : Std.UScalar src_ty) : -/
-/-   ∃ y, Std.toResult (Std.UScalar.hcast tgt_ty x) = Std.Result.ok y ∧ y.val = (x: Int).bmod (2 ^ tgt_ty.numBits) -/
-/- := by -/ 
-/-   simp [Std.toResult, hcast] -/
-/-   rw [IScalar.val, BitVec.toInt_setWidth, bv_toNat] -/
+  
+theorem getElem_eq_getElem! [GetElem? cont idx elem dom] [LawfulGetElem cont idx elem dom]
+    [Inhabited elem] (c : cont) (i : idx) (h : dom c i) :
+    c[i]'h = c[i]! := by
+  have : Decidable (dom c i) := .isTrue h
+  simp [getElem!_def, getElem?_def, h]
 
 @[ext]
 theorem BitVec.ext{bv1 bv2: BitVec n}
-{point_eq: ∀ (i: Fin n), bv1[i] = bv2[i]}
+{point_eq: ∀ i: Nat, (_: i < n) → bv1[i] = bv2[i]}
 : bv1 = bv2 
 := by
   obtain ⟨⟨a, a_lt⟩⟩ := bv1
   obtain ⟨⟨b, b_lt⟩⟩ := bv2
-  simp
+  simp 
   simp [BitVec.getElem_eq_testBit_toNat] at point_eq
   apply Nat.eq_of_testBit_eq
   intro i
   if h: i < n then
-    exact point_eq ⟨i, h⟩
+    exact point_eq i h
   else
     have: a < 2 ^i := calc
       a < 2 ^n := a_lt
@@ -433,7 +376,7 @@ theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
     simp [Spec.Keccak.StateArray.decode_encode c] at this
     assumption
   simp
-  apply BitVec.ext (point_eq := bv_point_eq)
+  apply BitVec.ext (point_eq := fun i h => bv_point_eq ⟨i, h⟩)
 
 theorem Spec.Keccak.StateArray.get_ofFn{f: Fin 5 × Fin 5 × Fin (w l) → Spec.Bit}(x y: Fin 5)(z: Fin (w l))
 : (StateArray.ofFn f).get x y z = f (x,y,z)
@@ -550,8 +493,7 @@ theorem simple.StateArray.index_mut.spec
   have c_encode: c.val = @Spec.Keccak.StateArray.encodeIndex 6 x.val.cast y.val.cast z.val.cast := by
     simp [Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt z_idx, c_post, W.spec]
   constructor
-  · simp [Spec.Keccak.StateArray.get, ←c_encode]
-    simp [toSpec]
+  · simp [Spec.Keccak.StateArray.get, ←c_encode, toSpec, List.getElem!_eq_getElem?_getD]
   · intro b
     ext i j k
     simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.set, ←c_encode]
@@ -595,7 +537,7 @@ theorem simple.theta.theta_d.spec(input : simple.StateArray)(x z: Std.Usize)
 : ∃ output, theta.d input x z = .ok output ∧ output = Spec.Keccak.θ.D input.toSpec x z
 := by
   rw [theta.d]
-  progress* by ((try simp [W.spec]); scalar_tac)
+  progress*
   · trans (2^32 -1)
     · have: i2.val = W.val - 1 := by scalar_tac
       simp [W.spec, Spec.w] at *
@@ -623,8 +565,9 @@ theorem simple.theta.theta_d.spec(input : simple.StateArray)(x z: Std.Usize)
     have: i2.val = W.val - 1 := by scalar_tac
     simp [this, W.spec, Nat.add_comm]
 
-
-
+theorem Fin.cast_of_mk{n: Nat}{x: Nat}(x_lt: x < n)
+: Fin.mk x x_lt = @Nat.cast (Fin n) (@Fin.instNatCast n ⟨Nat.not_eq_zero_of_lt x_lt⟩) x := by
+    simp only [Nat.cast, NatCast.natCast, Fin.instNatCast, Fin.ofNat', Nat.mod_eq_of_lt x_lt]
 
 @[progress]
 theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: Std.Usize)
@@ -703,12 +646,10 @@ theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: St
     simp [this]
     intro x y z'
     simp [Nat.not_le_of_gt z'.isLt]
-termination_by (Spec.w 6 + 1) - z.val
--- TODO: I need to do this to impose the order to be ≤, but it should be fine to use <, since
--- z is not incremented if `z = Spec.w 6`. Why does this happen then?
-decreasing_by 
+termination_by (Spec.w 6) - z.val
+decreasing_by scalar_decr_tac
 
-  scalar_decr_tac
+
 
 @[progress]
 theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
@@ -726,7 +667,8 @@ theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
   case isTrue y_idx =>
     let* ⟨ res_z, res_z_post ⟩ ← simple.theta.inner.inner_loop.spec
     let* ⟨ y_succ, y_succ_post ⟩ ← Aeneas.Std.Usize.add_spec
-    let* ⟨ res, res_post ⟩ ← spec (a := a) (y := y_succ) -- ← I do this instead of `· exact a`
+    let* ⟨ res, res_post ⟩ ← spec  -- (y := y_succ) -- ← I do this instead of `· exact a`
+
     intro x' y' z'
     simp [res_post, y_succ_post, res_z_post]
 
@@ -746,6 +688,7 @@ theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
       rintro rfl rfl
       scalar_tac
   case isFalse y_oob =>
+    simp
     have: y.val = 5 := by scalar_tac
     simp [this]
     intro x' y' z'
@@ -918,3 +861,5 @@ theorem sha3_512.spec(input: Vec Bool)
 := by
   sorry
 end FinalResul
+
+end Refinement
