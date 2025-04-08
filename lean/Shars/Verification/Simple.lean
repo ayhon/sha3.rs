@@ -41,7 +41,7 @@ theorem simple.add_to_vec_loop.spec(dst: Vec Bool)(other: Vec Bool)(o n i: Std.U
       let* ⟨ t, t_post ⟩ ← Aeneas.Std.Slice.index_usize_spec
       let* ⟨ dst', dst'_post ⟩ ← Aeneas.Std.Slice.update_spec
       fsimp [*] at dst'_post
-    let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
+      let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
       let* ⟨ nb_added, output, nb_added_post, output_post ⟩ ← spec
       simp [*] at *
       constructor
@@ -51,7 +51,7 @@ theorem simple.add_to_vec_loop.spec(dst: Vec Bool)(other: Vec Bool)(o n i: Std.U
         split_all
         · rfl
         · scalar_tac
-    · simp [‹j = o + i›']
+        · simp [‹j = o + i›']
           simp_lists
         · simp_lists
     case isFalse oi_oob=>
