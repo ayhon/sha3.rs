@@ -662,7 +662,6 @@ termination_by (Spec.w 6) - z.val
 decreasing_by scalar_decr_tac
 
 
-
 @[progress]
 theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
 (x_idx: x.val < 5)
@@ -999,10 +998,237 @@ theorem simple.IOTA_RC_POINTS.spec
 : ∀ t < 255, IOTA_RC_POINTS.val[t]! = Spec.Keccak.ι.rc t
 := by native_decide
 
+attribute [scalar_tac_simps] Nat.mod_mod Fin.ofNat'
+
+@[progress]
+theorem simple.iota_rc_point.spec(t: Std.Usize)
+: ∃ output, 
+  iota_rc_point t = .ok output ∧
+  output = Spec.Keccak.ι.rc t.val
+:= by
+  simp [iota_rc_point]
+  progress*
+  simp [*, IOTA_RC_POINTS.spec (t.val % 255) (by scalar_tac)]
+  rw [
+    Spec.Keccak.ι.rc,
+    ‹Fin.ofNat' 255 (↑t % 255) = Fin.ofNat' 255 ↑t›',
+    ←Spec.Keccak.ι.rc
+  ]
+
+
+/- theorem Std.Usize.one_ShiftLeft_spec -/
+
+theorem Aeneas.Std.UScalar.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar ty1)
+  (hy : y.val < ty0.numBits)
+: ∃ z, (1#ty0.numBits#uscalar) <<< y = .ok z ∧
+  z.val = 2^y.val ∧
+  z.bv = 1#ty0.numBits <<< y.val
+  := by
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_UScalar, shiftLeft, hy, reduceIte, UScalar.size]
+  simp only [BitVec.shiftLeft_eq, Result.ok.injEq, _root_.exists_eq_left', and_true, val]
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_UScalar, shiftLeft, hy, reduceIte, UScalar.size]
+  simp only [bv_toNat, BitVec.shiftLeft_eq, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, Nat.shiftLeft_eq, Nat.mod_mul_mod, one_mul]
+  apply Nat.mod_eq_of_lt
+  apply Nat.pow_lt_pow_of_lt Nat.one_lt_two ‹y.val < ty0.numBits›
+
+/- theorem Aeneas.Std.Usize.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar ty1) (size : Nat) -/
+@[progress] theorem Aeneas.Std.Usize.one_ShiftLeft_spec (y : UScalar ty1) (hy : y.val < UScalarTy.Usize.numBits) 
+: ∃ (z : Usize),
+  1#usize <<< y = .ok z ∧
+  z.val = 2 ^ y.val ∧
+  z.bv = (1#usize).bv <<< y.val
+:= UScalar.one_ShiftLeft_spec _ _ hy
+
+/- @[scalar_tac 2 ^ n] -/ 
+/- theorem Nat.one_lt_two_pow''(n: Nat): 1 ≤ 2^n := @Nat.one_le_two_pow n -/
+attribute [scalar_tac_simps] Nat.one_le_two_pow
+
+@[simp, scalar_tac_simps]
+theorem simple.L.spec
+: L.val = 6
+:= by native_decide
+
+theorem getElem_fold_set(init: BitVec n)(ls: List α)
+(idx_f: α → Fin n)
+(value_f: α → Bool)
+(idx_inv_f: Fin n → α)
+(i: Fin n)
+: Function.LeftInverse idx_inv_f idx_f
+→ (List.foldl (fun b a => b.set (idx_f a) (value_f a)) (init := init) ls)[i] = 
+    if i ∈ (ls.map idx_f |>.reverse) then
+      value_f (idx_inv_f i)
+    else
+      init[i]
+:= by
+  intro idx_left_inv
+  induction ls using List.reverseRecOn
+  case nil => simp
+  case append_singleton pref last ih =>
+    simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
+    split
+    case isTrue h =>
+      simp at h ih
+      rcases h with idx_x | ⟨x, x_in_xs, idx_x⟩
+      /- cases h2: h -/
+      · simp [BitVec.getElem_set, *]
+        rw [idx_left_inv]
+      · simp only [← idx_x, Fin.getElem_fin, BitVec.getElem_set]
+        split
+        · rename_i h
+          simp [←Fin.eq_of_val_eq h]
+          rw [idx_left_inv]
+        · simp [ih, idx_x]
+          intro contr
+          replace contr := contr x x_in_xs idx_x
+          simp at contr
+    case isFalse h =>
+      simp at h ih
+      have: (idx_f last).val ≠ i.val := fun e => h.left (Fin.eq_of_val_eq e.symm)
+      simp [BitVec.getElem_set, this,ih]
+      intro x x_in_pref idx_x
+      have := h.right x x_in_pref idx_x
+      simp at this
+
+theorem Spec.Keccak.ι.RC_as_function(iᵣ: Nat)(x: Fin (Spec.w l))
+: (RC iᵣ)[x] = 
+    let j := (x.val+1).log2
+    if x = 2^j - 1 then
+      ι.rc (j + 7*iᵣ)
+    else
+      false
+:= by
+  let ind_f (j: Fin (l.val + 1)): Fin (Spec.w l) := 2^j.val - 1
+  let inv (x: Fin (Spec.w l)): Fin (l.val + 1) := (x.val+1).log2
+  let value_f (j: Fin (l.val + 1)) := rc (j.val + 7 * iᵣ)
+  have ind_left_inv: inv.LeftInverse ind_f := by 
+    sorry
+    /- simp [ind_f, inv, Function.LeftInverse] -/
+    /- intro x -/
+    /- rw [ -/
+    /-   Nat.sub_add_cancel Nat.one_le_two_pow -/
+    /- ] -/
+  have exists_charact:  (∃ a, 2 ^ a - 1 = x) ↔ (x = 2 ^ (x.val + 1).log2 - 1) := by
+    apply Iff.intro
+    · intro ⟨a, a_prop⟩
+      conv => arg 1; rw [←a_prop]
+      congr
+      if h: a < (x.val +1).log2 then
+        have: 2^a < 2^(x.val + 1).log2 := by
+          apply Nat.pow_lt_pow_of_lt Nat.one_lt_two h
+        have: 2^a -1 < 2^(x.val + 1).log2 -1 := by
+          apply Nat.sub_lt_sub_right Nat.one_le_two_pow this
+        have: x.val < x.val := by
+          calc x.val
+            _ = 2^a - 1 := by
+              rw [a_prop.symm]
+              -- TODO: Fin being a PITA
+              sorry
+            _ < 2 ^(x.val + 1).log2 - 1 := this
+        /- rw [a_prop] at this -/
+        sorry
+      else if a > (x.val + 1).log2 then
+        sorry
+      else
+        simp at *
+        apply Nat.le_antisymm (by assumption) (by assumption)
+    · intro prop
+      exists (x.val + 1).log2
+      exact prop.symm
+      /- simpa using prop -/
+
+  /- have inv_def x: inv x = (x.val + 1).log2 := rfl -/
+  /- rw [←inv_def] -/
+
+  simp [RC]
+  have := getElem_fold_set (0#(w l)) (List.finRange (l.val + 1)) (ind_f) (value_f) (inv) x ind_left_inv
+  simp only [ind_f, inv, value_f, Fin.getElem_fin] at this
+  conv => arg 1; arg 1; arg 1; ext b a; arg 1; rw [Fin.cast_of_mk]
+  simp [this]
+
+  sorry
+
+
+def Spec.Keccak.ι.RC.loop {l: Fin 7}(iᵣ: Nat)(start: Nat): BitVec (w l) := Id.run do
+  let mut RC: BitVec (w l) := 0#(w l)
+  for j in List.finRange (l.val + 1) |>.drop start do
+    have j_valid_idx := calc  2 ^ ↑j - 1
+        _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
+        _ ≤ 2 ^ ↑l := Nat.pow_le_pow_iff_right (by decide) |>.mpr <| Fin.is_le j
+    RC := RC.set ⟨2^j.val - 1, j_valid_idx⟩ (ι.rc (↑j + 7*iᵣ)) 
+  RC
+
+theorem Spec.Keccak.ι.RC.spec{l: Fin 7}(iᵣ: Nat)(start: Nat)
+: Spec.Keccak.ι.RC.loop iᵣ start = SRRange.foldWhile 
+    (i := start) 
+    (step := 1) 
+    (hStep := Nat.one_pos)
+    (max := l.val + 1) 
+    (f := fun RC j => RC.set (2^j - 1).cast <| ι.rc (j + 7*iᵣ))
+    (init := 0#(w l))
+:= by
+  simp [loop]
+
+theorem List.foldl_of_foldl_map(f: α' → α)(upd: β → α → β)(init: β)(ls: List α')
+: List.foldl (upd · <| f ·) init ls = List.foldl upd init (f <$> ls) 
+:= by revert init; induction ls <;> simp [*]
+
+theorem List.val_finRange_eq_range(n: Nat)
+: Fin.val <$> List.finRange n = List.range n
+:= by 
+  exact?
+
+@[progress]
+theorem simple.iota_rc_init_loop.spec(ir : Std.Usize) (input : Aeneas.Std.Array Bool 64#usize)(i: Std.Usize)
+: ir.val < 24
+→ i.val ≤ 6 + 1
+→ ∃ output,
+  simple.iota_rc_init_loop ir input i = .ok output ∧
+  ∀ (j: Fin (Spec.w 6)), (2^i.val) - 1 ≤ j.val → output.val[j]! = (Spec.Keccak.ι.RC ir)[j]
+:= by
+  intro ir_lt i_loop_bound
+  rw [iota_rc_init_loop]
+  split
+  case isTrue i_lt =>
+    let* ⟨ aux, aux_post ⟩ ← Std.Usize.mul_spec
+    let* ⟨ aux2, aux2_post ⟩ ← Std.Usize.add_spec
+    let* ⟨ tmp, tmp_post ⟩ ← iota_rc_point.spec
+    let* ⟨ i2, i2_post_1, i2_post_2 ⟩ ← Std.Usize.one_ShiftLeft_spec
+    · calc i.val
+        _ ≤ 6 := by simpa using i_lt
+        _ < 32 := by decide
+        _ ≤ Std.UScalarTy.Usize.numBits := by
+          rw [Std.UScalarTy.numBits]
+          rcases System.Platform.numBits_eq <;> scalar_tac
+    let* ⟨ i3, i3_post ⟩ ← Std.Usize.sub_spec
+    let* ⟨ rc1, rc1_post ⟩ ← Std.Array.update_spec
+    · simp [*, ‹i3.val = i2.val - 1›']
+      have: 2 ^i.val ≤ 2 ^ 6 := by 
+        apply Nat.pow_le_pow_right  Nat.two_pos
+        simpa using i_lt
+      scalar_tac
+    let* ⟨ j1, j1_post ⟩ ← Std.Usize.add_spec
+    let* ⟨ rest, rest_post ⟩ ← spec
+    intro j j_range
+    simp [rest_post]
+    sorry
+  case isFalse i_oob =>
+    simp [‹i.val = 7›']
+    scalar_tac
+
+@[progress]
+theorem simple.iota.spec(ir: Std.Usize)(input: StateArray)
+: ∃ output,
+  iota ir input = .ok output ∧
+  output.toSpec = Spec.Keccak.ι (iᵣ:= ir.val) input.toSpec
+:= by
+  simp [iota, iota_rc_init, ClonesimpleStateArray.clone]
+  sorry
+
 theorem Array.getElem?_chunks_exact(k: Nat)(arr: Array α)(i: Nat)
 : i < arr.size / k
 → Vector.toArray <$> (arr.chunks_exact k)[i]? = some (arr.extract (k*i) (k*(i+1)))
-:= by sorry
+:= by 
+  sorry
 
 @[progress]
 private theorem auxiliary.Slice.index(start stop: Std.Usize)(arr: Std.Slice α)(k i: Nat)
