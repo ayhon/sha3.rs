@@ -11,10 +11,243 @@ section Refinement
 
 set_option maxHeartbeats 1000000
 
+/- section Extras -/
 attribute [-simp] List.getElem!_eq_getElem?_getD
-attribute [local simp] Aeneas.Std.Slice.set
+attribute [simp] Aeneas.Std.Slice.set
 
 notation "‹" term "›'" => (by scalar_tac: term)
+
+theorem and_imp_of_ite{cond: Prop}[Decidable cond]: (if cond then P else Q) = ((cond → P) ∧ ((¬ cond) → Q)) := by
+  split <;> simp [*]
+
+open Aeneas hiding Std.Array in 
+@[simp, scalar_tac_simps]
+theorem OrdUsize.min_val (x y : Std.Usize) : (Std.core.cmp.impls.OrdUsize.min x y).val = Nat.min x.val y.val := by
+  simp [Std.core.cmp.impls.OrdUsize.min]; split <;> simp [*] <;> omega
+
+-- TODO: derive automatically with `progress_pure_def` applied to `Std.core.cmp.impls.OrdUsize.min`
+open Aeneas hiding Std.Array in 
+@[progress]
+theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
+  ∃ z, Std.toResult (Std.core.cmp.impls.OrdUsize.min x y) = .ok z ∧ z = Std.core.cmp.impls.OrdUsize.min x y := by
+  simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult]
+
+attribute [simp] Id.run Id.pure_eq Id.bind_eq
+
+attribute [simp_lists_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_le
+attribute [simp_lists_simps] List.drop_eq_nil_of_le List.forIn_yield_eq_foldl List.foldl_nil
+attribute [simp_lists_simps] List.drop_eq_getElem_cons List.getElem_finRange List.foldl_cons
+attribute [simp_lists_simps] List.getElem?_set_eq
+
+@[simp_lists_simps]   
+theorem getElem!_zipWith[Inhabited α][Inhabited β](f: α → α → β)(xs ys: List α)
+: ∀ i < xs.length.min ys.length,
+  (xs.zipWith f ys)[i]! = f xs[i]! ys[i]!
+:= by
+  intro i i_idx
+  cases xs <;> cases ys <;> cases i <;> simp at *
+  apply getElem!_zipWith
+  apply Nat.le_min.mpr
+  assumption
+
+attribute [scalar_tac_simps] Classical.not_and_iff_or_not_not
+attribute [scalar_tac_simps] Fin.val_add Fin.val_mul 
+attribute [scalar_tac_simps] List.length_finRange List.length_zipWith
+attribute [scalar_tac_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_le
+attribute [scalar_tac a.val] Fin.is_le'
+attribute [scalar_tac self] Fin.isLt
+
+@[scalar_tac_simps]
+theorem Fin.val_ofNat{n: Nat}[NeZero n]{x: Nat}
+: (ofNat(x): Fin n).val = x % n
+:= by simp [OfNat.ofNat, Fin.instOfNat]
+
+@[scalar_tac x % v]
+theorem Nat.zero_mod_or_mod_lt(x v: Nat): v = 0 ∨ x % v < v := by
+  match h: v with
+  | 0 => left; rfl
+  | v'+1 => 
+    right
+    apply Nat.mod_lt
+    exact Nat.zero_lt_succ v'
+
+attribute [scalar_tac_simps] Spec.w Spec.b
+
+@[simp, scalar_tac_simps]
+theorem simple.W.spec 
+: simple.W = Spec.w 6
+:= by native_decide
+
+theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
+: n*y + x < n*m
+:= by
+  have n_pos: n > 0 := by apply Nat.pos_of_ne_zero; intro h; simp [h] at x_lt
+  have m_pos: m > 0 := by apply Nat.pos_of_ne_zero; intro h; simp [h] at y_lt
+  calc n*y + x
+    _ = n * y + x := rfl
+    _ ≤ n * (m-1) + x := by
+      apply Nat.add_le_add_right 
+      apply Nat.mul_le_mul_left
+      apply Nat.le_pred_iff_lt m_pos |>.mpr
+      exact y_lt
+    _ ≤ n * (m-1) + (n-1) := by
+      apply Nat.add_le_add_left
+      apply Nat.le_pred_iff_lt n_pos |>.mpr
+      exact x_lt
+    _ < n * m := by 
+      simp [Nat.mul_sub, ←Nat.add_sub_assoc n_pos]
+      have: n*m >= n := by 
+        conv => arg 2; rw [←Nat.mul_one n]
+        apply Nat.mul_le_mul (Nat.le_refl n) m_pos
+      simp [Nat.sub_add_cancel this]
+      exact And.intro n_pos m_pos
+
+
+@[scalar_tac 5 * y + x]
+theorem something_not_named_yet
+: x ≥ 5 ∨ y ≥ 5 ∨ Spec.w 6 * (5 * y + x) ≤ Spec.w 6 * 24
+:= by
+  if x ≥ 5 then left; assumption
+  else if y ≥ 5 then right; left; assumption
+  else
+    rename_i x_idx y_idx
+    simp at x_idx y_idx
+    right; right
+    apply Nat.mul_le_mul_left (k := Spec.w 6)
+    exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
+
+theorem getElem_eq_getElem! [GetElem? cont idx elem dom] [LawfulGetElem cont idx elem dom]
+    [Inhabited elem] (c : cont) (i : idx) (h : dom c i) :
+    c[i]'h = c[i]! := by
+  have : Decidable (dom c i) := .isTrue h
+  simp [getElem!_def, getElem?_def, h]
+
+@[ext]
+theorem BitVec.ext{bv1 bv2: BitVec n}
+{point_eq: ∀ i: Nat, (_: i < n) → bv1[i] = bv2[i]}
+: bv1 = bv2 
+:= by
+  obtain ⟨⟨a, a_lt⟩⟩ := bv1
+  obtain ⟨⟨b, b_lt⟩⟩ := bv2
+  simp 
+  simp [BitVec.getElem_eq_testBit_toNat] at point_eq
+  apply Nat.eq_of_testBit_eq
+  intro i
+  if h: i < n then
+    exact point_eq i h
+  else
+    have: a < 2 ^i := calc
+      a < 2 ^n := a_lt
+      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
+    simp [Nat.testBit_lt_two_pow this]
+    have: b < 2 ^i := calc
+      b < 2 ^n := b_lt
+      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
+    simp [Nat.testBit_lt_two_pow this]
+
+@[ext]
+theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
+{point_eq: ∀ (x y: Fin 5)(z: Fin (w l)), a.get x y z = b.get x y z}
+: a = b
+:= by
+  obtain ⟨a⟩ := a
+  obtain ⟨b⟩ := b
+  have bv_point_eq: ∀ (c: Fin (Spec.b l)), a[c] = b[c] := by 
+    simp [get] at point_eq
+    intro c
+    have := point_eq (decodeIndex c).1 (decodeIndex c).2.1 (decodeIndex c).2.2
+    simp [Spec.Keccak.StateArray.decode_encode c] at this
+    assumption
+  simp
+  apply BitVec.ext (point_eq := fun i h => bv_point_eq ⟨i, h⟩)
+
+@[simp]
+theorem Spec.Keccak.StateArray.get_ofFn{f: Fin 5 × Fin 5 × Fin (w l) → Spec.Bit}(x y: Fin 5)(z: Fin (w l))
+: (StateArray.ofFn f).get x y z = f (x,y,z)
+:= by simp [ofFn, get, BitVec.ofFn, encode_decode]
+
+theorem Bool.toNat_mod2_self(b: Bool)
+: b.toNat % 2 = b.toNat
+:= by cases b <;> simp
+
+theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
+:  {j_lt: j < n}
+→ (bv.set i b)[j] = if i = j then b else bv[j]
+:= by 
+  intro j_lt
+  have n_pos: n > 0 := by cases n <;> (first | cases i.isLt | apply Nat.zero_lt_succ )
+  have hyp: 2 ∣ 2^n := by
+    cases n
+    case zero => contradiction
+    case succ n' => exact Dvd.intro_left (Nat.pow 2 n') rfl
+  have bool_fits{n: Nat}{b:Bool}: n > 0 → b.toNat < 2^n := by
+    intro hyp; cases b <;>
+    all_goals (
+      cases n 
+      case zero => contradiction
+      case succ n' => simp
+    )
+
+  rw [set]
+  split
+  case isTrue h => 
+    subst h
+    simp [Nat.mod_mod_of_dvd _ hyp, Bool.toNat_mod2_self, Nat.testBit, BitVec.getLsbD]
+  case isFalse =>
+    simp
+    rw [BitVec.getLsbD, BitVec.toNat_ofNat, Nat.testBit, Nat.shiftRight_eq_div_pow]
+    simp [Nat.mod_eq_of_lt (bool_fits n_pos)]
+    if h: i < j then
+      have: ¬ j < i := by scalar_tac
+      have shift_nz: j - i.val > 0 := by scalar_tac
+      simp [this, Nat]
+      cases bv[i.val] ^^b <;> simp 
+      have: 1 / 2 ^ (j - i.val) = 0 := by 
+        apply Nat.div_eq_zero_iff_lt (bool_fits (b := false) shift_nz) |>.mpr
+        exact bool_fits (b := true) shift_nz
+      rw [this]
+      simp
+    else
+      have h: j < i := by scalar_tac
+      simp [h]
+
+theorem Spec.Keccak.StateArray.get_set(a: Spec.Keccak.StateArray l)(x x' y y': Fin 5)(z z': Fin (w l))
+: (a.set x' y' z' val).get x y z = if x = x' ∧ y = y' ∧ z = z' then val else a.get x y z
+:= by
+  simp [get, set, BitVec.getElem_set]
+  split
+  case isTrue h =>
+    replace h := encode_inj x x' y y' z z' |>.mp <| Fin.eq_of_val_eq h.symm
+    simp [h]
+  case isFalse h =>
+    have : ¬ (x = x' ∧ y = y' ∧ z = z') := by rintro ⟨rfl,rfl,rfl⟩; exact h rfl
+    simp [this]
+
+@[simp]
+theorem Spec.Keccak.StateArray.get_set_eq(a: Spec.Keccak.StateArray l)(x y : Fin 5)(z : Fin (w l))
+: (a.set x y z val).get x y z = val
+:= by simp [get_set]
+
+@[simp]
+theorem Spec.Keccak.StateArray.get_set_neq(a: Spec.Keccak.StateArray l)(x x' y y': Fin 5)(z z': Fin (w l))
+: (x,y,z) ≠ (x',y',z')
+→ (a.set x' y' z' val).get x y z = a.get x y z
+:= by 
+  intros not_cond
+  simp only [ne_eq, Prod.mk.injEq] at not_cond
+  simp [not_cond, get_set]
+
+/- @[scalar_tac x % n] -/
+/- theorem tmp2(x n: Nat): x % n = x ∨ x ≥ n := by -/
+/-   if h: x < n then -/
+/-     left; exact Nat.mod_eq_of_lt ‹x < n› -/
+/-   else -/
+/-     right; simpa using h -/
+    
+attribute [scalar_tac_simps] Nat.mod_succ 
+attribute [scalar_tac_simps] Nat.cast_add Nat.cast_mul Nat.cast_ofNat Nat.cast_inj Nat.cast_le Nat.cast_ite 
+
+/- end Extras -/
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec 
@@ -94,50 +327,27 @@ theorem simple.xor_long_at_loop.spec(a b: Std.Slice Bool)(pos n i: Std.Usize)
 → ∃ output,/- {{{ -/
   xor_long_at_loop a b pos n i = .ok output ∧ 
   output.length = a.length ∧
-  ∀ j <a.length, output[j]! =
-    if i ≤ j ∧ j < n then (a[j]! ^^ b[j-pos.val]!)
-    else a[j]!
+  ∀ j <a.length, 
+    if i ≤ j ∧ j < n then output[j]! = (a[j]! ^^ b[j-pos.val]!)
+    else output[j]! = a[j]!
 := by
   intro no_overflow n_def i_ge_pos
   rw [xor_long_at_loop]
   progress* <;> simp [*]
   · intro j j_lt
-    replace res_post_2 := res_post_2 j (by simp [*]); simp at res_post_2; simp [*]; clear res_post_2
+    replace res_post_2 := res_post_2 j (by simp [*])
+    simp [*] at res_post_2
     split_all
-    · simp_lists
+    · simp_lists [*]
     · scalar_tac
-    · simp [‹j = i.val + pos›']
+    · simp only [res_post_2]
+      simp [‹j = i.val + pos›']
       simp_lists
-    · simp_lists
-  · intro j j_lt
-    simp_ifs
+    · simp only [res_post_2]
+      simp_lists
+  · scalar_tac
 termination_by n.val - i.val
 decreasing_by scalar_decr_tac/- }}} -/
-
----
-@[simp, scalar_tac_simps]
-theorem OrdUsize.min_val (x y : Std.Usize) : (Std.core.cmp.impls.OrdUsize.min x y).val = Nat.min x.val y.val := by
-  simp [Std.core.cmp.impls.OrdUsize.min]; split <;> simp [*] <;> omega
-
--- TODO: derive automatically with `progress_pure_def` applied to `Std.core.cmp.impls.OrdUsize.min`
-@[progress]
-theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
-  ∃ z, Std.toResult (Std.core.cmp.impls.OrdUsize.min x y) = .ok z ∧ z = Std.core.cmp.impls.OrdUsize.min x y := by
-  simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult]
-
-attribute [scalar_tac a.val] Fin.is_le'
-
-attribute [scalar_tac_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_le
-
-@[scalar_tac_simps]
-theorem not_and_equiv_or_not (a b : Prop) : ¬ (a ∧ b) ↔ ¬ a ∨ ¬ b := by tauto
----
-
-@[simp_lists_simps]
-theorem and_imp_of_ite{cond P Q: Prop}[Decidable cond]: (if cond then P else Q) = ((cond → P) ∧ ((¬ cond) → Q)) := by
-  split <;> simp [*]
-
-attribute [simp_lists_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_le
 
 @[progress]
 theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
@@ -146,8 +356,10 @@ theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
   xor_long_at a b pos = .ok output ∧ 
   output.length = a.length ∧
   ∀ j < a.length, 
-    if pos.val ≤ j ∧ j < pos.val + b.length then output[j]! = (a[j]! ^^ b[j-pos.val]!)
-    else output[j]! = a[j]!
+      if pos.val ≤ j ∧ j < pos.val + b.length then 
+        output[j]! = (a[j]! ^^ b[j-pos.val]!)
+      else 
+        output[j]! = a[j]!
 := by/- {{{ -/
   intro no_overflowa
   rw [xor_long_at]
@@ -156,25 +368,14 @@ theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
   let* ⟨ n, n_post ⟩ ← Std.core.cmp.impls.OrdUsize.min_spec
   let* ⟨ res, res_post_1, res_post_2 ⟩ ← simple.xor_long_at_loop.spec
   simp_lists [*] at *
-  intro j _
-  rw [res_post_2 j (by scalar_tac)]
-  constructor
-  · intro _; simp_ifs
-  · intro _; simp_ifs
+  intro j j_lt
+  replace res_post_2 := res_post_2 j j_lt
+  split_all
+  · simpa using res_post_2
+  · scalar_tac
+  · scalar_tac
+  · simpa using res_post_2
 
-
-@[simp_lists_simps]   
-theorem getElem!_zipWith[Inhabited α][Inhabited β](f: α → α → β)(xs ys: List α)
-: ∀ i < xs.length.min ys.length,
-  (xs.zipWith f ys)[i]! = f xs[i]! ys[i]!
-:= by
-  intro i i_idx
-  cases xs <;> cases ys <;> cases i <;> simp at *
-  apply getElem!_zipWith
-  apply Nat.le_min.mpr
-  assumption
-
-attribute [scalar_tac_simps] List.length_zipWith
 
 @[progress]
 theorem simple.xor_long.spec(a b: Std.Slice Bool)
@@ -182,7 +383,7 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
   xor_long a b = .ok c ∧ c = a.val.zipWith xor b ++ a.val.drop b.length
 := by/- {{{ -/
   rw [xor_long]
-  progress* by scalar_tac
+  progress*
 
   apply List.ext_getElem!
   · simp [*]; scalar_tac
@@ -227,10 +428,6 @@ theorem BitVec.getElem_ofBoolListLE{ls: List Bool}{i: Nat}
       rw [←BitVec.getElem_eq_testBit_toNat (ofBoolListLE tl) i']
       apply BitVec.getElem_ofBoolListLE i_lt
 
-theorem simple.W.spec 
-: simple.W = Spec.w 6
-:= by native_decide
-
 example: (2^32)-1 <= Std.Usize.max := by
   simp [Std.Usize.max, Std.Usize.numBits_eq]
   obtain h | h := System.Platform.numBits_eq <;> rw [h] <;> omega
@@ -240,45 +437,6 @@ theorem Aeneas.Std.Usize.max_bound
 := by
   rw [Std.Usize.max_def, Std.Usize.numBits, Std.UScalarTy.numBits]
   cases System.Platform.numBits_eq <;> simp [*]
-
-theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
-: n*y + x < n*m
-:= by
-  have n_pos: n > 0 := by apply Nat.pos_of_ne_zero; intro h; simp [h] at x_lt
-  have m_pos: m > 0 := by apply Nat.pos_of_ne_zero; intro h; simp [h] at y_lt
-  calc n*y + x
-    _ = n * y + x := rfl
-    _ ≤ n * (m-1) + x := by
-      apply Nat.add_le_add_right 
-      apply Nat.mul_le_mul_left
-      apply Nat.le_pred_iff_lt m_pos |>.mpr
-      exact y_lt
-    _ ≤ n * (m-1) + (n-1) := by
-      apply Nat.add_le_add_left
-      apply Nat.le_pred_iff_lt n_pos |>.mpr
-      exact x_lt
-    _ < n * m := by 
-      simp [Nat.mul_sub, ←Nat.add_sub_assoc n_pos]
-      have: n*m >= n := by 
-        conv => arg 2; rw [←Nat.mul_one n]
-        apply Nat.mul_le_mul (Nat.le_refl n) m_pos
-      simp [Nat.sub_add_cancel this]
-      exact And.intro n_pos m_pos
-
-attribute [scalar_tac_simps] simple.W.spec Spec.w Spec.b
-
-@[scalar_tac 5 * y + x]
-theorem something_not_named_yet
-: x ≥ 5 ∨ y ≥ 5 ∨ Spec.w 6 * (5 * y + x) ≤ Spec.w 6 * 24
-:= by
-  if x ≥ 5 then left; assumption
-  else if y ≥ 5 then right; left; assumption
-  else
-    rename_i x_idx y_idx
-    simp at x_idx y_idx
-    right; right
-    apply Nat.mul_le_mul_left (k := Spec.w 6)
-    exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
 
 @[progress]
 theorem  simple.StateArray.index.spec
@@ -300,7 +458,7 @@ theorem  simple.StateArray.index.spec
      _ ≤ Spec.w 6 * (5 * 5) := by
           apply Nat.mul_le_mul_left (k := Spec.w 6)
           exact Nat.le_of_lt (Nat.lt_packing_right x_idx y_idx)
-     _ < 2^32 - 1 := by simp [Spec.w]; decide
+     _ < 2^32 - 1 := by simp [Spec.w]
      _ ≤ Std.Usize.max := Std.Usize.max_bound
   let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
   · simp [*, simple.W.spec]
@@ -312,7 +470,7 @@ theorem  simple.StateArray.index.spec
           exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
      _ < Spec.w 6 * (5 * 5) := by
           apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
-     _ < 2^32 - 1 := by simp [Spec.w]; decide
+     _ < 2^32 - 1 := by simp [Spec.w]
      _ ≤ Std.Usize.max := Std.Usize.max_bound
   have: Spec.w 6 * (5 * ↑y + ↑x) + ↑z < 1600 := by
     simp [Spec.w]
@@ -324,6 +482,7 @@ theorem  simple.StateArray.index.spec
      _ < Spec.w 6 * (5 * 5) := by
           apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
   let* ⟨ res, res_post ⟩ ← Aeneas.Std.Array.index_usize_spec
+  · simp [*, W.spec]
   simp [*, simple.W.spec, Std.Usize.max]
   simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt z_idx, toSpec, List.getElem!_eq_getElem?_getD]
 
@@ -331,113 +490,6 @@ example(bv: BitVec n)(i: Nat)(i_idx: i < n)
 : bv[i]! = bv[i]'i_idx
 := by 
   exact getElem!_pos bv i i_idx
-
-  
-theorem getElem_eq_getElem! [GetElem? cont idx elem dom] [LawfulGetElem cont idx elem dom]
-    [Inhabited elem] (c : cont) (i : idx) (h : dom c i) :
-    c[i]'h = c[i]! := by
-  have : Decidable (dom c i) := .isTrue h
-  simp [getElem!_def, getElem?_def, h]
-
-@[ext]
-theorem BitVec.ext{bv1 bv2: BitVec n}
-{point_eq: ∀ i: Nat, (_: i < n) → bv1[i] = bv2[i]}
-: bv1 = bv2 
-:= by
-  obtain ⟨⟨a, a_lt⟩⟩ := bv1
-  obtain ⟨⟨b, b_lt⟩⟩ := bv2
-  simp 
-  simp [BitVec.getElem_eq_testBit_toNat] at point_eq
-  apply Nat.eq_of_testBit_eq
-  intro i
-  if h: i < n then
-    exact point_eq i h
-  else
-    have: a < 2 ^i := calc
-      a < 2 ^n := a_lt
-      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
-    simp [Nat.testBit_lt_two_pow this]
-    have: b < 2 ^i := calc
-      b < 2 ^n := b_lt
-      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
-    simp [Nat.testBit_lt_two_pow this]
-
-@[ext]
-theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
-{point_eq: ∀ (x y: Fin 5)(z: Fin (w l)), a.get x y z = b.get x y z}
-: a = b
-:= by
-  obtain ⟨a⟩ := a
-  obtain ⟨b⟩ := b
-  have bv_point_eq: ∀ (c: Fin (Spec.b l)), a[c] = b[c] := by 
-    simp [get] at point_eq
-    intro c
-    have := point_eq (decodeIndex c).1 (decodeIndex c).2.1 (decodeIndex c).2.2
-    simp [Spec.Keccak.StateArray.decode_encode c] at this
-    assumption
-  simp
-  apply BitVec.ext (point_eq := fun i h => bv_point_eq ⟨i, h⟩)
-
-theorem Spec.Keccak.StateArray.get_ofFn{f: Fin 5 × Fin 5 × Fin (w l) → Spec.Bit}(x y: Fin 5)(z: Fin (w l))
-: (StateArray.ofFn f).get x y z = f (x,y,z)
-:= by simp [ofFn, get, BitVec.ofFn, encode_decode]
-
-theorem Bool.toNat_mod2_self(b: Bool)
-: b.toNat % 2 = b.toNat
-:= by cases b <;> simp
-
-theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
-:  {j_lt: j < n}
-→ (bv.set i b)[j] = if i = j then b else bv[j]
-:= by 
-  intro j_lt
-  have n_pos: n > 0 := by cases n <;> (first | cases i.isLt | apply Nat.zero_lt_succ )
-  have hyp: 2 ∣ 2^n := by
-    cases n
-    case zero => contradiction
-    case succ n' => exact Dvd.intro_left (Nat.pow 2 n') rfl
-  have bool_fits{n: Nat}{b:Bool}: n > 0 → b.toNat < 2^n := by
-    intro hyp; cases b <;>
-    all_goals (
-      cases n 
-      case zero => contradiction
-      case succ n' => simp
-    )
-
-  rw [set]
-  split
-  case isTrue h => 
-    subst h
-    simp [Nat.mod_mod_of_dvd _ hyp, Bool.toNat_mod2_self, Nat.testBit, BitVec.getLsbD]
-  case isFalse =>
-    simp
-    rw [BitVec.getLsbD, BitVec.toNat_ofNat, Nat.testBit, Nat.shiftRight_eq_div_pow]
-    simp [Nat.mod_eq_of_lt (bool_fits n_pos)]
-    if h: i < j then
-      have: ¬ j < i := by scalar_tac
-      have shift_nz: j - i.val > 0 := by scalar_tac
-      simp [this, Nat]
-      cases bv[i.val] ^^b <;> simp 
-      have: 1 / 2 ^ (j - i.val) = 0 := by 
-        apply Nat.div_eq_zero_iff_lt (bool_fits (b := false) shift_nz) |>.mpr
-        exact bool_fits (b := true) shift_nz
-      rw [this]
-      simp
-    else
-      have h: j < i := by scalar_tac
-      simp [h]
-
-theorem Spec.Keccak.StateArray.get_set(a: Spec.Keccak.StateArray l)(x x' y y': Fin 5)(z z': Fin (w l))
-: (a.set x' y' z' val).get x y z = if x = x' ∧ y = y' ∧ z = z' then val else a.get x y z
-:= by
-  simp [get, set, BitVec.getElem_set]
-  split
-  case isTrue h =>
-    replace h := encode_inj x x' y y' z z' |>.mp <| Fin.eq_of_val_eq h.symm
-    simp [h]
-  case isFalse h =>
-    have : ¬ (x = x' ∧ y = y' ∧ z = z') := by rintro ⟨rfl,rfl,rfl⟩; exact h rfl
-    simp [this]
 
 
 @[progress]
@@ -475,7 +527,7 @@ theorem simple.StateArray.index_mut.spec
           exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
      _ < Spec.w 6 * (5 * 5) := by
           apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
-     _ < 2^32 - 1 := by simp [Spec.w]; decide
+     _ < 2^32 - 1 := by simp [Spec.w]
      _ ≤ Std.Usize.max := Std.Usize.max_bound
   simp only [*] at c_post
   have c_idx :↑c < Std.Array.length self := by
@@ -538,23 +590,7 @@ theorem simple.theta.theta_d.spec(input : simple.StateArray)(x z: Std.Usize)
 := by
   rw [theta.d]
   progress*
-  · trans (2^32 -1)
-    · have: i2.val = W.val - 1 := by scalar_tac
-      simp [W.spec, Spec.w] at *
-      simp [this, Fin.val_ofNat']
-      --TODO: Weird that `scalar_tac` fails here
-      /- scalar_tac -/
-      calc _
-        _ ≤ (2^6 - 1) + (2^(6: Fin 7).val - 1) := 
-          Nat.add_le_add_right (Nat.le_pred_iff_lt (Nat.two_pow_pos 6) |>.mpr z_idx) (k := 2^(6: Fin 7).val - 1)
-        _ ≤ 2^32 - 1 := by decide
-    · exact Aeneas.Std.Usize.max_bound
-  · simp [*]
-    rw [←i2_post, W.spec]
-    apply Nat.mod_lt
-    decide
-  rw [Spec.Keccak.θ.D]
-  simp [*]
+  simp [*, Spec.Keccak.θ.D]
   congr 2
   · apply Fin.eq_of_val_eq
     simp [Fin.sub_def, Nat.add_comm]
@@ -590,57 +626,33 @@ theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: St
     let* ⟨ res_elem, res_elem_post ⟩ ← simple.binxor.spec
     let* ⟨ old_val, mk_new, old_val.post, mk_new.post ⟩ ← simple.StateArray.index_mut.spec
     let* ⟨ z_succ, z_succ_post ⟩ ← Aeneas.Std.Usize.add_spec
-    · simp; apply le_of_lt; calc z.val + 1
-        _ < Spec.w 6 + 1 := by exact Nat.add_lt_add_right z_idx 1
-        _ < 2^32 -1 := by decide
-        _ ≤ Std.Usize.max := Std.Usize.max_bound
     let* ⟨ res, res_post ⟩ ← spec
     /- simp only [z_succ_post] at *; clear z_succ_post -/
 
-    have norm{n: Nat}{x: Std.Usize}(x_lt: x.val < n)[NeZero n]: x.val.cast = Fin.mk x.val x_lt := by
-      simp only [Nat.cast, NatCast.natCast, Fin.instNatCast, Fin.ofNat', Nat.mod_eq_of_lt x_lt]
+    /- have norm{n: Nat}{x: Std.Usize}(x_lt: x.val < n)[NeZero n]: x.val.cast = Fin.mk x.val x_lt := by -/
+    /-   simp only [Nat.cast, NatCast.natCast, Fin.instNatCast, Fin.ofNat', Nat.mod_eq_of_lt x_lt] -/
 
     intro x' y' j
-    replace res_post := res_post x' y' j
-    split
-    case isTrue h =>
-      obtain ⟨rfl, rfl,j_bnd⟩ := h
-      rw [res_post]; simp [z_succ_post] at res_post ⊢
-      intro _
-      obtain rfl : j = z.val.cast := by
-        apply Fin.eq_of_val_eq; simp [Nat.mod_eq_of_lt z_idx]; scalar_tac
-      rw [mk_new.post res_elem]
-      simp [Spec.Keccak.StateArray.get_set, aux_post]
-      simp [res_elem_post, acc_elem_post]
-      simp [←norm, aux_post]
-
-    case isFalse j_oob =>
-      /-
-      When x ≠ x' or y ≠ y', the result is trivially true.
-
-      Otherwise, the idea here is to prove that if `j` is outside 
-      of the interesting bounds, then no modifications have been 
-      done to the input.
-
-      To do that we need to reason about `res_post`, showing that
-      ¬ z ≤ j → ¬ z + 1 ≤ j and about `mk_new res_elem`, showing
-      now that getting an element which is not the one which was
-      set gives you the same value as before.
-      -/
-      rw [not_and_or, not_and_or] at j_oob
-      rw [res_post]
-      obtain h | h | j_oob := j_oob
-      · rw [mk_new.post res_elem, Spec.Keccak.StateArray.get_set]; simp [h]; scalar_tac
-      · rw [mk_new.post res_elem, Spec.Keccak.StateArray.get_set]; simp [h]; scalar_tac
-
-      simp only [z_succ_post] at *
-      have: ¬ z.val + 1 ≤ j.val := by scalar_tac
-
-      have h2:= mk_new.post res_elem
-      simp [h2]
-      simp [Spec.Keccak.StateArray.get_set, this]
-      rintro rfl rfl rfl
-      simp [Nat.mod_eq_of_lt z_idx] at j_oob
+    simp [*] at res_post
+    rw [res_post]; clear res_post
+    /- replace res_post := res_post x' y' j -/
+    split_all
+    · rfl
+    · scalar_tac
+    · have: j = z.val.cast := by
+        have: j = j.val.cast := by simp
+        rw [this]
+        rw [‹j.val = z.val›']
+      simp [this, *]
+    · simp_ifs [Spec.Keccak.StateArray.get_set]
+      have: ¬ (x' = x.val.cast ∧ y' = y.val.cast ∧ j = z.val.cast) := by
+        simp; intros
+        simp [*] at *
+        have: j = j.val.cast := by simp
+        rintro rfl
+        simp at *
+        scalar_tac
+      simp [this]
   case isFalse z_end =>
     have: z = Spec.w 6 := by simp [W.spec] at z_end; scalar_tac
     simp [this]
@@ -746,16 +758,6 @@ def Spec.Keccak.ρ.sequence_point(n: Nat): Fin 5 × Fin 5 := n.repeat (fun (x,y)
 
 def Spec.Keccak.ρ.sequence := Vector.range 24 |>.map sequence_point
 
-#check simple.rho
-#check simple.rho_loop
-#check simple.rho.inner
-#check simple.rho.inner_loop
-
-attribute [simp] Id.run Id.pure_eq Id.bind_eq
-attribute [simp_lists_simps] List.drop_eq_nil_of_le
-attribute [scalar_tac_simps] List.length_finRange
-attribute [simp_lists_simps] List.forIn_yield_eq_foldl List.foldl_nil
-
 
 @[progress]
 theorem simple.rho_offset.spec (t : Std.Usize)
@@ -776,23 +778,6 @@ theorem simple.rho_offset.spec (t : Std.Usize)
       scalar_tac
     _ ≤ Std.Usize.max := by scalar_tac
   scalar_tac
-
-@[scalar_tac_simps]
-theorem Fin.val_ofNat{n: Nat}[NeZero n]{x: Nat}
-: (ofNat(x): Fin n).val = x % n
-:= by simp [OfNat.ofNat, Fin.instOfNat]
-
-@[scalar_tac x % v]
-theorem Nat.zero_mod_or_mod_lt(x v: Nat): v = 0 ∨ x % v < v := by
-  match h: v with
-  | 0 => left; rfl
-  | v'+1 => 
-    right
-    apply Nat.mod_lt
-    exact Nat.zero_lt_succ v'
-
-attribute [simp_lists_simps] List.drop_eq_getElem_cons List.getElem_finRange List.foldl_cons
-/- attribute [scalar_tac_simps] Spec.Keccak.ρ.offset -/
 
 def Spec.Keccak.ρ.inner_loop(input res: Spec.Keccak.StateArray 6)(t: Fin 24)(x y: Fin 5)(z: Nat) := Id.run do
     let mut res' := res
@@ -838,25 +823,17 @@ theorem simple.rho.inner_loop.spec(input res : StateArray) (t x y z : Std.Usize)
     rw [Fin.cast_of_mk ‹z.val < Spec.w 6›']
     congr 3
     apply Fin.eq_of_val_eq
+    simp [*]
     have i1_val: i1.val = W - (@Spec.Keccak.ρ.offset 6 t).val := by scalar_tac
-    simp [i1_val]
+    simp [i1_val, Nat.mod_eq_of_lt t_lt, Fin.sub_def]
     have: W.val >= @Spec.Keccak.ρ.offset 6 t.val := by scalar_tac
-    simp [Nat.sub_add_cancel this]
     simp [Spec.Keccak.ρ.offset, W.spec]
-    simp [Fin.sub_def]
-    simp [Nat.add_comm, Nat.mod_eq_of_lt (t_lt)]
+    simp [Nat.add_comm]
   case isFalse =>
     simp [‹z.val = Spec.w 6›']
+    simp_lists 
 termination_by Spec.w 6 - z.val
 decreasing_by scalar_decr_tac
-
-/- attribute [scalar_tac_simps] Fin.eq_of_val_eq -/
-
-theorem simple.rho_loop.extracted_1 (x y : Std.Usize)
-: ((2 * x.val + 3 * y.val) % 5).cast = (2 * (x.val.cast: Fin 5) + 3 * y.val.cast) := by
-  apply Fin.eq_of_val_eq
-  scalar_tac
-
 
 @[progress]
 theorem simple.rho_loop.spec(input: simple.StateArray)
