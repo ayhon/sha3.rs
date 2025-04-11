@@ -1,4 +1,5 @@
 import Aeneas
+import Shars.BitVec
 import Shars.Definitions.Simple
 import Sha3.Spec
 /- import Sha3.Utils -/
@@ -183,6 +184,13 @@ theorem Spec.Keccak.StateArray.get_set_neq(a: Spec.Keccak.StateArray l)(x x' y y
 attribute [scalar_tac_simps] Nat.mod_succ 
 attribute [scalar_tac_simps] Nat.cast_add Nat.cast_mul Nat.cast_ofNat Nat.cast_inj Nat.cast_le Nat.cast_ite 
 
+def Aeneas.Std.UScalar.ofNatCore' {ty : UScalarTy} (x : Nat) (h : x < 2^ty.numBits) : UScalar ty :=
+  { bv := BitVec.ofFin ⟨x,h⟩ }
+@[reducible] def Aeneas.Std.UScalar.ofNat' {ty : UScalarTy} (x : Nat)
+  (hInBounds : x ≤ UScalar.cMax ty := by decide) : UScalar ty :=
+  UScalar.ofNatCore' x (UScalar.bound_suffices ty x hInBounds)
+macro:max x:term:max noWs "#usize'" : term => `(@Aeneas.Std.UScalar.ofNat' Aeneas.Std.UScalarTy.Usize $x (by first | decide | scalar_tac))
+
 /- end Extras -/
 
 open Aeneas hiding Std.Array
@@ -237,6 +245,10 @@ theorem simple.add_to_vec_loop.spec(dst: Vec Bool)(other: Vec Bool)(o n i: Std.U
       simp_ifs
 termination_by n.val - i.val
 decreasing_by scalar_decr_tac/- }}} -/
+
+/- @[reducible] def UScalar.ofNat {ty : UScalarTy} (x : Nat) -/
+/-   (hInBounds : x ≤ UScalar.cMax ty := by decide) : UScalar ty := -/
+
 
 @[progress]
 theorem simple.add_to_vec.spec(dst: Std.Slice Bool)(other: Vec Bool)(o n: Std.Usize)
@@ -344,14 +356,13 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
 end Auxiliary/- }}} -/
 
 
+@[simp] def Aeneas.Std.Array.toBitVec{size: Std.Usize}(self: Std.Array Bool size): BitVec (size.val) :=
+  (BitVec.ofBoolListLE <| self.val).cast (by simp)
+
 def simple.StateArray.toSpec(self: simple.StateArray): Spec.Keccak.StateArray 6 :=
-  Spec.Keccak.StateArray.ofBitVec <| (BitVec.ofBoolListLE <| self.val).setWidth (Spec.b 6)
+  Spec.Keccak.StateArray.ofBitVec <| self.toBitVec.cast (by simp [Spec.w, Spec.b])
 
-
-example: (2^32)-1 <= Std.Usize.max := by
-  simp [Std.Usize.max, Std.Usize.numBits_eq]
-  obtain h | h := System.Platform.numBits_eq <;> rw [h] <;> omega
-
+@[scalar_tac Std.Usize.max]
 theorem Aeneas.Std.Usize.max_bound
 : 2^32 - 1 <= Std.Usize.max
 := by
@@ -404,13 +415,10 @@ theorem  simple.StateArray.index.spec
   let* ⟨ res, res_post ⟩ ← Aeneas.Std.Array.index_usize_spec
   · simp [*, W.spec]
   simp [*, simple.W.spec, Std.Usize.max]
-  simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt z_idx, toSpec, List.getElem!_eq_getElem?_getD]
-
-example(bv: BitVec n)(i: Nat)(i_idx: i < n)
-: bv[i]! = bv[i]'i_idx
-:= by 
-  exact getElem!_pos bv i i_idx
-
+  simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex]
+  simp [Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt z_idx]
+  simp [toSpec, Std.Array.toBitVec, BitVec.getElem_ofBoolListLE]
+  simp [getElem_eq_getElem!]
 
 @[progress]
 theorem simple.StateArray.index_mut.spec
@@ -465,33 +473,18 @@ theorem simple.StateArray.index_mut.spec
   have c_encode: c.val = @Spec.Keccak.StateArray.encodeIndex 6 x.val.cast y.val.cast z.val.cast := by
     simp [Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt z_idx, c_post, W.spec]
   constructor
-  · simp [Spec.Keccak.StateArray.get, ←c_encode, toSpec, List.getElem!_eq_getElem?_getD]
+  · simp [Spec.Keccak.StateArray.get, ←c_encode, toSpec]; rw [getElem_eq_getElem!]
   · intro b
     ext i j k
     simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.set, ←c_encode]
-    /- let c2 := Spec.Keccak.StateArray.encodeIndex i j k -/
-    /- have c2_encode: c2 = Spec.Keccak.StateArray.encodeIndex i j k := rfl -/
-    /- rw [←c2_encode] -/
     simp [toSpec, Spec.Keccak.StateArray.set, Std.Array.set]
-    /- have h := BitVec.setWidth_eq (BitVec.ofBoolListLE self.val) -/
-    /- have : self.val.length = 1600 := by simp only [List.Vector.length_val, Std.UScalar.ofNat_val_eq] -/
     simp [BitVec.getElem_set]
-    if h: c.val = Spec.Keccak.StateArray.encodeIndex i j k then
-      rw [←h]
-      simp [Nat.mod_eq_of_lt (by simpa [Spec.b, Spec.w, self.property] using c_idx: c.val < Spec.b 6), ←c_encode]
-      have c_set_idx: c.val < (self.val.set c.val b).length := by simpa using c_idx
-      simp [List.getElem?_eq_getElem c_set_idx]
-    else
-      rw [c_encode] at h
-      simp [h]
-      have:(Spec.Keccak.StateArray.encodeIndex i j k).val < (self.val.set ↑c b).length := by 
-        have := (Spec.Keccak.StateArray.encodeIndex i j k).isLt
-        simp only [List.length_set]
-        simp only [Spec.b, Spec.w] at this
-        simp
-        exact this
+    split
+    case isTrue h =>
+      simp [←h, c_encode]
+    case isFalse h =>
       rw [←c_encode] at h
-      simp [List.getElem?_set_ne h]
+      simp [List.getElem_set_ne h]
 
 theorem Bool.xor_eq_ne(a b: Bool): (a ^^ b) = (a != b) := by cases a <;> cases b <;> decide
 
@@ -935,9 +928,6 @@ theorem simple.iota_rc_point.spec(t: Std.Usize)
     ←Spec.Keccak.ι.rc
   ]
 
-
-/- theorem Std.Usize.one_ShiftLeft_spec -/
-
 theorem Aeneas.Std.UScalar.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar ty1)
   (hy : y.val < ty0.numBits)
 : ∃ z, (1#ty0.numBits#uscalar) <<< y = .ok z ∧
@@ -963,139 +953,196 @@ theorem Aeneas.Std.UScalar.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar 
 /- theorem Nat.one_lt_two_pow''(n: Nat): 1 ≤ 2^n := @Nat.one_le_two_pow n -/
 attribute [scalar_tac_simps] Nat.one_le_two_pow
 
-@[simp, scalar_tac_simps]
-theorem simple.L.spec
-: L.val = 6
-:= by native_decide
+@[simp, scalar_tac_simps] theorem simple.L.spec : L.val = 6 := by native_decide
 
-theorem getElem_fold_set(init: BitVec n)(ls: List α)
-(idx_f: α → Fin n)
-(value_f: α → Bool)
-(idx_inv_f: Fin n → α)
-(i: Fin n)
-: Function.LeftInverse idx_inv_f idx_f
-→ (List.foldl (fun b a => b.set (idx_f a) (value_f a)) (init := init) ls)[i] = 
-    if i ∈ (ls.map idx_f |>.reverse) then
-      value_f (idx_inv_f i)
-    else
-      init[i]
+def simple.iota_rc_init_loop.ref(ir: Nat)(rc: BitVec (Spec.w 6))(j: Nat) := 
+  if j <= 6
+  then
+    let i := 7 * ir
+    let i1 := j + i
+    let b := Spec.Keccak.ι.rc i1
+    let i2 := 1 <<< j
+    let i3 := i2 - 1
+    let rc1 := rc.set i3 b
+    let j1 := j + 1
+    iota_rc_init_loop.ref ir rc1 j1
+  else rc
+termination_by 7 - j
+
+@[scalar_tac Std.UScalarTy.Usize.numBits]
+theorem Std.UScalarTy.Usize_numBits_le: Std.UScalarTy.Usize.numBits ≥ 32 := by
+  rcases System.Platform.numBits_eq with h | h <;> simp [h]
+
+theorem Aeneas.Std.Array.toBitVec_set{size: Std.Usize}(arr: Std.Array Bool size)(i: Std.Usize)(b: Bool)
+(i_idx: i < arr.length)
+: (arr.set i b).toBitVec = arr.toBitVec.set ⟨i.val, by simpa using i_idx⟩ b
+:= by 
+  simp [toBitVec]
+  rw [←BitVec.cast_set (i_idx := i_idx)]
+  ext j j_idx
+  simp only [BitVec.getElem_cast]
+  simp
+  simp at j_idx
+  have: size.val > 0 := by scalar_tac -- cases h: size.val <;> simp [h] at *
+  if h: i = j then
+    simp [h, BitVec.getElem_set]
+  else
+    simp [h, BitVec.getElem_set]
+
+theorem simple.iota_rc_init_loop.ref_spec(ir : Std.Usize) (input : Aeneas.Std.Array Bool 64#usize)(j: Std.Usize)
+: ir.val < 24
+→ j.val ≤ 6 + 1
+→ ∃ output,
+  iota_rc_init_loop ir input j = .ok output ∧
+  output.toBitVec.cast (by simp [Spec.w]) = simple.iota_rc_init_loop.ref ir.val (input.toBitVec.cast (by simp [Spec.w])) j.val
 := by
-  intro idx_left_inv
-  induction ls using List.reverseRecOn
-  case nil => simp
-  case append_singleton pref last ih =>
-    simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
-    split
-    case isTrue h =>
-      simp at h ih
-      rcases h with idx_x | ⟨x, x_in_xs, idx_x⟩
-      /- cases h2: h -/
-      · simp [BitVec.getElem_set, *]
-        rw [idx_left_inv]
-      · simp only [← idx_x, Fin.getElem_fin, BitVec.getElem_set]
-        split
-        · rename_i h
-          simp [←Fin.eq_of_val_eq h]
-          rw [idx_left_inv]
-        · simp [ih, idx_x]
-          intro contr
-          replace contr := contr x x_in_xs idx_x
-          simp at contr
-    case isFalse h =>
-      simp at h ih
-      have: (idx_f last).val ≠ i.val := fun e => h.left (Fin.eq_of_val_eq e.symm)
-      simp [BitVec.getElem_set, this,ih]
-      intro x x_in_pref idx_x
-      have := h.right x x_in_pref idx_x
-      simp at this
+  intro ir_lt j_loop_bound
+  rw [iota_rc_init_loop, iota_rc_init_loop.ref]
+  split
+  case isTrue j_lt =>
+    let* ⟨ i, i_post ⟩ ← Std.Usize.mul_spec
+    let* ⟨ i1, i1_post ⟩ ← Std.Usize.add_spec
+    let* ⟨ b, b_post ⟩ ← iota_rc_point.spec
+    simp [i1_post, i_post] at b_post
+    let* ⟨ i2, i2_post_1, i2_post_2 ⟩ ← Std.Usize.one_ShiftLeft_spec
+    let* ⟨ i3, i3_post ⟩ ← Std.Usize.sub_spec
+    have i3_val: i3.val = i2.val - 1 := by 
+      rw [i3_post, Nat.add_sub_cancel]
+    simp [i2_post_1] at i3_val
+    have i3_idx: i3.val < input.length := by 
+      simp [*]
+      calc  2 ^ ↑j - 1
+          _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
+          _ ≤ 2 ^ 6 := Nat.pow_le_pow_right Nat.two_pos (by simpa using j_lt)
+    let* ⟨ rc1, rc1_post ⟩ ← Std.Array.update_spec
+    let* ⟨ j1, j1_post ⟩ ← Std.Usize.add_spec
+    let* ⟨ res, res_post ⟩ ← ref_spec
+    -- END PROGRESS
+    rw [res_post, ←BitVec.cast_set (i_idx := ?first)]
+    rw [rc1_post, Std.Array.toBitVec_set (i_idx := by assumption)]
+    case first =>
+      simp [Nat.shiftLeft_eq, NatCast.natCast, Fin.ofNat']
+      rw [Nat.mod_eq_of_lt] <;> simpa [i3_val] using i3_idx
+    simp_ifs
+    congr 3
+    simp [i3_val]
+    rw [Nat.shiftLeft_eq, Nat.one_mul, Nat.mod_eq_of_lt]
+    simpa [i3_val] using i3_idx
+  case isFalse => simp [‹j.val = 7›']
+termination_by 7 - j.val
+decreasing_by scalar_decr_tac
 
-theorem Spec.Keccak.ι.RC_as_function(iᵣ: Nat)(x: Fin (Spec.w l))
-: (RC iᵣ)[x] = 
-    let j := (x.val+1).log2
-    if x = 2^j - 1 then
-      ι.rc (j + 7*iᵣ)
-    else
-      false
+theorem simple.iota_rc_init_loop.ref.foldWhile_spec(iᵣ: Nat)(input: BitVec (Spec.w 6))(j: Nat)
+: iota_rc_init_loop.ref iᵣ input j = SRRange.foldWhile 
+    (i    := j) 
+    (max  := 6 + 1) 
+    (step := 1) (hStep := Nat.one_pos) 
+    (init := input) 
+    (f    := fun input j => input.set (↑(1 <<< j - 1)) (Spec.Keccak.ι.rc (j + 7 * iᵣ)))
 := by
-  let ind_f (j: Fin (l.val + 1)): Fin (Spec.w l) := 2^j.val - 1
-  let inv (x: Fin (Spec.w l)): Fin (l.val + 1) := (x.val+1).log2
-  let value_f (j: Fin (l.val + 1)) := rc (j.val + 7 * iᵣ)
-  have ind_left_inv: inv.LeftInverse ind_f := by 
-    sorry
-    /- simp [ind_f, inv, Function.LeftInverse] -/
-    /- intro x -/
-    /- rw [ -/
-    /-   Nat.sub_add_cancel Nat.one_le_two_pow -/
-    /- ] -/
-  have exists_charact:  (∃ a, 2 ^ a - 1 = x) ↔ (x = 2 ^ (x.val + 1).log2 - 1) := by
-    apply Iff.intro
-    · intro ⟨a, a_prop⟩
-      conv => arg 1; rw [←a_prop]
-      congr
-      if h: a < (x.val +1).log2 then
-        have: 2^a < 2^(x.val + 1).log2 := by
-          apply Nat.pow_lt_pow_of_lt Nat.one_lt_two h
-        have: 2^a -1 < 2^(x.val + 1).log2 -1 := by
-          apply Nat.sub_lt_sub_right Nat.one_le_two_pow this
-        have: x.val < x.val := by
-          calc x.val
-            _ = 2^a - 1 := by
-              rw [a_prop.symm]
-              -- TODO: Fin being a PITA
-              sorry
-            _ < 2 ^(x.val + 1).log2 - 1 := this
-        /- rw [a_prop] at this -/
-        sorry
-      else if a > (x.val + 1).log2 then
-        sorry
-      else
-        simp at *
-        apply Nat.le_antisymm (by assumption) (by assumption)
-    · intro prop
-      exists (x.val + 1).log2
-      exact prop.symm
-      /- simpa using prop -/
+  rw [ref, SRRange.foldWhile]
+  if h: j < 7 then
+    simp only
+    simp [h, ‹j ≤ 6›']
+    rw [simple.iota_rc_init_loop.ref.foldWhile_spec]
+  else simp [h, ‹¬ (j ≤ 6)›']
 
-  /- have inv_def x: inv x = (x.val + 1).log2 := rfl -/
-  /- rw [←inv_def] -/
+def Spec.Keccak.ι.RC.loop (iᵣ: Nat)(init: BitVec (w 6))(start: Nat): BitVec (w 6) := Id.run do
+  let mut RC := init
+  for j in List.finRange (6 + 1) |>.drop start do
+    have j_valid_idx := calc  2 ^ ↑j - 1
+        _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
+        _ ≤ 2 ^ 6 := Nat.pow_le_pow_right Nat.two_pos <| Fin.is_le j
+    RC := RC.set ⟨2^j.val - 1, j_valid_idx⟩ (ι.rc (↑j + 7*iᵣ)) 
+  return RC
 
-  simp [RC]
-  have := getElem_fold_set (0#(w l)) (List.finRange (l.val + 1)) (ind_f) (value_f) (inv) x ind_left_inv
-  simp only [ind_f, inv, value_f, Fin.getElem_fin] at this
-  conv => arg 1; arg 1; arg 1; ext b a; arg 1; rw [Fin.cast_of_mk]
-  simp [this]
+def BitVec.set!{n: Nat}(i: Nat)(b: Bool)(bv: BitVec n): BitVec n := 
+  if _: i < n then
+    bv.set ⟨i, ‹i < n›⟩ b
+  else bv
 
+theorem BitVec.set!_eq_set{n: Nat}(i: Nat)(b: Bool)(bv: BitVec n)⦃i_idx: i < n⦄
+: bv.set! i b = bv.set ⟨i, i_idx⟩ b
+:= by simp only [set!, reduceDIte, i_idx]
+
+theorem List.foldl_of_foldl_map(f: α' → α)(upd: β → α → β)(upd' : β → α' → β)(init: β)(ls: List α')
+: upd' = (upd · <| f ·)
+→ List.foldl upd' init ls = List.foldl upd init (ls.map f) 
+:= by rintro rfl; revert init; induction ls <;> simp [*]
+
+theorem List.val_finRange_eq_range(n: Nat)
+: (List.finRange n).map Fin.val = List.range n
+:= by cases n <;> simp
+
+def Spec.Keccak.ι.RC.loop.spec(iᵣ: Nat)
+: RC.loop iᵣ (0#(w 6)) 0 = RC iᵣ
+:= by simp [loop, RC]; congr
+
+def Spec.Keccak.ι.RC.loop.foldl_spec(iᵣ: Nat)(init: BitVec (w 6))(start: Nat)
+: RC.loop iᵣ init start =
+    List.foldl (fun RC j => RC.set! (2^j - 1) (ι.rc (j + 7*iᵣ))) init (List.range (6 + 1) |>.drop start)
+:= by
+  simp [RC.loop]
+  rw [
+    ←List.val_finRange_eq_range 7,
+    ←List.map_drop,
+    ←List.foldl_of_foldl_map (f := Fin.val)
+  ]
+  ext RC j : 2
+  rw [BitVec.set!_eq_set]
+
+theorem List.drop_range'(i s n: Nat): (List.range' s n |>.drop i) = List.range' (s + i) (n - i) := by
+  cases i 
+  case zero => simp
+  case succ i' => 
+    cases n
+    case zero => simp
+    case succ n' => 
+      rw [List.range'_succ, List.drop_succ_cons, Nat.add_comm i', ←Nat.add_assoc, Nat.sub_add_eq, Nat.add_sub_cancel]
+      apply List.drop_range'
+
+theorem List.drop_range(i n: Nat): (List.range n |>.drop i) = List.range' i (n-i) := by
+  simp [List.range_eq_range', List.drop_range' (s := 0)]
+
+theorem Aeneas.SRRange.foldWhile_eq_foldWhile'{α : Type u} 
+(i max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (init : α)
+: foldWhile max step hStep f i init = SRRange.foldWhile' {
+    start := i
+    stop  := max
+    step  := step
+    step_pos := hStep
+  } (fun acc e _ => f acc e) i init (hi := by simp)
+:= by
   sorry
 
 
-def Spec.Keccak.ι.RC.loop {l: Fin 7}(iᵣ: Nat)(start: Nat): BitVec (w l) := Id.run do
-  let mut RC: BitVec (w l) := 0#(w l)
-  for j in List.finRange (l.val + 1) |>.drop start do
-    have j_valid_idx := calc  2 ^ ↑j - 1
-        _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
-        _ ≤ 2 ^ ↑l := Nat.pow_le_pow_iff_right (by decide) |>.mpr <| Fin.is_le j
-    RC := RC.set ⟨2^j.val - 1, j_valid_idx⟩ (ι.rc (↑j + 7*iᵣ)) 
-  RC
-
-theorem Spec.Keccak.ι.RC.spec{l: Fin 7}(iᵣ: Nat)(start: Nat)
-: Spec.Keccak.ι.RC.loop iᵣ start = SRRange.foldWhile 
-    (i := start) 
-    (step := 1) 
-    (hStep := Nat.one_pos)
-    (max := l.val + 1) 
-    (f := fun RC j => RC.set (2^j - 1).cast <| ι.rc (j + 7*iᵣ))
-    (init := 0#(w l))
+def simple.iota_rc_init_loop.foldWhile.spec(iᵣ: Nat)(init: BitVec (Spec.w 6))(start: Nat)
+: SRRange.foldWhile 
+    (i    := start) 
+    (max  := 6 + 1) 
+    (step := 1) (hStep := Nat.one_pos) 
+    (init := init) 
+    (f    := fun input j => BitVec.set (1 <<< j - 1).cast (Spec.Keccak.ι.rc (j + 7 * iᵣ)) input)
+= Spec.Keccak.ι.RC.loop iᵣ init start
 := by
-  simp [loop]
-
-theorem List.foldl_of_foldl_map(f: α' → α)(upd: β → α → β)(init: β)(ls: List α')
-: List.foldl (upd · <| f ·) init ls = List.foldl upd init (f <$> ls) 
-:= by revert init; induction ls <;> simp [*]
-
-theorem List.val_finRange_eq_range(n: Nat)
-: Fin.val <$> List.finRange n = List.range n
-:= by 
-  exact?
+  rw [Spec.Keccak.ι.RC.loop.foldl_spec, List.drop_range, SRRange.foldl_range' (hStep := Nat.one_pos)]
+  simp
+  if start_idx: start < 7 then
+    rw [‹start  + (7 - start) = 7›']
+    rw [SRRange.foldWhile_eq_foldWhile', SRRange.foldWhile_eq_foldWhile']
+    congr
+    ext input j j_idx : 3
+    rw [←BitVec.set!_eq_set]
+    congr 2
+    simp
+    simp only [Nat.shiftLeft_eq, Nat.one_mul]
+    simp [Membership.mem] at j_idx
+    have j_valid_idx := calc  2 ^ j - 1
+        _ < 2 ^ j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j))
+        _ ≤ 2 ^ 6 := Nat.pow_le_pow_right Nat.two_pos (by scalar_tac)
+    rw [Nat.mod_eq_of_lt]; simpa using j_valid_idx
+  else
+    rw [SRRange.foldWhile_id (h := start_idx), SRRange.foldWhile_id (h := by simpa using start_idx)]
 
 @[progress]
 theorem simple.iota_rc_init_loop.spec(ir : Std.Usize) (input : Aeneas.Std.Array Bool 64#usize)(i: Std.Usize)
@@ -1103,46 +1150,130 @@ theorem simple.iota_rc_init_loop.spec(ir : Std.Usize) (input : Aeneas.Std.Array 
 → i.val ≤ 6 + 1
 → ∃ output,
   simple.iota_rc_init_loop ir input i = .ok output ∧
-  ∀ (j: Fin (Spec.w 6)), (2^i.val) - 1 ≤ j.val → output.val[j]! = (Spec.Keccak.ι.RC ir)[j]
+  output.toBitVec.cast (by simp [Spec.w]) = Spec.Keccak.ι.RC.loop ir.val (input.toBitVec.cast (by simp [Spec.w])) i.val
 := by
   intro ir_lt i_loop_bound
-  rw [iota_rc_init_loop]
+  let* ⟨ output, output_post⟩ ← iota_rc_init_loop.ref_spec
+  rw [
+    output_post,
+    simple.iota_rc_init_loop.ref.foldWhile_spec,
+    simple.iota_rc_init_loop.foldWhile.spec,
+  ]
+
+theorem repeat_false_toBitVec_eq_zero(size: Std.Usize)
+: (Std.Array.repeat size false).toBitVec = 0#(size.val)
+:= by ext i; simp only [Std.Array.toBitVec, Std.Array.repeat, BitVec.getElem_cast,
+  BitVec.getElem_ofBoolListLE, List.getElem_replicate, BitVec.getElem_zero]
+
+@[progress]
+theorem simple.iota_rc_init.spec(ir: Std.Usize)
+: ir.val < 24
+→ ∃ output,
+  simple.iota_rc_init ir (Std.Array.repeat 64#usize false) = .ok output ∧
+  output.toBitVec.cast (by simp [Spec.w]) = (Spec.Keccak.ι.RC ir.val : BitVec (Spec.w 6))
+:= by 
+  intro ir_lt
+  simp [iota_rc_init, -Std.Array.toBitVec]
+  let* ⟨output , output_post⟩ ← iota_rc_init_loop.spec
+  rw [output_post, ←Spec.Keccak.ι.RC.loop.spec]
+  congr
+  ext i i_idx
+  simp only [Std.Array.toBitVec, Std.Array.repeat, BitVec.getElem_cast,
+    BitVec.getElem_ofBoolListLE, List.getElem_replicate, BitVec.getElem_zero]
+
+@[scalar_tac (x.cast : Fin n)]
+theorem asfd(x: Nat){n: Nat}[NeZero n]
+: (x.cast : Fin n).val = x ∨ x ≥ n
+:= by 
+  simp
+  if x < n then
+    left; rw [Nat.mod_eq_of_lt]; assumption
+  else
+    right; simpa using ‹¬ x < n›
+
+@[progress]
+theorem simple.iota_a_loop.spec(res : StateArray) (a : StateArray) (rc : Aeneas.Std.Array Bool 64#usize)(z: Std.Usize) 
+: ∃ output,
+  simple.iota_a_loop res a rc z = .ok output ∧
+  ∀ (x y: Fin 5)(z': Fin (Spec.w 6)),
+  output.toSpec.get x y z' = 
+    if x = 0 ∧ y = 0 ∧ z.val ≤ z'.val then
+      a.toSpec.get 0 0 z' ^^ rc.toBitVec[z'.val]!
+    else
+      res.toSpec.get x y z'
+:= by
+  rw [simple.iota_a_loop]
   split
-  case isTrue i_lt =>
-    let* ⟨ aux, aux_post ⟩ ← Std.Usize.mul_spec
-    let* ⟨ aux2, aux2_post ⟩ ← Std.Usize.add_spec
-    let* ⟨ tmp, tmp_post ⟩ ← iota_rc_point.spec
-    let* ⟨ i2, i2_post_1, i2_post_2 ⟩ ← Std.Usize.one_ShiftLeft_spec
-    · calc i.val
-        _ ≤ 6 := by simpa using i_lt
-        _ < 32 := by decide
-        _ ≤ Std.UScalarTy.Usize.numBits := by
-          rw [Std.UScalarTy.numBits]
-          rcases System.Platform.numBits_eq <;> scalar_tac
-    let* ⟨ i3, i3_post ⟩ ← Std.Usize.sub_spec
-    let* ⟨ rc1, rc1_post ⟩ ← Std.Array.update_spec
-    · simp [*, ‹i3.val = i2.val - 1›']
-      have: 2 ^i.val ≤ 2 ^ 6 := by 
-        apply Nat.pow_le_pow_right  Nat.two_pos
-        simpa using i_lt
-      scalar_tac
-    let* ⟨ j1, j1_post ⟩ ← Std.Usize.add_spec
+  case isTrue =>
+    let* ⟨ b, b_post ⟩ ← StateArray.index.spec
+    let* ⟨ b1, b1_post ⟩ ← Std.Array.index_usize_spec
+    let* ⟨ b2, b2_post ⟩ ← binxor.spec
+    simp [b_post, b1_post] at b2_post
+    let* ⟨ old_res, set_res, old_res_post, set_res_post ⟩ ← StateArray.index_mut.spec
+    let* ⟨ z1, z1_post ⟩ ← Std.Usize.add_spec
     let* ⟨ rest, rest_post ⟩ ← spec
-    intro j j_range
-    simp [rest_post]
-    sorry
-  case isFalse i_oob =>
-    simp [‹i.val = 7›']
-    scalar_tac
+    simp [*] at rest_post
+    intro x y z'
+    rw [rest_post]
+    split_all
+    · simp [Spec.Keccak.StateArray.get_set]
+    · scalar_tac
+    · simp [Spec.Keccak.StateArray.get_set, -Std.Array.toBitVec]
+      have zz' := ‹z.val = z'.val›'
+      simp [zz', -Std.Array.toBitVec]
+      simp_ifs
+      rw [getElem!_pos (h := by scalar_tac)]
+      rw [getElem!_pos (h := by scalar_tac)]
+      simp [BitVec.getElem_ofBoolListLE]
+    · rw [Spec.Keccak.StateArray.get_set]
+      have: ¬ (x = 0 ∧ y = 0 ∧ z' = z.val.cast) := by 
+        -- TODO: Could we modify `scalar_tac` so that it handles this case?
+        -- The issue is with `Fin` inequalities being hiden behind `And`, `Or` or `Not`.
+        -- It would be nice to have `scalar_tac` transform these using the lemmas
+        --  · Fin.val_fin_le
+        --  · Fin.val_inj
+        -- I was thinking of using a `simproc`, but I don't think these work with
+        -- implications, since they're supposed to do rewritings.
+        -- Perhaps I could have it 
+        rename_i h1 h2
+        simp [not_and_or, -not_and] at h1 h2 ⊢
+        rcases h1 with (h1 | h1 | h1) <;> try (simp [h1]; done)
+        rcases h2 with (h1 | h1 | h1) <;> try (simp [h1]; done)
+        right;right
+        intro
+        scalar_tac
+      simp_ifs
+  case isFalse z_oob =>
+    simp at z_oob ⊢
+    intro x y z'
+    simp_ifs
 
 @[progress]
 theorem simple.iota.spec(ir: Std.Usize)(input: StateArray)
-: ∃ output,
+: ir.val < 24
+→ ∃ output,
   iota ir input = .ok output ∧
   output.toSpec = Spec.Keccak.ι (iᵣ:= ir.val) input.toSpec
 := by
-  simp [iota, iota_rc_init, ClonesimpleStateArray.clone]
-  sorry
+  intro ir_lt
+  simp [iota, iota_a, ClonesimpleStateArray.clone]
+  let* ⟨rc, rc_post⟩ ← iota_rc_init.spec
+  let* ⟨res, res_post⟩ ← iota_a_loop.spec
+  ext x y z
+  simp only [Spec.Keccak.ι, Spec.Keccak.StateArray.get_ofFn, res_post]
+  split
+  case isTrue h =>
+    simp only [Fin.isValue, h, id_eq, Id.run, Fin.getElem_fin, Id.pure_eq, Spec.Keccak.StateArray.get_ofFn, Bool.bne_right_inj]
+    replace rc_post := BitVec.cast_left _ rc_post
+    rw [rc_post, ←getElem_eq_getElem! (h := by scalar_tac)]
+    simp
+  case isFalse h =>
+    simp
+    split
+    · simp [*] at *
+      simp [*] at *
+    rename_i h; simp at h; obtain ⟨rfl, rfl, rfl⟩ := h
+    rfl
 
 theorem Array.getElem?_chunks_exact(k: Nat)(arr: Array α)(i: Nat)
 : i < arr.size / k

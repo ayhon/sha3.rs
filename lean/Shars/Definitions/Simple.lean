@@ -16,7 +16,7 @@ namespace simple
 /- [simple::W]
    Source: 'src/simple.rs', lines 4:0-4:23 -/
 @[global_simps] def W_body : Result Usize := 1#usize <<< L
-@[global_simps, irreducible] def W : Usize := eval_global W_body (by native_decide)
+@[global_simps, irreducible] def W : Usize := eval_global W_body
 
 /- [simple::B]
    Source: 'src/simple.rs', lines 5:0-5:24 -/
@@ -24,7 +24,7 @@ namespace simple
 def B_body : Result Usize := do
                              let i ← 5#usize * 5#usize
                              i * W
-@[global_simps, irreducible] def B : Usize := eval_global B_body (by native_decide)
+@[global_simps, irreducible] def B : Usize := eval_global B_body
 
 /- [simple::NR]
    Source: 'src/simple.rs', lines 6:0-6:21 -/
@@ -114,12 +114,6 @@ def xor_long (s : Slice Bool) (other : Slice Bool) : Result (Slice Bool) :=
 /- [simple::StateArray]
    Source: 'src/simple.rs', lines 35:0-35:29 -/
 @[reducible] def StateArray := (Array Bool 1600#usize)
-
-/- Trait declaration: [core::default::Default]
-   Source: '/rustc/library/core/src/default.rs', lines 107:0-107:24
-   Name pattern: core::default::Default -/
-structure core.default.Default (Self : Type) where
-  default : Result Self
 
 /- [simple::{core::default::Default for simple::StateArray}::default]:
    Source: 'src/simple.rs', lines 38:4-40:5 -/
@@ -503,31 +497,32 @@ def chi (a : StateArray) : Result StateArray :=
 @[global_simps]
 def IOTA_RC_POINTS_body : Result (Array Bool 255#usize) :=
   ok
-  (Array.make 255#usize [
-    true, false, false, false, false, false, false, false, true, false, true,
-    true, false, false, false, true, true, true, true, false, true, false,
-    false, false, false, true, true, true, true, true, true, true, true, false,
-    false, true, false, false, false, false, true, false, true, false, false,
-    true, true, true, true, true, false, true, false, true, false, true, false,
-    true, true, true, false, false, false, false, false, true, true, false,
-    false, false, true, false, true, false, true, true, false, false, true,
-    true, false, false, true, false, true, true, true, true, true, true, false,
-    true, true, true, true, false, false, true, true, false, true, true, true,
-    false, true, true, true, false, false, true, false, true, false, true,
-    false, false, true, false, true, false, false, false, true, false, false,
-    true, false, true, true, false, true, false, false, false, true, true,
-    false, false, true, true, true, false, false, true, true, true, true,
-    false, false, false, true, true, false, true, true, false, false, false,
-    false, true, false, false, false, true, false, true, true, true, false,
-    true, false, true, true, true, true, false, true, true, false, true, true,
-    true, true, true, false, false, false, false, true, true, false, true,
-    false, false, true, true, false, true, false, true, true, false, true,
-    true, false, true, false, true, false, false, false, false, false, true,
-    false, false, true, true, true, false, true, true, false, false, true,
-    false, false, true, false, false, true, true, false, false, false, false,
-    false, false, true, true, true, false, true, false, false, true, false,
-    false, false, true, true, true, false, false, false
-    ] (by native_decide))
+    (Array.make 255#usize [
+      true, false, false, false, false, false, false, false, true, false, true,
+      true, false, false, false, true, true, true, true, false, true, false,
+      false, false, false, true, true, true, true, true, true, true, true,
+      false, false, true, false, false, false, false, true, false, true, false,
+      false, true, true, true, true, true, false, true, false, true, false,
+      true, false, true, true, true, false, false, false, false, false, true,
+      true, false, false, false, true, false, true, false, true, true, false,
+      false, true, true, false, false, true, false, true, true, true, true,
+      true, true, false, true, true, true, true, false, false, true, true,
+      false, true, true, true, false, true, true, true, false, false, true,
+      false, true, false, true, false, false, true, false, true, false, false,
+      false, true, false, false, true, false, true, true, false, true, false,
+      false, false, true, true, false, false, true, true, true, false, false,
+      true, true, true, true, false, false, false, true, true, false, true,
+      true, false, false, false, false, true, false, false, false, true, false,
+      true, true, true, false, true, false, true, true, true, true, false,
+      true, true, false, true, true, true, true, true, false, false, false,
+      false, true, true, false, true, false, false, true, true, false, true,
+      false, true, true, false, true, true, false, true, false, true, false,
+      false, false, false, false, true, false, false, true, true, true, false,
+      true, true, false, false, true, false, false, true, false, false, true,
+      true, false, false, false, false, false, false, true, true, true, false,
+      true, false, false, true, false, false, false, true, true, true, false,
+      false, false
+      ] (by native_decide))
 @[global_simps, irreducible]
 def IOTA_RC_POINTS : Array Bool 255#usize := eval_global IOTA_RC_POINTS_body (by native_decide)
 
@@ -649,7 +644,7 @@ def sponge_absorb_loop
         { start := i1, end_ := i3 }
     let (s1, to_slice_mut_back) ←
       (↑(Array.to_slice_mut s) : Result ((Slice Bool) × (Slice Bool →
-         Array Bool 1600#usize)))
+        Array Bool 1600#usize)))
     let s2 ← xor_long s1 chunk
     let s3 := to_slice_mut_back s2
     let s4 ← keccak_p s3
@@ -666,12 +661,12 @@ def sponge_absorb_loop
     let nb_left ← i2 + i3
     let (s1, to_slice_mut_back) ←
       (↑(Array.to_slice_mut s) : Result ((Slice Bool) × (Slice Bool →
-         Array Bool 1600#usize)))
+        Array Bool 1600#usize)))
     let s2 ← xor_long s1 rest
     let s3 := to_slice_mut_back s2
     let (s4, to_slice_mut_back1) ←
       (↑(Array.to_slice_mut s3) : Result ((Slice Bool) × (Slice Bool →
-         Array Bool 1600#usize)))
+        Array Bool 1600#usize)))
     let i4 := Slice.len rest
     let s5 ← xor_long_at s4 suffix i4
     let leftover ←
@@ -683,7 +678,7 @@ def sponge_absorb_loop
       let s7 ← keccak_p s6
       let (s8, to_slice_mut_back2) ←
         (↑(Array.to_slice_mut s7) : Result ((Slice Bool) × (Slice Bool →
-           Array Bool 1600#usize)))
+          Array Bool 1600#usize)))
       let s9 ←
         core.slice.index.Slice.index
           (core.slice.index.SliceIndexRangeFromUsizeSlice Bool) suffix
@@ -692,20 +687,20 @@ def sponge_absorb_loop
       let s11 := to_slice_mut_back2 s10
       let (s12, to_slice_mut_back3) ←
         (↑(Array.to_slice_mut s11) : Result ((Slice Bool) × (Slice Bool →
-           Array Bool 1600#usize)))
+          Array Bool 1600#usize)))
       let s13 ←
         (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-           Bool))
+          Bool))
       let i5 := Slice.len suffix
       let i6 ← i5 - leftover
       let s14 ← xor_long_at s12 s13 i6
       let s15 := to_slice_mut_back3 s14
       let (s16, to_slice_mut_back4) ←
         (↑(Array.to_slice_mut s15) : Result ((Slice Bool) × (Slice Bool →
-           Array Bool 1600#usize)))
+          Array Bool 1600#usize)))
       let s17 ←
         (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-           Bool))
+          Bool))
       let i7 ← r - 1#usize
       let s18 ← xor_long_at s16 s17 i7
       let s19 := to_slice_mut_back4 s18
@@ -715,10 +710,10 @@ def sponge_absorb_loop
       let s6 := to_slice_mut_back1 s5
       let (s7, to_slice_mut_back2) ←
         (↑(Array.to_slice_mut s6) : Result ((Slice Bool) × (Slice Bool →
-           Array Bool 1600#usize)))
+          Array Bool 1600#usize)))
       let s8 ←
         (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-           Bool))
+          Bool))
       let s9 ← xor_long_at s7 s8 nb_left
       let i5 ← nb_left + 1#usize
       if i5 < r
@@ -727,10 +722,10 @@ def sponge_absorb_loop
         let s10 := to_slice_mut_back2 s9
         let (s11, to_slice_mut_back3) ←
           (↑(Array.to_slice_mut s10) : Result ((Slice Bool) × (Slice Bool
-             → Array Bool 1600#usize)))
+            → Array Bool 1600#usize)))
         let s12 ←
           (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-             Bool))
+            Bool))
         let i6 ← r - 1#usize
         let s13 ← xor_long_at s11 s12 i6
         let s14 := to_slice_mut_back3 s13
@@ -741,10 +736,10 @@ def sponge_absorb_loop
         let s11 ← keccak_p s10
         let (s12, to_slice_mut_back3) ←
           (↑(Array.to_slice_mut s11) : Result ((Slice Bool) × (Slice Bool
-             → Array Bool 1600#usize)))
+            → Array Bool 1600#usize)))
         let s13 ←
           (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-             Bool))
+            Bool))
         let i6 ← r - 1#usize
         let s14 ← xor_long_at s12 s13 i6
         let s15 := to_slice_mut_back3 s14
@@ -765,7 +760,7 @@ def sponge_absorb
 
 /- Trait implementation: [core::marker::{core::marker::Copy for bool}#53]
    Source: '/rustc/library/core/src/marker.rs', lines 48:25-48:62
-   Name pattern: core::marker::Copy<bool> -/
+   Name pattern: [core::marker::Copy<bool>] -/
 @[reducible]
 def core.marker.CopyBool : core.marker.Copy Bool := {
   cloneInst := core.clone.CloneBool
@@ -826,7 +821,7 @@ def sha3_224 (bs : Slice Bool) : Result (Array Bool 224#usize) :=
   let i1 ← B - i
   let (s, to_slice_mut_back) ←
     (↑(Array.to_slice_mut output) : Result ((Slice Bool) × (Slice Bool →
-       Array Bool 224#usize)))
+      Array Bool 224#usize)))
   let s1 ← (↑(Array.to_slice SHA3_SUFFIX) : Result (Slice Bool))
   let s2 ← sponge i1 bs s s1
   ok (to_slice_mut_back s2)
@@ -840,7 +835,7 @@ def sha3_256 (bs : Slice Bool) : Result (Array Bool 256#usize) :=
   let i1 ← B - i
   let (s, to_slice_mut_back) ←
     (↑(Array.to_slice_mut output) : Result ((Slice Bool) × (Slice Bool →
-       Array Bool 256#usize)))
+      Array Bool 256#usize)))
   let s1 ← (↑(Array.to_slice SHA3_SUFFIX) : Result (Slice Bool))
   let s2 ← sponge i1 bs s s1
   ok (to_slice_mut_back s2)
@@ -854,7 +849,7 @@ def sha3_384 (bs : Slice Bool) : Result (Array Bool 384#usize) :=
   let i1 ← B - i
   let (s, to_slice_mut_back) ←
     (↑(Array.to_slice_mut output) : Result ((Slice Bool) × (Slice Bool →
-       Array Bool 384#usize)))
+      Array Bool 384#usize)))
   let s1 ← (↑(Array.to_slice SHA3_SUFFIX) : Result (Slice Bool))
   let s2 ← sponge i1 bs s s1
   ok (to_slice_mut_back s2)
@@ -868,7 +863,7 @@ def sha3_512 (bs : Slice Bool) : Result (Array Bool 512#usize) :=
   let i1 ← B - i
   let (s, to_slice_mut_back) ←
     (↑(Array.to_slice_mut output) : Result ((Slice Bool) × (Slice Bool →
-       Array Bool 512#usize)))
+      Array Bool 512#usize)))
   let s1 ← (↑(Array.to_slice SHA3_SUFFIX) : Result (Slice Bool))
   let s2 ← sponge i1 bs s s1
   ok (to_slice_mut_back s2)
