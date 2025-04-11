@@ -123,29 +123,6 @@ theorem getElem_eq_getElem! [GetElem? cont idx elem dom] [LawfulGetElem cont idx
   simp [getElem!_def, getElem?_def, h]
 
 @[ext]
-theorem BitVec.ext{bv1 bv2: BitVec n}
-{point_eq: ∀ i: Nat, (_: i < n) → bv1[i] = bv2[i]}
-: bv1 = bv2 
-:= by
-  obtain ⟨⟨a, a_lt⟩⟩ := bv1
-  obtain ⟨⟨b, b_lt⟩⟩ := bv2
-  simp 
-  simp [BitVec.getElem_eq_testBit_toNat] at point_eq
-  apply Nat.eq_of_testBit_eq
-  intro i
-  if h: i < n then
-    exact point_eq i h
-  else
-    have: a < 2 ^i := calc
-      a < 2 ^n := a_lt
-      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
-    simp [Nat.testBit_lt_two_pow this]
-    have: b < 2 ^i := calc
-      b < 2 ^n := b_lt
-      _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
-    simp [Nat.testBit_lt_two_pow this]
-
-@[ext]
 theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
 {point_eq: ∀ (x y: Fin 5)(z: Fin (w l)), a.get x y z = b.get x y z}
 : a = b
@@ -169,47 +146,6 @@ theorem Spec.Keccak.StateArray.get_ofFn{f: Fin 5 × Fin 5 × Fin (w l) → Spec.
 theorem Bool.toNat_mod2_self(b: Bool)
 : b.toNat % 2 = b.toNat
 := by cases b <;> simp
-
-theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
-:  {j_lt: j < n}
-→ (bv.set i b)[j] = if i = j then b else bv[j]
-:= by 
-  intro j_lt
-  have n_pos: n > 0 := by cases n <;> (first | cases i.isLt | apply Nat.zero_lt_succ )
-  have hyp: 2 ∣ 2^n := by
-    cases n
-    case zero => contradiction
-    case succ n' => exact Dvd.intro_left (Nat.pow 2 n') rfl
-  have bool_fits{n: Nat}{b:Bool}: n > 0 → b.toNat < 2^n := by
-    intro hyp; cases b <;>
-    all_goals (
-      cases n 
-      case zero => contradiction
-      case succ n' => simp
-    )
-
-  rw [set]
-  split
-  case isTrue h => 
-    subst h
-    simp [Nat.mod_mod_of_dvd _ hyp, Bool.toNat_mod2_self, Nat.testBit, BitVec.getLsbD]
-  case isFalse =>
-    simp
-    rw [BitVec.getLsbD, BitVec.toNat_ofNat, Nat.testBit, Nat.shiftRight_eq_div_pow]
-    simp [Nat.mod_eq_of_lt (bool_fits n_pos)]
-    if h: i < j then
-      have: ¬ j < i := by scalar_tac
-      have shift_nz: j - i.val > 0 := by scalar_tac
-      simp [this, Nat]
-      cases bv[i.val] ^^b <;> simp 
-      have: 1 / 2 ^ (j - i.val) = 0 := by 
-        apply Nat.div_eq_zero_iff_lt (bool_fits (b := false) shift_nz) |>.mpr
-        exact bool_fits (b := true) shift_nz
-      rw [this]
-      simp
-    else
-      have h: j < i := by scalar_tac
-      simp [h]
 
 theorem Spec.Keccak.StateArray.get_set(a: Spec.Keccak.StateArray l)(x x' y y': Fin 5)(z z': Fin (w l))
 : (a.set x' y' z' val).get x y z = if x = x' ∧ y = y' ∧ z = z' then val else a.get x y z
@@ -411,22 +347,6 @@ end Auxiliary/- }}} -/
 def simple.StateArray.toSpec(self: simple.StateArray): Spec.Keccak.StateArray 6 :=
   Spec.Keccak.StateArray.ofBitVec <| (BitVec.ofBoolListLE <| self.val).setWidth (Spec.b 6)
 
-theorem BitVec.getElem_ofBoolListLE{ls: List Bool}{i: Nat}
-: ∀ (h: i < ls.length), (BitVec.ofBoolListLE ls)[i] = ls[i]
-:= by
-  intro i_lt
-  cases ls
-  case nil => contradiction
-  case cons hd tl =>
-    simp [BitVec.ofBoolListLE, BitVec.getElem_eq_testBit_toNat]
-    cases i
-    case zero => simp [Nat.mod_eq_of_lt (Bool.toNat_lt hd)]
-    case succ i' => 
-      have: (ofBoolListLE tl).toNat * 2 + hd.toNat = (ofBoolListLE tl).toNat.bit hd := by 
-        simp [Nat.bit]; cases hd <;> simp [Nat.mul_comm]
-      simp [this, Nat.testBit_bit_succ] at i_lt ⊢
-      rw [←BitVec.getElem_eq_testBit_toNat (ofBoolListLE tl) i']
-      apply BitVec.getElem_ofBoolListLE i_lt
 
 example: (2^32)-1 <= Std.Usize.max := by
   simp [Std.Usize.max, Std.Usize.numBits_eq]
