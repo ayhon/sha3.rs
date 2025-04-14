@@ -228,17 +228,22 @@ fn round(a: &mut StateArray, ir: usize) {
     *a = iota(ir, a);
 }
 
-fn keccak_p(s: &mut [bool; B]) {
-    let mut a = StateArray(*s);
+fn keccak_p_aux(a: &mut StateArray){
     let mut ir = 0;
     while ir < 24 {
-        round(&mut a, ir);
+        round(a, ir);
         ir += 1;
     }
+}
+
+
+fn keccak_p(s: &mut [bool; B]) {
+    let mut a = StateArray(*s);
+    keccak_p_aux(&mut a);
     *s = a.0;
 }
 
-fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
+fn sponge_absorb_initial(bs: &[bool], r: usize, s: &mut [bool; B]) {
     let n = bs.len() / r;
     let mut i = 0;
     while i < n {
@@ -247,7 +252,9 @@ fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
         keccak_p(s);
         i += 1;
     }
-    let rest = &bs[r*n..];
+}
+
+fn sponge_absorb_final(s: &mut [bool; B], rest: &[bool], suffix: &[bool], r: usize){
     let nb_left = rest.len() + suffix.len();
     // rest.len() < r
     xor_long(s, rest);
@@ -273,6 +280,13 @@ fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
         }
     }
     keccak_p(s);
+}
+
+fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
+    sponge_absorb_initial(bs, r, s);
+    let n = bs.len() / r;
+    let rest = &bs[r*n..];
+    sponge_absorb_final(s, rest, suffix, r);
 }
 
 /// Expects `z` to have the proper size (d)

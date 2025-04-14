@@ -322,9 +322,9 @@ def rho_loop
     let i ← 2#usize * x
     let i1 ← 3#usize * y
     let i2 ← i + i1
-    let lhs ← i2 % 5#usize
+    let y1 ← i2 % 5#usize
     let t1 ← t + 1#usize
-    rho_loop a y lhs res1 t1
+    rho_loop a y y1 res1 t1
   else ok res
 partial_fixpoint
 
@@ -607,29 +607,34 @@ def round (a : StateArray) (ir : Usize) : Result StateArray :=
   let a4 ← chi a3
   iota ir a4
 
-/- [simple::keccak_p]: loop 0:
-   Source: 'src/simple.rs', lines 234:4-237:5 -/
-def keccak_p_loop (a : StateArray) (ir : Usize) : Result Unit :=
+/- [simple::keccak_p_aux]: loop 0:
+   Source: 'src/simple.rs', lines 233:4-236:5 -/
+def keccak_p_aux_loop (a : StateArray) (ir : Usize) : Result StateArray :=
   if ir < 24#usize
-  then do
-       let a1 ← round a ir
-       let ir1 ← ir + 1#usize
-       keccak_p_loop a1 ir1
-  else ok ()
+  then
+    do
+    let a1 ← round a ir
+    let ir1 ← ir + 1#usize
+    keccak_p_aux_loop a1 ir1
+  else ok a
 partial_fixpoint
 
-/- [simple::keccak_p]:
-   Source: 'src/simple.rs', lines 231:0-239:1 -/
-def keccak_p (s : Array Bool 1600#usize) : Result (Array Bool 1600#usize) :=
-  do
-  keccak_p_loop s 0#usize
-  ok s
+/- [simple::keccak_p_aux]:
+   Source: 'src/simple.rs', lines 231:0-237:1 -/
+@[reducible]
+def keccak_p_aux (a : StateArray) : Result StateArray :=
+  keccak_p_aux_loop a 0#usize
 
-/- [simple::sponge_absorb]: loop 0:
-   Source: 'src/simple.rs', lines 244:4-249:5 -/
-def sponge_absorb_loop
-  (bs : Slice Bool) (r : Usize) (s : Array Bool 1600#usize)
-  (suffix : Slice Bool) (n : Usize) (i : Usize) :
+/- [simple::keccak_p]:
+   Source: 'src/simple.rs', lines 240:0-244:1 -/
+def keccak_p (s : Array Bool 1600#usize) : Result (Array Bool 1600#usize) :=
+  keccak_p_aux s
+
+/- [simple::sponge_absorb_initial]: loop 0:
+   Source: 'src/simple.rs', lines 249:4-254:5 -/
+def sponge_absorb_initial_loop
+  (bs : Slice Bool) (r : Usize) (s : Array Bool 1600#usize) (n : Usize)
+  (i : Usize) :
   Result (Array Bool 1600#usize)
   :=
   if i < n
@@ -648,118 +653,134 @@ def sponge_absorb_loop
     let s2 ← xor_long s1 chunk
     let s3 := to_slice_mut_back s2
     let s4 ← keccak_p s3
-    sponge_absorb_loop bs r s4 suffix n i2
+    sponge_absorb_initial_loop bs r s4 n i2
+  else ok s
+partial_fixpoint
+
+/- [simple::sponge_absorb_initial]:
+   Source: 'src/simple.rs', lines 246:0-255:1 -/
+def sponge_absorb_initial
+  (bs : Slice Bool) (r : Usize) (s : Array Bool 1600#usize) :
+  Result (Array Bool 1600#usize)
+  :=
+  do
+  let i := Slice.len bs
+  let n ← i / r
+  sponge_absorb_initial_loop bs r s n 0#usize
+
+/- [simple::sponge_absorb_final]:
+   Source: 'src/simple.rs', lines 257:0-283:1 -/
+def sponge_absorb_final
+  (s : Array Bool 1600#usize) (rest : Slice Bool) (suffix : Slice Bool)
+  (r : Usize) :
+  Result (Array Bool 1600#usize)
+  :=
+  do
+  let i := Slice.len rest
+  let i1 := Slice.len suffix
+  let nb_left ← i + i1
+  let (s1, to_slice_mut_back) ←
+    (↑(Array.to_slice_mut s) : Result ((Slice Bool) × (Slice Bool → Array
+      Bool 1600#usize)))
+  let s2 ← xor_long s1 rest
+  let s3 := to_slice_mut_back s2
+  let (s4, to_slice_mut_back1) ←
+    (↑(Array.to_slice_mut s3) : Result ((Slice Bool) × (Slice Bool → Array
+      Bool 1600#usize)))
+  let i2 := Slice.len rest
+  let s5 ← xor_long_at s4 suffix i2
+  let leftover ←
+    (↑(core.num.Usize.saturating_sub nb_left r) : Result Usize)
+  if leftover > 0#usize
+  then
+    do
+    let s6 := to_slice_mut_back1 s5
+    let s7 ← keccak_p s6
+    let (s8, to_slice_mut_back2) ←
+      (↑(Array.to_slice_mut s7) : Result ((Slice Bool) × (Slice Bool →
+        Array Bool 1600#usize)))
+    let s9 ←
+      core.slice.index.Slice.index
+        (core.slice.index.SliceIndexRangeFromUsizeSlice Bool) suffix
+        { start := leftover }
+    let s10 ← xor_long s8 s9
+    let s11 := to_slice_mut_back2 s10
+    let (s12, to_slice_mut_back3) ←
+      (↑(Array.to_slice_mut s11) : Result ((Slice Bool) × (Slice Bool →
+        Array Bool 1600#usize)))
+    let s13 ←
+      (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice Bool))
+    let i3 := Slice.len suffix
+    let i4 ← i3 - leftover
+    let s14 ← xor_long_at s12 s13 i4
+    let s15 := to_slice_mut_back3 s14
+    let (s16, to_slice_mut_back4) ←
+      (↑(Array.to_slice_mut s15) : Result ((Slice Bool) × (Slice Bool →
+        Array Bool 1600#usize)))
+    let s17 ←
+      (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice Bool))
+    let i5 ← r - 1#usize
+    let s18 ← xor_long_at s16 s17 i5
+    let s19 := to_slice_mut_back4 s18
+    keccak_p s19
   else
     do
-    let i1 ← r * n
-    let rest ←
-      core.slice.index.Slice.index
-        (core.slice.index.SliceIndexRangeFromUsizeSlice Bool) bs
-        { start := i1 }
-    let i2 := Slice.len rest
-    let i3 := Slice.len suffix
-    let nb_left ← i2 + i3
-    let (s1, to_slice_mut_back) ←
-      (↑(Array.to_slice_mut s) : Result ((Slice Bool) × (Slice Bool →
+    let s6 := to_slice_mut_back1 s5
+    let (s7, to_slice_mut_back2) ←
+      (↑(Array.to_slice_mut s6) : Result ((Slice Bool) × (Slice Bool →
         Array Bool 1600#usize)))
-    let s2 ← xor_long s1 rest
-    let s3 := to_slice_mut_back s2
-    let (s4, to_slice_mut_back1) ←
-      (↑(Array.to_slice_mut s3) : Result ((Slice Bool) × (Slice Bool →
-        Array Bool 1600#usize)))
-    let i4 := Slice.len rest
-    let s5 ← xor_long_at s4 suffix i4
-    let leftover ←
-      (↑(core.num.Usize.saturating_sub nb_left r) : Result Usize)
-    if leftover > 0#usize
+    let s8 ←
+      (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice Bool))
+    let s9 ← xor_long_at s7 s8 nb_left
+    let i3 ← nb_left + 1#usize
+    if i3 < r
     then
       do
-      let s6 := to_slice_mut_back1 s5
-      let s7 ← keccak_p s6
-      let (s8, to_slice_mut_back2) ←
-        (↑(Array.to_slice_mut s7) : Result ((Slice Bool) × (Slice Bool →
+      let s10 := to_slice_mut_back2 s9
+      let (s11, to_slice_mut_back3) ←
+        (↑(Array.to_slice_mut s10) : Result ((Slice Bool) × (Slice Bool →
           Array Bool 1600#usize)))
-      let s9 ←
-        core.slice.index.Slice.index
-          (core.slice.index.SliceIndexRangeFromUsizeSlice Bool) suffix
-          { start := leftover }
-      let s10 ← xor_long s8 s9
-      let s11 := to_slice_mut_back2 s10
+      let s12 ←
+        (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
+          Bool))
+      let i4 ← r - 1#usize
+      let s13 ← xor_long_at s11 s12 i4
+      let s14 := to_slice_mut_back3 s13
+      keccak_p s14
+    else
+      do
+      let s10 := to_slice_mut_back2 s9
+      let s11 ← keccak_p s10
       let (s12, to_slice_mut_back3) ←
         (↑(Array.to_slice_mut s11) : Result ((Slice Bool) × (Slice Bool →
           Array Bool 1600#usize)))
       let s13 ←
         (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
           Bool))
-      let i5 := Slice.len suffix
-      let i6 ← i5 - leftover
-      let s14 ← xor_long_at s12 s13 i6
+      let i4 ← r - 1#usize
+      let s14 ← xor_long_at s12 s13 i4
       let s15 := to_slice_mut_back3 s14
-      let (s16, to_slice_mut_back4) ←
-        (↑(Array.to_slice_mut s15) : Result ((Slice Bool) × (Slice Bool →
-          Array Bool 1600#usize)))
-      let s17 ←
-        (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-          Bool))
-      let i7 ← r - 1#usize
-      let s18 ← xor_long_at s16 s17 i7
-      let s19 := to_slice_mut_back4 s18
-      keccak_p s19
-    else
-      do
-      let s6 := to_slice_mut_back1 s5
-      let (s7, to_slice_mut_back2) ←
-        (↑(Array.to_slice_mut s6) : Result ((Slice Bool) × (Slice Bool →
-          Array Bool 1600#usize)))
-      let s8 ←
-        (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-          Bool))
-      let s9 ← xor_long_at s7 s8 nb_left
-      let i5 ← nb_left + 1#usize
-      if i5 < r
-      then
-        do
-        let s10 := to_slice_mut_back2 s9
-        let (s11, to_slice_mut_back3) ←
-          (↑(Array.to_slice_mut s10) : Result ((Slice Bool) × (Slice Bool
-            → Array Bool 1600#usize)))
-        let s12 ←
-          (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-            Bool))
-        let i6 ← r - 1#usize
-        let s13 ← xor_long_at s11 s12 i6
-        let s14 := to_slice_mut_back3 s13
-        keccak_p s14
-      else
-        do
-        let s10 := to_slice_mut_back2 s9
-        let s11 ← keccak_p s10
-        let (s12, to_slice_mut_back3) ←
-          (↑(Array.to_slice_mut s11) : Result ((Slice Bool) × (Slice Bool
-            → Array Bool 1600#usize)))
-        let s13 ←
-          (↑(Array.to_slice (Array.make 1#usize [ true ])) : Result (Slice
-            Bool))
-        let i6 ← r - 1#usize
-        let s14 ← xor_long_at s12 s13 i6
-        let s15 := to_slice_mut_back3 s14
-        keccak_p s15
-partial_fixpoint
+      keccak_p s15
 
 /- [simple::sponge_absorb]:
-   Source: 'src/simple.rs', lines 241:0-276:1 -/
+   Source: 'src/simple.rs', lines 285:0-290:1 -/
 def sponge_absorb
   (bs : Slice Bool) (r : Usize) (s : Array Bool 1600#usize)
   (suffix : Slice Bool) :
   Result (Array Bool 1600#usize)
   :=
   do
+  let s1 ← sponge_absorb_initial bs r s
   let i := Slice.len bs
   let n ← i / r
-  sponge_absorb_loop bs r s suffix n 0#usize
+  let i1 ← r * n
+  let rest ←
+    core.slice.index.Slice.index
+      (core.slice.index.SliceIndexRangeFromUsizeSlice Bool) bs { start := i1 }
+  sponge_absorb_final s1 rest suffix r
 
 /- Trait implementation: [core::marker::{core::marker::Copy for bool}#53]
-   Source: '/rustc/library/core/src/marker.rs', lines 48:25-48:62
+   Source: '/rustc/library/core/src/marker.rs', lines 55:25-55:62
    Name pattern: [core::marker::Copy<bool>] -/
 @[reducible]
 def core.marker.CopyBool : core.marker.Copy Bool := {
@@ -767,7 +788,7 @@ def core.marker.CopyBool : core.marker.Copy Bool := {
 }
 
 /- [simple::sponge_squeeze]: loop 0:
-   Source: 'src/simple.rs', lines 282:4-291:5 -/
+   Source: 'src/simple.rs', lines 296:4-305:5 -/
 def sponge_squeeze_loop
   (r : Usize) (z : Slice Bool) (s : Array Bool 1600#usize) (i : Usize) :
   Result (Slice Bool)
@@ -785,7 +806,7 @@ def sponge_squeeze_loop
 partial_fixpoint
 
 /- [simple::sponge_squeeze]:
-   Source: 'src/simple.rs', lines 279:0-292:1 -/
+   Source: 'src/simple.rs', lines 293:0-306:1 -/
 @[reducible]
 def sponge_squeeze
   (r : Usize) (z : Slice Bool) (s : Array Bool 1600#usize) :
@@ -794,7 +815,7 @@ def sponge_squeeze
   sponge_squeeze_loop r z s 0#usize
 
 /- [simple::sponge]:
-   Source: 'src/simple.rs', lines 294:0-298:1 -/
+   Source: 'src/simple.rs', lines 308:0-312:1 -/
 def sponge
   (r : Usize) (bs : Slice Bool) (output : Slice Bool) (suffix : Slice Bool) :
   Result (Slice Bool)
@@ -805,7 +826,7 @@ def sponge
   sponge_squeeze r output s1
 
 /- [simple::SHA3_SUFFIX]
-   Source: 'src/simple.rs', lines 300:0-300:45 -/
+   Source: 'src/simple.rs', lines 314:0-314:45 -/
 @[global_simps]
 def SHA3_SUFFIX_body : Result (Array Bool 2#usize) :=
   ok (Array.make 2#usize [ false, true ])
@@ -813,7 +834,7 @@ def SHA3_SUFFIX_body : Result (Array Bool 2#usize) :=
 def SHA3_SUFFIX : Array Bool 2#usize := eval_global SHA3_SUFFIX_body
 
 /- [simple::sha3_224]:
-   Source: 'src/simple.rs', lines 301:0-301:141 -/
+   Source: 'src/simple.rs', lines 315:0-315:141 -/
 def sha3_224 (bs : Slice Bool) : Result (Array Bool 224#usize) :=
   do
   let output := Array.repeat 224#usize false
@@ -827,7 +848,7 @@ def sha3_224 (bs : Slice Bool) : Result (Array Bool 224#usize) :=
   ok (to_slice_mut_back s2)
 
 /- [simple::sha3_256]:
-   Source: 'src/simple.rs', lines 302:0-302:141 -/
+   Source: 'src/simple.rs', lines 316:0-316:141 -/
 def sha3_256 (bs : Slice Bool) : Result (Array Bool 256#usize) :=
   do
   let output := Array.repeat 256#usize false
@@ -841,7 +862,7 @@ def sha3_256 (bs : Slice Bool) : Result (Array Bool 256#usize) :=
   ok (to_slice_mut_back s2)
 
 /- [simple::sha3_384]:
-   Source: 'src/simple.rs', lines 303:0-303:141 -/
+   Source: 'src/simple.rs', lines 317:0-317:141 -/
 def sha3_384 (bs : Slice Bool) : Result (Array Bool 384#usize) :=
   do
   let output := Array.repeat 384#usize false
@@ -855,7 +876,7 @@ def sha3_384 (bs : Slice Bool) : Result (Array Bool 384#usize) :=
   ok (to_slice_mut_back s2)
 
 /- [simple::sha3_512]:
-   Source: 'src/simple.rs', lines 304:0-304:141 -/
+   Source: 'src/simple.rs', lines 318:0-318:141 -/
 def sha3_512 (bs : Slice Bool) : Result (Array Bool 512#usize) :=
   do
   let output := Array.repeat 512#usize false
@@ -869,7 +890,7 @@ def sha3_512 (bs : Slice Bool) : Result (Array Bool 512#usize) :=
   ok (to_slice_mut_back s2)
 
 /- [simple::SHAKE_SUFFIX]
-   Source: 'src/simple.rs', lines 306:0-306:42 -/
+   Source: 'src/simple.rs', lines 320:0-320:42 -/
 @[global_simps]
 def SHAKE_SUFFIX_body : Result (Array Bool 4#usize) :=
   ok (Array.repeat 4#usize true)
@@ -877,7 +898,7 @@ def SHAKE_SUFFIX_body : Result (Array Bool 4#usize) :=
 def SHAKE_SUFFIX : Array Bool 4#usize := eval_global SHAKE_SUFFIX_body
 
 /- [simple::shake128]:
-   Source: 'src/simple.rs', lines 307:0-307:99 -/
+   Source: 'src/simple.rs', lines 321:0-321:99 -/
 def shake128 (bs : Slice Bool) (output : Slice Bool) : Result (Slice Bool) :=
   do
   let i ← 2#usize * 128#usize
@@ -886,7 +907,7 @@ def shake128 (bs : Slice Bool) (output : Slice Bool) : Result (Slice Bool) :=
   sponge i1 bs output s
 
 /- [simple::shake256]:
-   Source: 'src/simple.rs', lines 308:0-308:99 -/
+   Source: 'src/simple.rs', lines 322:0-322:99 -/
 def shake256 (bs : Slice Bool) (output : Slice Bool) : Result (Slice Bool) :=
   do
   let i ← 2#usize * 256#usize
