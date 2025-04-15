@@ -131,10 +131,11 @@ theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
   xor_long_at a b pos = .ok output ∧ 
   output.length = a.length ∧
   ∀ j < a.length, 
+      output[j]! =
       if pos.val ≤ j ∧ j < pos.val + b.length then 
-        output[j]! = (a[j]! ^^ b[j-pos.val]!)
+         (a[j]! ^^ b[j-pos.val]!)
       else 
-        output[j]! = a[j]!
+          a[j]!
 := by/- {{{ -/
   intro no_overflowa
   rw [xor_long_at]
@@ -152,33 +153,42 @@ theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
   · simpa using res_post_2
 
 
+@[simp]
+theorem BitVec.setWidth_eq_cast{n m: Nat}(bv: BitVec n)(h: n = m)
+: bv.setWidth m = bv.cast h
+:= by
+  ext i i_lt
+  simp only [getElem_setWidth, getElem_cast]
+  simp only [GetElem.getElem]
+  exact rfl
+
 @[progress]
 theorem simple.xor_long.spec(a b: Std.Slice Bool)
 : ∃ c, 
-  xor_long a b = .ok c ∧ c = a.val.zipWith xor b ++ a.val.drop b.length
+  xor_long a b = .ok c ∧
+  c.length = a.length ∧
+  c.toBitVec = (a.toBitVec ^^^ b.toBitVec.setWidth a.length).setWidth c.length
+  /- c = a.val.zipWith xor b ++ a.val.drop b.length -/
 := by/- {{{ -/
   rw [xor_long]
   progress*
 
-  apply List.ext_getElem!
-  · simp [*]; scalar_tac
-
-  intro i
-  replace res_post_2 := res_post_2 i
-  if i_idx: i < a.length.min (b.length) then
-    simp_ifs at res_post_2
-    replace res_post_2 := res_post_2 (by scalar_tac)
-    simp [*, getElem!_zipWith]
-    simpa using res_post_2
-  else
-    if i_a_idx: i < a.length then
-      simp [*] at *
-      simp [*] at *
-      rw [res_post_2]
-      congr
-      scalar_tac
-    else
-      simp_lists
+  simp [*, BitVec.ofNatLt]
+  
+  ext j j_idx_res
+  have j_idx_a: j < a.length := by simpa [*] using j_idx_res
+  replace res_bit := res_post_2 j j_idx_a
+  -- NOTE: Replace [·]! with [·] so I can use theorems such as 
+  --        · `getElem_cast`
+  --        · `getElem_xor`
+  --        · `getElem_setWidth`
+  simp only [Std.Slice.getElem!_Nat_eq] at res_bit
+  simp only [getElem!_pos, *] at res_bit
+  /- simp only [BitVec.getElem_xor] -/
+  simp [Std.Slice.toBitVec, res_bit]; clear res_bit
+  split_all
+  · simp [getElem!_pos, getElem?_pos, *]
+  · simp [getElem?_neg, *]
 
 @[progress]
 theorem  simple.StateArray.index.spec
