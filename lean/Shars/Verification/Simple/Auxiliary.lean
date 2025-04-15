@@ -8,6 +8,7 @@ import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
 import Shars.Verification.Simple.Utils
+import Shars.Verification.Simple.Refinement
 
 set_option maxHeartbeats 1000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -15,6 +16,13 @@ attribute [simp] Aeneas.Std.Slice.set
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec 
+
+-- TODO: derive automatically with `progress_pure_def` applied to `Std.core.cmp.impls.OrdUsize.min`
+open Aeneas hiding Std.Array in 
+@[progress]
+theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
+  ∃ z, Std.toResult (Std.core.cmp.impls.OrdUsize.min x y) = .ok z ∧ z = Std.core.cmp.impls.OrdUsize.min x y := by
+  simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult]
 
 @[progress]
 theorem simple.add_to_vec_loop.spec(dst: Vec Bool)(other: Vec Bool)(o n i: Std.Usize)

@@ -175,15 +175,6 @@ theorem BitVec.set!_eq_set{n: Nat}(i: Nat)(b: Bool)(bv: BitVec n)⦃i_idx: i < n
 : bv.set! i b = bv.set ⟨i, i_idx⟩ b
 := by simp only [set!, reduceDIte, i_idx]
 
-theorem List.foldl_of_foldl_map(f: α' → α)(upd: β → α → β)(upd' : β → α' → β)(init: β)(ls: List α')
-: upd' = (upd · <| f ·)
-→ List.foldl upd' init ls = List.foldl upd init (ls.map f) 
-:= by rintro rfl; revert init; induction ls <;> simp [*]
-
-theorem List.val_finRange_eq_range(n: Nat)
-: (List.finRange n).map Fin.val = List.range n
-:= by cases n <;> simp
-
 def Spec.Keccak.ι.RC.loop.spec(iᵣ: Nat)
 : RC.loop iᵣ (0#(w 6)) 0 = RC iᵣ
 := by simp [loop, RC]; congr
@@ -201,19 +192,6 @@ def Spec.Keccak.ι.RC.loop.foldl_spec(iᵣ: Nat)(init: BitVec (w 6))(start: Nat)
   ext RC j : 2
   rw [BitVec.set!_eq_set]
 
-theorem List.drop_range'(i s n: Nat): (List.range' s n |>.drop i) = List.range' (s + i) (n - i) := by
-  cases i 
-  case zero => simp
-  case succ i' => 
-    cases n
-    case zero => simp
-    case succ n' => 
-      rw [List.range'_succ, List.drop_succ_cons, Nat.add_comm i', ←Nat.add_assoc, Nat.sub_add_eq, Nat.add_sub_cancel]
-      apply List.drop_range'
-
-theorem List.drop_range(i n: Nat): (List.range n |>.drop i) = List.range' i (n-i) := by
-  simp [List.range_eq_range', List.drop_range' (s := 0)]
-
 theorem Aeneas.SRRange.foldWhile_eq_foldWhile'{α : Type u} 
 (i max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (init : α)
 : foldWhile max step hStep f i init = SRRange.foldWhile' {
@@ -224,7 +202,6 @@ theorem Aeneas.SRRange.foldWhile_eq_foldWhile'{α : Type u}
   } (fun acc e _ => f acc e) i init (hi := by simp)
 := by
   sorry
-
 
 def simple.iota_rc_init_loop.foldWhile.spec(iᵣ: Nat)(init: BitVec (Spec.w 6))(start: Nat)
 : SRRange.foldWhile 
@@ -283,7 +260,7 @@ theorem simple.iota_rc_init.spec(ir: Std.Usize)
   output.toBitVec.cast (by simp [Spec.w]) = (Spec.Keccak.ι.RC ir.val : BitVec (Spec.w 6))
 := by 
   intro ir_lt
-  simp [iota_rc_init, -Std.Array.toBitVec]
+  simp [iota_rc_init]
   let* ⟨output , output_post⟩ ← iota_rc_init_loop.spec
   rw [output_post, ←Spec.Keccak.ι.RC.loop.spec]
   congr
