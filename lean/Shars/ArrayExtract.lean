@@ -166,13 +166,13 @@ theorem getElem?_extract_of_succ {as : Array α} {j : Nat} :
   simp [getElem?_extract]
   omega
 
-@[simp] theorem extract_extract {as : Array α} {i j k l : Nat} :
-    (as.extract i j).extract k l = as.extract (i + k) (min (i + l) j) := by
-  ext m h₁ h₂
-  · simp
-    omega
-  · simp only [size_extract] at h₁ h₂
-    simp [Nat.add_assoc]
+/- @[simp] theorem extract_extract {as : Array α} {i j k l : Nat} : -/
+/-     (as.extract i j).extract k l = as.extract (i + k) (min (i + l) j) := by -/
+/-   ext m h₁ h₂ -/
+/-   · simp -/
+/-     omega -/
+/-   · simp only [size_extract] at h₁ h₂ -/
+/-     simp [Nat.add_assoc] -/
 
 theorem extract_eq_empty_of_eq_empty {as : Array α} {i j : Nat} (h : as = #[]) :
     as.extract i j = #[] := by
@@ -231,15 +231,15 @@ theorem extract_append {as bs : Array α} {i j : Nat} :
       · congr 1
         omega
 
-theorem extract_append_left {as bs : Array α} :
-    (as ++ bs).extract 0 as.size = as.extract 0 as.size := by
-  simp
+/- theorem extract_append_left {as bs : Array α} : -/
+/-     (as ++ bs).extract 0 as.size = as.extract 0 as.size := by -/
+/-   simp -/
 
-@[simp] theorem extract_append_right {as bs : Array α} :
-    (as ++ bs).extract as.size (as.size + i) = bs.extract 0 i := by
-  simp only [extract_append, extract_size_left, Nat.sub_self, empty_append]
-  congr 1
-  omega
+/- @[simp] theorem extract_append_right {as bs : Array α} : -/
+/-     (as ++ bs).extract as.size (as.size + i) = bs.extract 0 i := by -/
+/-   simp only [extract_append, extract_size_left, Nat.sub_self, empty_append] -/
+/-   congr 1 -/
+/-   omega -/
 
 @[simp] theorem map_extract {as : Array α} {i j : Nat} :
     (as.extract i j).map f = (as.map f).extract i j := by
@@ -268,10 +268,10 @@ theorem extract_eq_extract_left {as : Array α} {i i' j : Nat} :
       congr 1
       omega
 
-theorem extract_add_left {as : Array α} {i j k : Nat} :
-    as.extract (i + j) k = (as.extract i k).extract j (k - i) := by
-  simp [extract_eq_extract_right]
-  omega
+/- theorem extract_add_left {as : Array α} {i j k : Nat} : -/
+/-     as.extract (i + j) k = (as.extract i k).extract j (k - i) := by -/
+/-   simp [extract_eq_extract_right] -/
+/-   omega -/
 
 theorem mem_extract_iff_getElem {as : Array α} {a : α} {i j : Nat} :
     a ∈ as.extract i j ↔ ∃ (k : Nat) (hm : k < min j as.size - i), as[i + k] = a := by
