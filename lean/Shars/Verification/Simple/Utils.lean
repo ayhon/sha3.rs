@@ -5,3 +5,4 @@ import Shars.Verification.Simple.Utils.SimpLikeTactics
 import Shars.Verification.Simple.Utils.List
 import Shars.Verification.Simple.Utils.StateArray
 import Shars.Verification.Simple.Utils.Extract
+import Shars.Verification.Simple.Utils.Array

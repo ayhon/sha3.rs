@@ -51,7 +51,7 @@ theorem Array.extract_start_start(arr: Array α)(start: Nat)
 : arr.extract start start = #[]
 := by simp only [extract_eq_empty_iff, inf_le_left]
 
-theorem Array.getElem_chunks_exact[Inhabited α](arr: Array α)(k i: Nat)(i_idx: i < arr.size / k)
+theorem Array.toArray_getElem!_chunks_exact[Inhabited α](arr: Array α)(k i: Nat)(i_idx: i < arr.size / k)
 : k > 0 
 → (arr.chunks_exact k)[i]!.toArray = arr.extract (k*i) (k*(i+1))
 := by
@@ -83,7 +83,7 @@ theorem Array.getElem_chunks_exact[Inhabited α](arr: Array α)(k i: Nat)(i_idx:
       case precond => simp; (conv => arg 1; rw [←Nat.mul_one k]); apply Nat.mul_le_mul_left; simp
 
       simp
-      have ih := Array.getElem_chunks_exact rest k i'
+      have ih := Array.toArray_getElem!_chunks_exact rest k i'
       rw [ih ?i_idx (k_pos)]
       case i_idx => simpa [Nat.add_div_left (H := k_pos)] using i_idx
 
@@ -91,3 +91,19 @@ theorem Array.getElem_chunks_exact[Inhabited α](arr: Array α)(k i: Nat)(i_idx:
       congr
       · rw[Nat.add_comm, Nat.add_sub_cancel]
       · rw[Nat.add_comm (k*2), Nat.mul_two, ←Nat.add_assoc, Nat.add_sub_cancel, Nat.add_comm]
+
+@[simp]
+theorem Array.size_getElem!_chunks_exact[Inhabited α](arr: Array α)(k i: Nat)
+: k > 0 
+→ (arr.chunks_exact k)[i]!.size = k
+:= by
+  intro k_pos
+  simp
+
+theorem Array.getElem!_chunks_exact[Inhabited α](arr: Array α)(k i: Nat)
+  (i_idx: i < arr.size / k)
+  (k_pos: k > 0)
+: (arr.chunks_exact k)[i]! = ⟨arr.extract (k*i) (k*(i+1)), by simp [←Array.toArray_getElem!_chunks_exact arr k i i_idx k_pos]⟩
+:= by 
+  simp only [Vector.eq_mk] 
+  apply Array.toArray_getElem!_chunks_exact arr k i i_idx k_pos

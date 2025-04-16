@@ -1,0 +1,71 @@
+import Aeneas
+import Shars.ArrayExtract
+import Shars.Verification.Simple.Utils.Notation
+import Shars.Verification.Simple.Utils.Extract
+
+
+set_option maxHeartbeats 100000
+attribute [-simp] List.getElem!_eq_getElem?_getD
+attribute [simp] Id.run Id.pure_eq Id.bind_eq
+
+
+theorem Array.foldl_split(arr: Array α)(upd: β → α → β)(init: β)
+    (l m r: Nat)
+    (l_idx: l < arr.size := by assumption)
+    (r_le: r ≤ arr.size := by assumption)
+    (m_inside: l ≤ m ∧ m < r := by simp; omega)
+: arr.foldl upd init l r = arr.foldl upd (arr.foldl upd init l m) m r
+:= by 
+  simp only [Array.foldl, Array.foldlM_start_stop (m := Id) arr upd init]
+  simp only [←Array.foldlM_toList, Id.run]
+  rw [Array.foldlM_start_stop (m := Id), ←Array.foldlM_toList]
+  have : arr.extract l r = arr.extract l m ++ arr.extract m r := by 
+    simp; congr
+    · simp [*]
+    · simp [*, le_of_lt]
+  rw [this, Array.toList_append]
+  rw [List.foldlM_append]
+  simp
+
+theorem Array.extract_one(arr: Array α)(l: Nat)
+   (l_idx: l < arr.size)
+: arr.extract l (l+1) = #[arr[l]]
+:= by
+  ext i hi1 hi2
+  · simp [‹l+1 ≤ arr.size›']
+  simp at hi1 hi2
+  simp [hi2]
+
+theorem Array.foldl_step_right(arr: Array α)(l r: Nat)(upd: β → α → β)(init: β)(l_idx: l < arr.size)(r_le: r ≤ arr.size)(nontriv: l < r)
+: arr.foldl upd init l r = arr.foldl upd (upd init arr[l]) (l+1) r
+:= by 
+  if h: r = l + 1 then
+    rw [h]
+    simp [Array.foldl, Array.foldlM_start_stop (m := Id) arr]
+    rw [Array.extract_one (l_idx := l_idx)]
+    simp [‹l + 1 ≤ arr.size›']
+  else
+    have := arr.foldl_split upd init l (l+1) r 
+    simp [this]
+    simp [Array.foldl, Array.foldlM_start_stop (m := Id) arr]
+    rw [Array.extract_one (l_idx := l_idx)]
+    simp [‹l + 1 ≤ arr.size›']
+
+theorem Array.foldl_step_left(arr: Array α)(l r: Nat)(upd: β → α → β)(init: β)(l_idx: l < arr.size)(r_le: r ≤ arr.size)(nontriv: l < r)
+: arr.foldl upd init l r = upd (arr.foldl upd init l (r-1)) arr[r-1]
+:= by 
+  cases r 
+  case zero => simp at nontriv
+  case succ r' =>
+    if h: l = r' then
+      simp [h, Array.foldl, Array.foldlM_start_stop (m := Id) arr]
+      rw [Array.extract_one (l_idx := ‹r' < arr.size›')]
+      simp [‹r' + 1 ≤ arr.size›']
+    else
+      have := arr.foldl_split upd init l (r') (r'+1)
+      simp [this]
+      simp [h, Array.foldl, Array.foldlM_start_stop (m := Id) arr]
+      rw [Array.extract_one (l_idx := ‹r' < arr.size›')]
+      simp [‹r' + 1 ≤ arr.size›']
+
+

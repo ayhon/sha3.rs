@@ -38,27 +38,23 @@ def absorb{r: Nat}(S: BitVec (Spec.b 6))(Ps: Array (BitVec r)) := Id.run do
     S := Spec.Keccak.P 6 24 (S ^^^ P.setWidth (Spec.b 6))
   return S
 
-theorem absorb_def{r: Nat}(S: BitVec (Spec.b 6))(Ps: Array (BitVec r)) 
-: absorb S Ps = List.foldl (Spec.Keccak.P 6 24 <| · ^^^ BitVec.setWidth (Spec.b 6) ·) S Ps.toList
-:= by simp [absorb, ←Array.foldl_toList,-Array.size_chunks_exact, -Array.size_map]
+def absorb.upd(S: BitVec (Spec.b 6))(P: BitVec n): BitVec (Spec.b 6) := Spec.Keccak.P 6 24 (S ^^^ P.setWidth (Spec.b 6))
+
+theorem absorb_def{r: Nat}(S: BitVec (Spec.b 6))(Ps: Array (Vector Bool r)) 
+: absorb S (Ps.map (·.toBitVec)) = Ps.foldl (absorb.upd · <| Vector.toBitVec ·) S
+:= by 
+  simp [absorb, ←Array.foldl_toList,-Array.size_chunks_exact, -Array.size_map]
+  rw [←List.foldl_of_foldl_map (f := Vector.toBitVec)]
+  simp [absorb.upd]
 
 theorem absorb.spec (N : Array Spec.Bit) (r: Nat)(r_pos: r > 0)
 : spec_sponge_absorb r r_pos N = absorb (0#(Spec.b 6)) ((N ++ Spec.«pad10*1» r N.size).chunks_exact r |>.map (·.toBitVec))
 := by 
-  rw [spec_sponge_absorb, Spec.sponge.absorb, absorb_def]
+  rw [spec_sponge_absorb, Spec.sponge.absorb, absorb]
   -- NOTE: I needed to exercise a bit too much control here.
   simp [←Array.foldl_toList,-Array.size_chunks_exact, -Array.size_map]
   rw [←List.foldl_of_foldl_map (f := Vector.toBitVec)]
   simp [Vector.toBitVec]
-
-/- @[progress] -/
-/- theorem Aeneas.Std.core.slice.index.Slice.index.spec -/
-/-   (bs: Std.Slice α)(inst: SliceIndex (ops.range.Range Usize) (Slice α) (Slice α))(range: ops.range.Range Usize) -/
-/- : ∃ output, -/
-/-   Aeneas.Std.core.slice.index.Slice.index inst bs range = .ok output ∧ -/
-
-
-/-     (Std.core.slice.index.SliceIndexRangeUsizeSliceInst Bool) bs := -/ 
 
 attribute [simp] Aeneas.Std.core.slice.index.Slice.index
 
@@ -85,6 +81,15 @@ theorem Aeneas.Std.core.slice.index.Slice.index.slice_index_range_usize_slice_sp
   output.val = input.val.extract r.start.val r.end_.val
 := by simpa using SliceIndexRangeUsizeSlice.index.spec input r
 
+theorem Array.foldl_extract(arr: Array α)(l r: Nat)(upd: β → α → β)(init: β)
+: (arr.extract l r).foldl upd init = arr.foldl upd init l r
+:= by simp only [foldl, ←foldlM_start_stop (m := Id)]
+
+theorem BitVec.cast_xor(bv bv2: BitVec n)(eq: n = m)
+: (bv ^^^ bv2).cast eq = bv.cast eq ^^^ bv2.cast eq
+:= by ext i i_lt; simp
+
+set_option maxHeartbeats 1000000 in
 @[progress]
 theorem simple.sponge_absorb_initial_loop.spec
   (bs : Std.Slice Bool) (r : Std.Usize) (s : Aeneas.Std.Array Bool 1600#usize) (n i : Std.Usize)
@@ -108,39 +113,61 @@ theorem simple.sponge_absorb_initial_loop.spec
     let* ⟨ i2, i2_post ⟩ ← Std.Usize.add_spec
     let* ⟨ i3, i3_post ⟩ ← Std.Usize.mul_spec
     let* ⟨ slice, slice_post ⟩ ← Std.core.slice.index.Slice.index.slice_index_range_usize_slice_spec
+    fsimp only [*] at slice_post
     let* ⟨old_slice, new_slice, slice_mut_post⟩ ← Std.Array.to_slice_mut.progress_spec
     simp [Std.Array.to_slice_mut, Std.Array.to_slice] at slice_mut_post
     obtain ⟨old_slice_post, new_slice_post⟩ := slice_mut_post
-    let* ⟨ s2, s2_post ⟩ ← xor_long.spec
+    let* ⟨ s2, s2_len, s2_post ⟩ ← xor_long.spec
+    rw [old_slice_post] at s2_post
+    simp [Std.Slice.toBitVec, s2_len] at s2_post
+    rw [slice_post] at s2_post
+    /- rw [s2_len] at s2_post -/ -- NOTE: Annoying that this doesn't work
     let* ⟨ s4, s4_post ⟩ ← keccak_p.spec
     let* ⟨rest, rest_post ⟩ ← spec
 
     simp [*, new_slice_post]
     apply congrArg
-    simp [absorb_def]
-    
+    have := @absorb_def r.val (Spec.Keccak.P 6 24 (BitVec.cast (by simp [Spec.w, Spec.b]) (s.from_slice s2).toBitVec))
+    simp [←Array.map_extract]
+    rw [absorb_def, absorb_def]
+    simp only [Array.foldl_extract]
+    rw [Array.foldl_step_right (l := i)]
+    case l_idx => simpa [n_val] using i_idx
+    case r_le => simp
+    case nontriv => simpa [n_val] using i_idx
+    congr
+    simp [Std.Array.from_slice, s2_post, s2_len, old_slice_post]
+    simp [Std.Array.toBitVec, s2_post, s2_len]
+    simp [BitVec.cast_xor, getElem_eq_getElem!]
+    rw [Array.getElem!_chunks_exact]
+    case i_idx => simpa [n_val] using i_idx
+    case k_pos => exact r_pos
 
-    sorry
-
+    simp [Vector.toBitVec, s.property, Spec.b, Spec.w]
+    congr
+    rw [Array.toList_extract]
+    simp
   case isFalse i_oob =>
     have := ‹bs.length / r.val - i.val = 0›'
-    simp [absorb, this]
-    sorry
-/- termination_by n.val - i.val -/
-/- decreasing_by scalar_decr_tac -/
+    simp [absorb, this, Array.foldl,Array.foldlM_start_stop (m := Id)]
+    rw [Array.extract_empty]
+    simp
+termination_by n.val - i.val
+decreasing_by scalar_decr_tac
 
 
 @[progress]
 theorem simple.sponge_absorb_initial.spec
   (bs : Std.Slice Bool) (r : Std.Usize) (s : Aeneas.Std.Array Bool 1600#usize)
 (r_pos: r.val > 0)
-: s.toBitVec = (0#(Spec.b 6)).cast (by simp [Spec.w, Spec.b])
+: r.val < 1600
+→ s.toBitVec = (0#(Spec.b 6)).cast (by simp [Spec.w, Spec.b])
 → ∃ output,
   sponge_absorb_initial bs r s = .ok output ∧ 
   let h := by simp [Spec.b, Spec.w]
   output.toBitVec = ((absorb (s.toBitVec.cast h) (bs.toArray.chunks_exact r |>.map (·.toBitVec))).cast h.symm)
 := by 
-  intro s_zero
+  intro r_lt s_zero
   rw [sponge_absorb_initial]
   let* ⟨ n, n_post ⟩ ← Std.Usize.div_spec
   let* ⟨ res, res_post ⟩ ← simple.sponge_absorb_initial_loop.spec
