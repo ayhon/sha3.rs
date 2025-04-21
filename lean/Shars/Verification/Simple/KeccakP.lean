@@ -8,7 +8,7 @@ import Shars.Verification.Simple.Pi
 import Shars.Verification.Simple.Chi
 import Shars.Verification.Simple.Iota
 
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 10000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Aeneas.Std.Slice.set
 
@@ -33,6 +33,10 @@ def Spec.Keccak.P.loop(l: Fin 7)(nᵣ: Nat)(S: StateArray l)(start: Nat) := Id.r
   for iᵣ in [(12 + 2*↑l) - nᵣ+ start: (12 + 2*↑l) - 1 + 1] do
     A := Rnd A iᵣ
   return A
+
+def Spec.Keccak.P.loop.spec(l: Fin 7)(nᵣ: Nat)(S: BitVec (Spec.b l))
+: P  l nᵣ S = (P.loop l nᵣ (StateArray.ofBitVec S) 0).toBitVec
+:= by congr
 
 @[progress]
 theorem simple.keccak_p_aux_loop.spec(input: StateArray)(ir: Std.Usize)
@@ -84,3 +88,21 @@ theorem simple.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
     rw [res_post]
     congr
     -- NOTE: Does `congr` unfold definitions?
+
+@[progress]
+theorem simple.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
+: ∃ output,
+  keccak_p input = .ok output ∧
+  output.val = (Spec.Keccak.P 6 24 (input.toBitVec.cast (by simp [Spec.b, Spec.w]))).toList
+:= by
+  rw [keccak_p, keccak_p_aux]
+  progress as ⟨res, res_post⟩
+  conv at res_post => arg 2; rw [StateArray.toSpec]
+  rw [Spec.Keccak.P.loop.spec]
+  rw [←res_post]
+  simp [StateArray.toSpec, BitVec.toList]
+  apply List.ext_getElem
+  · simp [Spec.b, Spec.w]
+  intro j j_idx_res j_idx_other
+  simp only [List.getElem_map, List.getElem_finRange, Std.Array.toBitVec]
+  simp only [BitVec.getElem_cast, BitVec.getElem_ofBoolListLE, Fin.cast_mk]

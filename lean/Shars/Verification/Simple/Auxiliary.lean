@@ -191,6 +191,29 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
   · simp [getElem?_neg, *]
 
 @[progress]
+theorem simple.xor_long.spec'(a b: Std.Slice Bool)
+: ∃ c, 
+  xor_long a b = .ok c ∧
+  c.length = a.length ∧
+  c.val = (a.toBitVec ^^^ b.toBitVec.setWidth a.length).toList
+  /- c = a.val.zipWith xor b ++ a.val.drop b.length -/
+:= by/- {{{ -/
+  rw [xor_long]
+  progress*
+  simp at *
+
+  simp [*, BitVec.ofNatLt, BitVec.toList]
+
+  apply List.ext_getElem (by simp [res_post_1]); intro j j_idx_res j_idx_other
+  simp at j_idx_other
+  rw [getElem_eq_getElem!]
+  rw [res_post_2 j j_idx_other]
+  split_all
+  · simp [Std.Slice.toBitVec, List.getElem!_eq_getElem?_getD, j_idx_other]
+  · simp at *
+    simp [Std.Slice.toBitVec, *, getElem_eq_getElem!]
+
+@[progress]
 theorem  simple.StateArray.index.spec
   (self : StateArray)(x y z: Std.Usize)
 (x_idx: x.val < 5)
