@@ -125,7 +125,7 @@ theorem ref.interesting_part_of_the_proof.case3{r: Nat}{rest suffix: List Bool}
   (hyp: (rest ++ suffix).length <= r-2)
 : preconditions r rest suffix
 → let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
-  (rest ++ suffix ++ padding).chunks_exact k = [rest ++ suffix ++ [true, true]]
+  (rest ++ suffix ++ padding).chunks_exact k = [rest ++ suffix ++ [true] ++ List.replicate (r -2 - rest.length - suffix.length) false ++ [true]]
 := by
   sorry
 
@@ -284,7 +284,7 @@ theorem ref.getElem!_xor_long_at_outside(a b: List Bool)(offset i: Nat)
     scalar_tac
 
 @[simp_lists_simps]
-theorem ref.getElem!_xor_long(a b: List Bool)(offset i: Nat)
+theorem ref.getElem!_xor_long_at(a b: List Bool)(offset i: Nat)
 : (xor_long_at a b offset)[i]! = if offset ≤ i ∧ i < offset + b.length ∧ i < a.length then a[i]! ^^ b[i - offset]! else a[i]!
 := by
   split
@@ -335,6 +335,27 @@ theorem ref.xor_long_at_twice_separate(a b c: List Bool)(offset: Nat)
       case neg =>
         simp_ifs
 
+theorem ref.xor_long_of_xor_long_at(a b: List Bool)(offset: Nat)
+: xor_long_at a b offset = xor_long a (List.replicate offset false ++ b)
+:= by
+  ext i
+  · simp [xor_long]
+  simp [xor_long]
+  simp_lists
+  split
+  case isTrue _ =>
+    simp_ifs
+    rw [List.getElem!_append_right]
+    case h => simp [*]
+    simp
+  case isFalse _ =>
+    split
+    case isTrue h =>
+      rw [List.getElem!_append_left]
+      case h => scalar_tac
+      simp_lists
+      simp
+    case isFalse h => rfl
 
 @[simp_lists_simps]
 theorem List.take_append_of_ge_length(xs ys: List α)(n: Nat)
@@ -525,6 +546,13 @@ theorem getElem_padding(x m: Nat)(i: Nat)
     case h => scalar_tac
     simp
 
+@[simp_lists_simps, simp]
+theorem List.getElem!_singleton[Inhabited α](a: α)
+: i = 0 → [a][i]! = a
+:= by rintro rfl; congr
+
+attribute [simp_lists_simps] List.append_left_eq_self List.replicate_eq_nil_iff
+
 theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool)
 : preconditions r rest suffix
 → let f := list_keccak_p
@@ -536,6 +564,21 @@ theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool
 := by
   rintro precond f padding
   have ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ := precond
+  /-
+  There are three cases we must consider:
+  · (rest ++ suffix) >= r
+    Then we have
+     (rest ++ suffix ++ padding).chunks_exact k =
+     = [(rest ++ suffix).take r, (suffix.drop (r - rest.length) ++ padding)]
+  · (rest ++ suffix) = r - 1
+    Then we have
+     (rest ++ suffix ++ padding).chunks_exact k =
+     = [rest ++ suffix ++ [true], List.replicate false (r-1) ++ [true]]
+  · (rest ++ suffix) <= r - 2
+    Then we have
+     (rest ++ suffix ++ padding).chunks_exact k =
+     = [rest ++ suffix ++ [true, true]]
+  -/
   if      cond1: (rest ++ suffix).length ≥ r then
     rw [case1 cond1 precond]
     simp at cond1
@@ -575,35 +618,77 @@ theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool
       ext i
       · simp [padding_len]
         scalar_tac
+      conv => rhs; rw [Array.getElem!_toList]
+      simp [getElem_padding, -List.cons_append, -List.singleton_append, -List.cons_append_fun]
       by_cases h: i = 0
-      case pos => simp [h, BitVec.toList]
-
-
-
-      sorry
+      case pos => simp [h]
+      by_cases h: i = (Spec.«pad10*1» r (rest.length + suffix.length)).size - 1
+      -- by_cases h: i = 2* r - rest.length - suffix.length - 1
+      case pos =>
+        rw [List.getElem!_append_right]
+        case h => scalar_tac
+        rw [List.getElem!_append_right]
+        case h => scalar_tac
+        simp [h, padding_len, ←leftover_val]
+        rw [List.getElem!_singleton]
+        scalar_tac
+      by_cases h: i < (Spec.«pad10*1» r (rest.length + suffix.length)).size
+      case neg =>
+        rw [getElem!_default]
+        case h => simp [Spec.«pad10*1»] at *; scalar_tac
+        simp [Spec.«pad10*1»] at *
+        simp [*]
+      case pos =>
+        rw [getElem!_pos]
+        case h => simp [padding_len] at *; scalar_tac
+        rw [List.getElem_append_right]
+        case h₁ => scalar_tac
+        rw [List.getElem_append_left]
+        case h => scalar_tac
+        simp [padding_len] at *; simp [*]
+        scalar_tac
 
   else if cond2: (rest ++ suffix).length = r - 1 then
-    sorry
-  else if cond3: (rest ++ suffix).length ≤ r - 2 then
-    sorry
-  else scalar_tac -- Absurd
+    rw [case2 cond2 precond]
+    replace cond2 := ‹r = (rest ++ suffix).length + 1›'
+    simp [absorb', simple.sponge_absorb_final.panic_free, *, xor_long]
 
-  /-
-  There are three cases we must consider:
-  · (rest ++ suffix) >= r
-    Then we have
-     (rest ++ suffix ++ padding).chunks_exact k =
-     = [(rest ++ suffix).take r, (suffix.drop (r - rest.length) ++ padding)]
-  · (rest ++ suffix) = r - 1
-    Then we have
-     (rest ++ suffix ++ padding).chunks_exact k =
-     = [rest ++ suffix ++ [true], List.replicate false (r-1) ++ [true]]
-  · (rest ++ suffix) <= r - 2
-    Then we have
-     (rest ++ suffix ++ padding).chunks_exact k =
-     = [rest ++ suffix ++ [true, true]]
-  -/
-  sorry
+    rw [ref.xor_long_at_twice_separate]
+    case compatible_offset => scalar_tac
+
+    rw [ref.xor_long_at_twice_separate]
+    case compatible_offset => scalar_tac
+
+    simp [ref.xor_long_of_xor_long_at]
+    congr
+    -- have{α: Type}(x ls: List α): (x ++ ls) = ls ↔ x = [] := by exact?
+    simp_lists
+    scalar_tac
+  else if cond3: (rest ++ suffix).length ≤ r - 2 then
+    rw [case3 cond3 precond]
+    simp at cond3
+    simp [absorb', simple.sponge_absorb_final.panic_free, *, xor_long]
+    simp_ifs
+
+    rw [ref.xor_long_at_twice_separate]
+    case compatible_offset => scalar_tac
+
+    rw [ref.xor_long_at_twice_separate]
+    case compatible_offset => scalar_tac
+
+    rw [ref.xor_long_at_twice_separate]
+    case compatible_offset => scalar_tac
+
+    simp only [ref.xor_long_of_xor_long_at]
+    congr
+    · simp
+    · rw [List.append_right_eq_self, List.replicate_eq_nil_iff]
+      -- scalar_tac -- TODO: Gives maxRecDepth error
+      omega
+    · simp only [List.length_singleton, Nat.sub_add_eq]
+      congr
+
+  else omega -- Absurd
 
 
 theorem absorb_def{r: Nat}(S: BitVec (Spec.b 6))(Ps: Array (Vector Bool r))
