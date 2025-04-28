@@ -477,18 +477,26 @@ theorem ref.mod_manipulation(a b r: Nat)
   (h4: (a + b) ≥ r)
 : ((- (a + b + 2: Int)) % r).toNat = 2*r - (a + b + 2)
 := by
-  (have: (2: Int) = (2: Nat).cast := by congr); rw [this]
-  have: a + b + 2 < 2*r := by scalar_tac
-  have: ((-((a + b + 2: Nat): Int)) % r).toNat = r - ((a + b + 2) % r) := by
-    generalize a + b + 2 = n
-    rw [Int.emod_def, Nat.mod_def]
-    sorry
-  simp only [←Nat.cast_sub, ←Nat.cast_add]
-  rw [this, Nat.mod_def]
-  have : (a + b + 2) / r = 1 := by
-    sorry
-  rw [this]
-  omega
+  have: ((- (a + b + 2: Int)) % r) ≡ 2*r - (a + b + 2) [ZMOD r] := by
+    ring_nf
+    calc _
+      _ ≡ -2 + (-a.cast + -b.cast) [ZMOD r] := by apply Int.mod_modEq
+      _ ≡ -2 + (-a.cast + -b.cast) + r [ZMOD r] := by exact Int.ModEq.symm Int.add_modEq_right
+      _ ≡ -2 + (-a.cast + -b.cast) + r + r [ZMOD r] := by exact Int.ModEq.symm Int.add_modEq_right
+      _ ≡ -2 + (-a.cast + -b.cast) + 2* r [ZMOD r] := by ring_nf; rfl
+    ring_nf; rfl
+  have := this.eq
+  simp [Int.emod_emod] at this ⊢
+  simp [this]
+  have: (2*r - (a + b + 2): Int) >= 0 := by omega
+  have: (2*r - (a + b + 2): Int) < r := by omega
+  rw [Int.emod_eq_of_lt]
+  case H1 => omega
+  case H2 => omega
+  zify
+  rw [Int.toNat_of_nonneg (by omega)]
+  rw [Nat.cast_sub (by omega)]
+  simp
 
 @[simp]
 theorem BitVec.getElem!_toList(bv: BitVec n)(i: Nat)
