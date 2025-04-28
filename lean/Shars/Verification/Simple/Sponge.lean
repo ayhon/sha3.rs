@@ -434,6 +434,42 @@ theorem ref.interesting_part_of_the_proof.case1{r: Nat}{rest suffix: List Bool}
 
 attribute [simp_lists_simps] List.take_append_drop
 
+@[elab_as_elim, cases_eliminator]
+def List.cases_extract(k: Nat)[NeZero k]
+  {motive : List α → Prop}
+  (onSmall: (rest: List α) → (small: rest.length < k) → motive rest)
+  (onBig: (chunk: List α) → (rest: List α) → (small: chunk.length = k) → motive (chunk ++ rest))
+  (ls: List α)
+: motive ls
+:=
+  if h: ls.length < k then
+    onSmall ls h
+  else
+    let chunk: List α := ls.extract (stop := k)
+    let other := ls.extract (start := k)
+    have properPartition: chunk ++ other = ls := by simp [chunk, other]; simp_lists
+    properPartition ▸ onBig chunk other (by simp [chunk]; omega)
+
+@[simp]
+theorem List.length_chunks_exact(ls: List α)(k: Nat)
+: (ls.chunks_exact k).length = ls.length / k
+:= by
+  by_cases h: k > 0
+  case neg => simp at h; subst h; simp [chunks_exact]
+  case pos =>
+    have k_neZero: NeZero k := { out := ne_zero_of_lt h }
+    unfold chunks_exact
+    cases ls_def: ls using List.cases_extract k
+    case onSmall small =>
+      simp [Nat.div_eq_zero_iff_lt h |>.mpr small]
+      simp [small]
+    case onBig chunk rest chunk_small =>
+      simp [chunk_small, k_neZero.ne]
+      rw [Nat.add_div_left (H:=h)]
+      simp
+      apply List.length_chunks_exact
+termination_by ls.length
+decreasing_by simp [ls_def, *]
 theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
   (hyp: (rest ++ suffix).length = r-1)
 : preconditions r rest suffix
