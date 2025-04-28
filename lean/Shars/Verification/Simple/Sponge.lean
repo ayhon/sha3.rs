@@ -347,6 +347,21 @@ theorem ref.interesting_part_of_the_proof.case1{r: Nat}{rest suffix: List Bool}
 → let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
   (rest ++ suffix ++ padding).chunks_exact k = [(rest ++ suffix).take r, (suffix.drop (r - rest.length) ++ padding)]
 := by
+  /-
+  · (rest ++ suffix) >= r
+    Then we have
+     (rest ++ suffix ++ padding).chunks_exact k =
+     = [(rest ++ suffix).take r, (suffix.drop (r - rest.length) ++ padding)]
+  -/
+  rintro ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ padding
+  have: (rest.length + suffix.length + padding.length) = 2*r := by
+    have: (Spec.«pad10*1» r (rest.length + suffix.length)).size = 2*r - (rest.length + suffix.length) := by
+      simp [Spec.«pad10*1_length», -neg_add_rev]
+      have := mod_manipulation (h1 := r_big_enough) (h2 := rest_len_lt) (h3 := suffix_len_le) (h4 := by scalar_tac)
+      rw [this]
+      scalar_tac
+    simp [padding, this]
+    scalar_tac
   sorry
 
 theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
@@ -355,6 +370,32 @@ theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
 → let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
   (rest ++ suffix ++ padding).chunks_exact k = [rest ++ suffix ++ [true], List.replicate (r-1) false ++ [true]]
 := by
+  rintro ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ padding
+  have: (rest.length + suffix.length + padding.length) = 2*r := by
+    have: (Spec.«pad10*1» r (rest.length + suffix.length)).size = 2*r - (rest.length + suffix.length) := by
+      simp at hyp
+      simp [Spec.«pad10*1_length», -neg_add_rev, hyp, r_big_enough]
+      zify
+      rw [Nat.cast_sub (by omega)]
+      rw [Nat.cast_sub (by omega)]
+      rw [Nat.cast_sub (by omega)]
+      rw [Nat.cast_mul]
+      ring_nf
+      simp
+      rw [
+        Int.neg_emod,
+        Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega),
+        Int.max_eq_left (by omega)
+      ]
+      omega
+    simp [padding, this]
+    scalar_tac
+  /-
+  · (rest ++ suffix) = r - 1
+    Then we have
+     (rest ++ suffix ++ padding).chunks_exact k =
+     = [rest ++ suffix ++ [true], List.replicate false (r-1) ++ [true]]
+  -/
   sorry
 
 theorem ref.interesting_part_of_the_proof.case3{r: Nat}{rest suffix: List Bool}
@@ -363,6 +404,26 @@ theorem ref.interesting_part_of_the_proof.case3{r: Nat}{rest suffix: List Bool}
 → let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
   (rest ++ suffix ++ padding).chunks_exact k = [rest ++ suffix ++ [true] ++ List.replicate (r -2 - rest.length - suffix.length) false ++ [true]]
 := by
+  rintro ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ padding
+  have: (rest.length + suffix.length + padding.length) = r := by
+    have: (Spec.«pad10*1» r (rest.length + suffix.length)).size = r - (rest.length + suffix.length) := by
+      simp at hyp
+      simp [Spec.«pad10*1_length», -neg_add_rev]
+      zify
+      rw [Nat.cast_sub (by omega)]
+      rw [Int.neg_emod]
+      rw [Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega)]
+      simp
+      rw [Int.max_eq_left (by omega)]
+      omega
+    simp [padding, this]
+    scalar_tac
+  /-
+  · (rest ++ suffix) <= r - 2
+    Then we have
+     (rest ++ suffix ++ padding).chunks_exact k =
+     = [rest ++ suffix ++ [true, true]]
+  -/
   sorry
 
 @[simp]
