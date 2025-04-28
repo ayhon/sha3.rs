@@ -17,8 +17,244 @@ set_option maxHeartbeats 100000
 attribute [-simp] List.getElem!_eq_getElem?_getD
 /- attribute [simp] Aeneas.Std.Slice.set -/
 
+attribute [simp_lists_simps] List.length_append List.take_append_eq_append_take List.take_zipWith List.length_zipWith List.length_take List.take_all_of_le List.length_drop List.drop_eq_nil_of_le List.drop_append_eq_append_drop List.nil_append List.zipWith_nil_left List.append_nil List.drop_drop List.take_take
+
+theorem List.zipWith_append_truncate_right{α : Type u} (f: α → β → γ) (x : List α)(y z: List β)
+  (hyp: y.length ≥ x.length)
+: List.zipWith f x (y ++ z) = List.zipWith f x y
+:= by cases x <;> cases y <;> simp_all [List.zipWith_append_truncate_right]
+
+theorem List.zipWith_append_truncate_left{α : Type u} (f:  β → α → γ) (x : List α)(y z: List β)
+  (hyp: y.length ≥ x.length)
+: List.zipWith f (y ++ z) x = List.zipWith f y x
+:= by
+  conv in (occs := *) List.zipWith f _ _ => all_goals rw [List.zipWith_comm]
+  apply List.zipWith_append_truncate_right (hyp := hyp)
+
+@[simp_lists_simps]
+theorem List.zipWith_append_right{α : Type u} (f: α → β → γ) (x : List α)(y z: List β)
+: List.zipWith f x (y ++ z) = (List.zipWith f x y).take y.length ++ List.zipWith f (x.drop y.length) z
+:= by
+  by_cases x.length < y.length
+  case pos =>
+    simp_lists [List.zipWith_append_truncate_right]
+  case neg h =>
+    simp_lists
+    match x, y with
+    | [], _ | _, [] => simp
+    | a :: x', b :: y' =>
+      simp [List.zipWith_append_right]
+
+@[simp]
+theorem List.drop_eq_drop(ls: List α)(n m: Nat)
+: ls.drop n = ls.drop m ↔ n = m ∨ (n ≥ ls.length ∧ m ≥ ls.length)
+:= by sorry
+
+@[simp]
+theorem BitVec.length_toList(bv: BitVec n)
+: bv.toList.length = n
+:= by simp [toList]
+
+def List.setLength(ls: List α)(n: Nat)(fill: α) :=
+  match ls, n with
+  | _, 0 => []
+  | [], _ => List.replicate n fill
+  | x :: xs, n'+1 => x :: xs.setLength n' fill
+
+@[simp]
+theorem List.length_setLength(ls: List α)(n: Nat)(fill: α)
+: (ls.setLength n fill).length = n
+:= by
+  match ls, n with
+  | x::xs, 0 => simp [setLength]
+  | [], n => cases n <;> simp [setLength]
+  | x :: xs, n'+1 =>
+    simp [setLength, List.length_setLength]
+
+@[simp_lists_simps]
+theorem List.getElem!_take[Inhabited α](ls: List α)(i n: Nat)
+: i < n → (ls.take n)[i]! = ls[i]!
+:= by
+  by_cases i < ls.length
+  case pos h =>
+    intro h2
+    apply List.getElem!_take_same <;> assumption
+  case neg =>
+    intro
+    simp_lists
+
+attribute [simp_lists_simps] List.getElem!_drop
+
+@[simp_lists_simps]
+theorem List.getElem!_zipWith[Inhabited α] [Inhabited β] [Inhabited c]
+  (a: List α)(b:List β)(f: α → β → c)(i: Nat)
+: i < a.length
+→ i < b.length
+→ (a.zipWith f b)[i]! = f a[i]! b[i]!
+:= by intros; simp [←getElem_eq_getElem!, *]
+
+@[simp_lists_simps]
+theorem List.getElem!_zip[Inhabited α] [Inhabited β]
+  (a: List α)(b:List β)(i: Nat)
+: i < a.length
+→ i < b.length
+→ (a.zip b)[i]! = (a[i]!,b[i]!)
+:= by apply List.getElem!_zipWith (f := (·,·))
+
+/- theorem List.getElem!_append[Inhabited α](ls1 ls2: List α) -/
+/- : (ls1 ++ ls2)[i] = -/
+attribute [simp_lists_simps] List.getElem!_append_left List.getElem!_append_right
+
+attribute [simp_lists_simps] Nat.min_eq_left
+attribute [simp_lists_simps] Nat.min_eq_right
+
+@[simp_lists_simps]
+theorem getElem!_eq_default[Inhabited α]
+  (ls: List α)(i: Nat)
+: i ≥ ls.length
+→ ls[i]! = default
+:= by intro oob; simp [getElem!_def, getElem?_eq_none, oob]
+
+attribute [simp_lists_simps] List.length_replicate List.getElem!_replicate
+
+@[simp_lists_simps]
+theorem List.take_append_of_ge_length(xs ys: List α)(n: Nat)
+: n ≥ xs.length
+→ (xs ++ ys).take n = xs ++ ys.take (n - xs.length)
+:= by
+  revert n
+  induction xs
+  case nil => simp
+  case cons hd tl ih =>
+    intro  n n_big
+    cases n
+    case zero => simp at n_big
+    case succ n' =>
+      simp
+      apply ih
+      simpa using n_big
+
+@[simp_lists_simps]
+theorem List.getElem!_map[Inhabited β]
+  (ls: List α)(f: α → β)(i: Nat)
+: (ls.map f)[i]! = if _: i < ls.length then f ls[i] else default
+:= by
+  split
+  case isTrue i_idx =>
+    simp [getElem!_def, getElem?_pos, i_idx]
+  case isFalse i_oob =>
+    rw [List.getElem!_default]
+    simpa using i_oob
+
+theorem getElem!_default [GetElem? cont idx elem dom] [LawfulGetElem cont idx elem dom]
+  [Inhabited elem] (c : cont) (i : idx) (h : ¬ dom c i)
+: getElem! c i = default
+:= by
+  have : Decidable (dom c i) := .isFalse h
+  simp [getElem!_def, getElem?_def, h]
+
+
+@[simp_lists_simps]
+theorem List.getElem!_append[Inhabited α]
+  (ls ls2: List α)(i: Nat)
+: (ls ++ ls2)[i]! = if i < ls.length then ls[i]! else ls2[i - ls.length]!
+:= by split <;> simp_lists
+
+@[simp]
+theorem Array.getElem!_append[Inhabited α]
+  (ls ls2: Array α)(i: Nat)
+: (ls ++ ls2)[i]! = if i < ls.size then ls[i]! else ls2[i - ls.size]!
+:= by
+  split
+  case isTrue i_idx =>
+    simp [getElem!_pos, i_idx, ‹i < ls.size + ls2.size›', Array.getElem_append]
+  case isFalse i_oob =>
+    by_cases i < ls.size + ls2.size
+    case pos h => simp [getElem!_pos, ‹i - ls.size < ls2.size›', h, Array.getElem_append, i_oob]
+    case neg h =>
+      rw [getElem!_default]
+      case h => simpa using h
+      rw [getElem!_default]
+      case h => scalar_tac
+
+attribute [simp_lists_simps] List.length_map List.length_finRange
+
+@[simp]
+theorem BitVec.toList_append(bv: BitVec n)(bv2: BitVec m)
+: (bv2 ++ bv).toList = bv.toList ++ bv2.toList
+:= by
+  simp [toList, BitVec.getElem_append]
+  apply List.ext_getElem!
+  · simp_arith
+  intro i
+  simp_lists
+  by_cases h: i < n
+  case pos =>
+    simp [h, ‹i < m + n›']
+    congr
+  case neg =>
+    simp [h]
+    split
+    case isTrue h =>
+      simp [‹i < m + n›']
+      congr
+    case isFalse h =>
+      simp [‹¬ i < m + n›']
+
+@[simp]
+theorem BitVec.toList_toArray(bv: BitVec n)
+: bv.toArray.toList = bv.toList
+:= by simp [toArray, toList, Array.finRange, List.finRange]
+
+@[simp]
+theorem BitVec.toArray_append(bv: BitVec n)(bv2: BitVec m)
+: (bv2 ++ bv).toArray = bv.toArray ++ bv2.toArray
+:= by
+  apply Array.toList_inj.mp
+  simp [BitVec.toList_append]
+
+@[simp]
+theorem BitVec.size_toArray(bv: BitVec n)
+: bv.toArray.size = n
+:= by simp [toArray, Array.finRange]
+
+theorem ref.mod_manipulation(a b r: Nat)
+  (h1: r ≥ 6)
+  (h2: a < r)
+  (h3: b <= 4)
+  (h4: (a + b) ≥ r)
+: ((- (a + b + 2: Int)) % r).toNat = 2*r - (a + b + 2)
+:= by
+  have: ((- (a + b + 2: Int)) % r) ≡ 2*r - (a + b + 2) [ZMOD r] := by
+    ring_nf
+    calc _
+      _ ≡ -2 + (-a.cast + -b.cast) [ZMOD r] := by apply Int.mod_modEq
+      _ ≡ -2 + (-a.cast + -b.cast) + r [ZMOD r] := by exact Int.ModEq.symm Int.add_modEq_right
+      _ ≡ -2 + (-a.cast + -b.cast) + r + r [ZMOD r] := by exact Int.ModEq.symm Int.add_modEq_right
+      _ ≡ -2 + (-a.cast + -b.cast) + 2* r [ZMOD r] := by ring_nf; rfl
+    ring_nf; rfl
+  have := this.eq
+  simp [Int.emod_emod] at this ⊢
+  simp [this]
+  have: (2*r - (a + b + 2): Int) >= 0 := by omega
+  have: (2*r - (a + b + 2): Int) < r := by omega
+  rw [Int.emod_eq_of_lt]
+  case H1 => omega
+  case H2 => omega
+  zify
+  rw [Int.toNat_of_nonneg (by omega)]
+  rw [Nat.cast_sub (by omega)]
+  simp
+
+
 open Aeneas hiding Std.Array
 open Std.alloc.vec
+
+theorem Spec.«pad10*1_length» (x m : Nat)
+: (Spec.«pad10*1» x m).size = (2 + (-(m + 2: Int) % x).toNat)
+:= by
+  simp_arith [«pad10*1», neg_add, -neg_add_rev, -Int.reduceNeg]
+  rfl
 
 def spec_sponge (r: Nat)(r_pos: r > 0):=
   have: NeZero r := ⟨Nat.not_eq_zero_of_lt r_pos⟩
@@ -129,44 +365,6 @@ theorem ref.interesting_part_of_the_proof.case3{r: Nat}{rest suffix: List Bool}
 := by
   sorry
 
-attribute [simp_lists_simps] List.length_append List.take_append_eq_append_take List.take_zipWith List.length_zipWith List.length_take List.take_all_of_le List.length_drop List.drop_eq_nil_of_le List.drop_append_eq_append_drop List.nil_append List.zipWith_nil_left List.append_nil List.drop_drop List.take_take
-
-theorem List.zipWith_append_truncate_right{α : Type u} (f: α → β → γ) (x : List α)(y z: List β)
-  (hyp: y.length ≥ x.length)
-: List.zipWith f x (y ++ z) = List.zipWith f x y
-:= by cases x <;> cases y <;> simp_all [List.zipWith_append_truncate_right]
-
-theorem List.zipWith_append_truncate_left{α : Type u} (f:  β → α → γ) (x : List α)(y z: List β)
-  (hyp: y.length ≥ x.length)
-: List.zipWith f (y ++ z) x = List.zipWith f y x
-:= by
-  conv in (occs := *) List.zipWith f _ _ => all_goals rw [List.zipWith_comm]
-  apply List.zipWith_append_truncate_right (hyp := hyp)
-
-@[simp_lists_simps]
-theorem List.zipWith_append_right{α : Type u} (f: α → β → γ) (x : List α)(y z: List β)
-: List.zipWith f x (y ++ z) = (List.zipWith f x y).take y.length ++ List.zipWith f (x.drop y.length) z
-:= by
-  by_cases x.length < y.length
-  case pos =>
-    simp_lists [List.zipWith_append_truncate_right]
-  case neg h =>
-    simp_lists
-    match x, y with
-    | [], _ | _, [] => simp
-    | a :: x', b :: y' =>
-      simp [List.zipWith_append_right]
-
-@[simp]
-theorem List.drop_eq_drop(ls: List α)(n m: Nat)
-: ls.drop n = ls.drop m ↔ n = m ∨ (n ≥ ls.length ∧ m ≥ ls.length)
-:= by sorry
-
-@[simp]
-theorem BitVec.length_toList(bv: BitVec n)
-: bv.toList.length = n
-:= by simp [toList]
-
 @[simp]
 theorem ref.length_list_keccak_p(ls: List Bool)
 : (list_keccak_p ls).length = 1600
@@ -194,59 +392,6 @@ theorem ref.xor_long_at_twice_compatible(a b c: List Bool)(offset: Nat)
       simp [le_of_lt (not_le.mp h)]
       simp_arith
 
-def List.setLength(ls: List α)(n: Nat)(fill: α) :=
-  match ls, n with
-  | _, 0 => []
-  | [], _ => List.replicate n fill
-  | x :: xs, n'+1 => x :: xs.setLength n' fill
-
-@[simp]
-theorem List.length_setLength(ls: List α)(n: Nat)(fill: α)
-: (ls.setLength n fill).length = n
-:= by
-  match ls, n with
-  | x::xs, 0 => simp [setLength]
-  | [], n => cases n <;> simp [setLength]
-  | x :: xs, n'+1 =>
-    simp [setLength, List.length_setLength]
-
-@[simp_lists_simps]
-theorem List.getElem!_take[Inhabited α](ls: List α)(i n: Nat)
-: i < n → (ls.take n)[i]! = ls[i]!
-:= by
-  by_cases i < ls.length
-  case pos h =>
-    intro h2
-    apply List.getElem!_take_same <;> assumption
-  case neg =>
-    intro
-    simp_lists
-
-attribute [simp_lists_simps] List.getElem!_drop
-
-@[simp_lists_simps]
-theorem List.getElem!_zipWith[Inhabited α] [Inhabited β] [Inhabited c]
-  (a: List α)(b:List β)(f: α → β → c)(i: Nat)
-: i < a.length
-→ i < b.length
-→ (a.zipWith f b)[i]! = f a[i]! b[i]!
-:= by intros; simp [←getElem_eq_getElem!, *]
-
-@[simp_lists_simps]
-theorem List.getElem!_zip[Inhabited α] [Inhabited β]
-  (a: List α)(b:List β)(i: Nat)
-: i < a.length
-→ i < b.length
-→ (a.zip b)[i]! = (a[i]!,b[i]!)
-:= by apply List.getElem!_zipWith (f := (·,·))
-
-/- theorem List.getElem!_append[Inhabited α](ls1 ls2: List α) -/
-/- : (ls1 ++ ls2)[i] = -/
-attribute [simp_lists_simps] List.getElem!_append_left List.getElem!_append_right
-
-attribute [simp_lists_simps] Nat.min_eq_left
-attribute [simp_lists_simps] Nat.min_eq_right
-
 @[simp_lists_simps]
 theorem ref.getElem!_xor_long_at_inside(a b: List Bool)(offset i: Nat)
 : offset ≤ i ∧ i < offset + b.length
@@ -257,13 +402,6 @@ theorem ref.getElem!_xor_long_at_inside(a b: List Bool)(offset i: Nat)
   simp [xor_long_at]
   simp_lists
   simp_arith [cond]
-
-@[simp_lists_simps]
-theorem getElem!_eq_default[Inhabited α]
-  (ls: List α)(i: Nat)
-: i ≥ ls.length
-→ ls[i]! = default
-:= by intro oob; simp [getElem!_def, getElem?_eq_none, oob]
 
 @[simp_lists_simps]
 theorem ref.getElem!_xor_long_at_outside(a b: List Bool)(offset i: Nat)
@@ -300,8 +438,6 @@ theorem ref.getElem!_xor_long_at(a b: List Bool)(offset i: Nat)
       simp_lists
 
 attribute [ext (iff := false)] List.ext_getElem!
-
-attribute [simp_lists_simps] List.length_replicate List.getElem!_replicate
 
 theorem ref.xor_long_at_twice_separate(a b c: List Bool)(offset: Nat)
 (compatible_offset: offset2 ≥ offset + b.length)
@@ -356,147 +492,6 @@ theorem ref.xor_long_of_xor_long_at(a b: List Bool)(offset: Nat)
       simp_lists
       simp
     case isFalse h => rfl
-
-@[simp_lists_simps]
-theorem List.take_append_of_ge_length(xs ys: List α)(n: Nat)
-: n ≥ xs.length
-→ (xs ++ ys).take n = xs ++ ys.take (n - xs.length)
-:= by
-  revert n
-  induction xs
-  case nil => simp
-  case cons hd tl ih =>
-    intro  n n_big
-    cases n
-    case zero => simp at n_big
-    case succ n' =>
-      simp
-      apply ih
-      simpa using n_big
-
-/- @[simp_lists_simps] -/
-/- theorem List.getElem!_eq_default[Inhabited α](ls: List α)(i: Nat) -/
-/- : i ≥ ls.length -/
-/- → ls[i]! = default -/
-/- := by -/
-/-   intro i_oob -/
-/-   simp [i_oob, getElem!_def] -/
-
-@[simp_lists_simps]
-theorem List.getElem!_map[Inhabited β]
-  (ls: List α)(f: α → β)(i: Nat)
-: (ls.map f)[i]! = if _: i < ls.length then f ls[i] else default
-:= by
-  split
-  case isTrue i_idx =>
-    simp [getElem!_def, getElem?_pos, i_idx]
-  case isFalse i_oob =>
-    rw [List.getElem!_default]
-    simpa using i_oob
-
-theorem getElem!_default [GetElem? cont idx elem dom] [LawfulGetElem cont idx elem dom]
-  [Inhabited elem] (c : cont) (i : idx) (h : ¬ dom c i)
-: getElem! c i = default
-:= by
-  have : Decidable (dom c i) := .isFalse h
-  simp [getElem!_def, getElem?_def, h]
-
-
-@[simp_lists_simps]
-theorem List.getElem!_append[Inhabited α]
-  (ls ls2: List α)(i: Nat)
-: (ls ++ ls2)[i]! = if i < ls.length then ls[i]! else ls2[i - ls.length]!
-:= by split <;> simp_lists
-
-@[simp]
-theorem Array.getElem!_append[Inhabited α]
-  (ls ls2: Array α)(i: Nat)
-: (ls ++ ls2)[i]! = if i < ls.size then ls[i]! else ls2[i - ls.size]!
-:= by
-  split
-  case isTrue i_idx =>
-    simp [getElem!_pos, i_idx, ‹i < ls.size + ls2.size›', Array.getElem_append]
-  case isFalse i_oob =>
-    by_cases i < ls.size + ls2.size
-    case pos h => simp [getElem!_pos, ‹i - ls.size < ls2.size›', h, Array.getElem_append, i_oob]
-    case neg h =>
-      rw [getElem!_default]
-      case h => simpa using h
-      rw [getElem!_default]
-      case h => scalar_tac
-
-attribute [simp_lists_simps] List.length_map List.length_finRange
-
-@[simp]
-theorem BitVec.toList_append(bv: BitVec n)(bv2: BitVec m)
-: (bv2 ++ bv).toList = bv.toList ++ bv2.toList
-:= by
-  simp [toList, BitVec.getElem_append]
-  ext i
-  · simp_arith
-  simp_lists
-  by_cases h: i < n
-  case pos =>
-    simp [h, ‹i < m + n›']
-    congr
-  case neg =>
-    simp [h]
-    split
-    case isTrue h =>
-      simp [‹i < m + n›']
-      congr
-    case isFalse h =>
-      simp [‹¬ i < m + n›']
-
-@[simp]
-theorem Array.toList_finRange(n: Nat)
-: (Array.finRange n).toList = List.finRange n
-:= by simp [Array.finRange, List.finRange]
-
-@[simp]
-theorem BitVec.toList_toArray(bv: BitVec n)
-: bv.toArray.toList = bv.toList
-:= by simp [toArray, toList]
-
-@[simp]
-theorem BitVec.toArray_append(bv: BitVec n)(bv2: BitVec m)
-: (bv2 ++ bv).toArray = bv.toArray ++ bv2.toArray
-:= by
-  apply Array.toList_inj.mp
-  simp [BitVec.toList_append]
-
-@[simp]
-theorem BitVec.size_toArray(bv: BitVec n)
-: bv.toArray.size = n
-:= by simp [toArray, Array.finRange]
-
-theorem ref.mod_manipulation(a b r: Nat)
-  (h1: r ≥ 6)
-  (h2: a < r)
-  (h3: b <= 4)
-  (h4: (a + b) ≥ r)
-: ((- (a + b + 2: Int)) % r).toNat = 2*r - (a + b + 2)
-:= by
-  have: ((- (a + b + 2: Int)) % r) ≡ 2*r - (a + b + 2) [ZMOD r] := by
-    ring_nf
-    calc _
-      _ ≡ -2 + (-a.cast + -b.cast) [ZMOD r] := by apply Int.mod_modEq
-      _ ≡ -2 + (-a.cast + -b.cast) + r [ZMOD r] := by exact Int.ModEq.symm Int.add_modEq_right
-      _ ≡ -2 + (-a.cast + -b.cast) + r + r [ZMOD r] := by exact Int.ModEq.symm Int.add_modEq_right
-      _ ≡ -2 + (-a.cast + -b.cast) + 2* r [ZMOD r] := by ring_nf; rfl
-    ring_nf; rfl
-  have := this.eq
-  simp [Int.emod_emod] at this ⊢
-  simp [this]
-  have: (2*r - (a + b + 2): Int) >= 0 := by omega
-  have: (2*r - (a + b + 2): Int) < r := by omega
-  rw [Int.emod_eq_of_lt]
-  case H1 => omega
-  case H2 => omega
-  zify
-  rw [Int.toNat_of_nonneg (by omega)]
-  rw [Nat.cast_sub (by omega)]
-  simp
 
 @[simp]
 theorem BitVec.getElem!_toList(bv: BitVec n)(i: Nat)
