@@ -395,12 +395,14 @@ def ref.absorb' (f: List Bool → List Bool) (s: List Bool) (chunks: List (List 
 
 def List.chunks_exact(k: Nat)(ls: List α): List (List α) :=
   if ls.length < k ∨ k = 0 then
-    return []
+    []
   else
     let chunk := (ls.take k)
     let rest := (ls.drop k).chunks_exact k
     chunk :: rest
 termination_by ls.length
+
+#guard [1,2,3,4,5].chunks_exact 2 == [[1,2], [3,4]]
 
 abbrev ref.interesting_part_of_the_proof.preconditions(r: Nat)(rest suffix: List Bool) :=
   r ≥ 6 -- Otherwise, we don't have suffix + 2 ≤ r
