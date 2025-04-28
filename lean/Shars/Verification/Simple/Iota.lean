@@ -32,7 +32,7 @@ theorem simple.iota_rc_point.spec(t: Std.Usize)
   simp [iota_rc_point]
   progress*
   simp [*, IOTA_RC_POINTS.spec (t.val % 255) (by scalar_tac)]
-  rw [
+  rw[
     Spec.Keccak.ι.rc,
     ‹Fin.ofNat' 255 (↑t % 255) = Fin.ofNat' 255 ↑t›',
     ←Spec.Keccak.ι.rc
@@ -83,28 +83,23 @@ termination_by 7 - j
 theorem Std.UScalarTy.Usize_numBits_le: Std.UScalarTy.Usize.numBits ≥ 32 := by
   rcases System.Platform.numBits_eq with h | h <;> simp [h]
 
-theorem Aeneas.Std.Array.toBitVec_set{size: Std.Usize}(arr: Std.Array Bool size)(i: Std.Usize)(b: Bool)
-(i_idx: i < arr.length)
-: (arr.set i b).toBitVec = arr.toBitVec.set ⟨i.val, by simpa using i_idx⟩ b
-:= by 
-  simp [toBitVec]
-  rw [←BitVec.cast_set (i_idx := i_idx)]
+@[simp]
+theorem BitVec.ofBoolListLE_set(ls: List Bool)(i: Nat)(b: Bool)
+: {i_idx: i < ls.length}
+→ BitVec.ofBoolListLE (ls.set i b) = ((BitVec.ofBoolListLE ls).set ⟨i, i_idx⟩ b).cast (by simp)
+:= by
+  intro i_idx
   ext j j_idx
-  simp only [BitVec.getElem_cast]
-  simp
   simp at j_idx
-  have: size.val > 0 := by scalar_tac -- cases h: size.val <;> simp [h] at *
-  if h: i = j then
-    simp [h, BitVec.getElem_set]
-  else
-    simp [h, BitVec.getElem_set]
+  simp [BitVec.getElem_set]
+  split <;> simp [*]
 
 theorem simple.iota_rc_init_loop.ref_spec(ir : Std.Usize) (input : Aeneas.Std.Array Bool 64#usize)(j: Std.Usize)
 : ir.val < 24
 → j.val ≤ 6 + 1
 → ∃ output,
   iota_rc_init_loop ir input j = .ok output ∧
-  output.toBitVec.cast (by simp [Spec.w]) = simple.iota_rc_init_loop.ref ir.val (input.toBitVec.cast (by simp [Spec.w])) j.val
+  output.val.toBitVec.cast (by simp [Spec.w]) = simple.iota_rc_init_loop.ref ir.val (input.val.toBitVec.cast (by simp [Spec.w])) j.val
 := by
   intro ir_lt j_loop_bound
   rw [iota_rc_init_loop, iota_rc_init_loop.ref]
@@ -129,10 +124,11 @@ theorem simple.iota_rc_init_loop.ref_spec(ir : Std.Usize) (input : Aeneas.Std.Ar
     let* ⟨ res, res_post ⟩ ← ref_spec
     -- END PROGRESS
     rw [res_post, ←BitVec.cast_set (i_idx := ?first)]
-    rw [rc1_post, Std.Array.toBitVec_set (i_idx := by assumption)]
     case first =>
       simp [Nat.shiftLeft_eq, NatCast.natCast, Fin.ofNat']
       rw [Nat.mod_eq_of_lt] <;> simpa [i3_val] using i3_idx
+    rw [rc1_post, List.toBitVec, Std.Array.set, BitVec.ofBoolListLE_set (i_idx := by simpa using i3_idx)]
+    simp
     simp_ifs
     congr 3
     simp [i3_val]
@@ -237,7 +233,7 @@ theorem simple.iota_rc_init_loop.spec(ir : Std.Usize) (input : Aeneas.Std.Array 
 → i.val ≤ 6 + 1
 → ∃ output,
   simple.iota_rc_init_loop ir input i = .ok output ∧
-  output.toBitVec.cast (by simp [Spec.w]) = Spec.Keccak.ι.RC.loop ir.val (input.toBitVec.cast (by simp [Spec.w])) i.val
+  output.val.toBitVec.cast (by simp [Spec.w]) = Spec.Keccak.ι.RC.loop ir.val (input.val.toBitVec.cast (by simp [Spec.w])) i.val
 := by
   intro ir_lt i_loop_bound
   let* ⟨ output, output_post⟩ ← iota_rc_init_loop.ref_spec
@@ -248,8 +244,8 @@ theorem simple.iota_rc_init_loop.spec(ir : Std.Usize) (input : Aeneas.Std.Array 
   ]
 
 theorem repeat_false_toBitVec_eq_zero(size: Std.Usize)
-: (Std.Array.repeat size false).toBitVec = 0#(size.val)
-:= by ext i; simp only [Std.Array.toBitVec, Std.Array.repeat, BitVec.getElem_cast,
+: (Std.Array.repeat size false).val.toBitVec = (0#(size.val)).cast (by simp)
+:= by ext i; simp only [Std.Array.repeat, BitVec.getElem_cast,
   BitVec.getElem_ofBoolListLE, List.getElem_replicate, BitVec.getElem_zero]
 
 @[progress]
@@ -257,7 +253,7 @@ theorem simple.iota_rc_init.spec(ir: Std.Usize)
 : ir.val < 24
 → ∃ output,
   simple.iota_rc_init ir (Std.Array.repeat 64#usize false) = .ok output ∧
-  output.toBitVec.cast (by simp [Spec.w]) = (Spec.Keccak.ι.RC ir.val : BitVec (Spec.w 6))
+  output.val.toBitVec.cast (by simp [Spec.w]) = (Spec.Keccak.ι.RC ir.val : BitVec (Spec.w 6))
 := by 
   intro ir_lt
   simp [iota_rc_init]
@@ -265,7 +261,7 @@ theorem simple.iota_rc_init.spec(ir: Std.Usize)
   rw [output_post, ←Spec.Keccak.ι.RC.loop.spec]
   congr
   ext i i_idx
-  simp only [Std.Array.toBitVec, Std.Array.repeat, BitVec.getElem_cast,
+  simp only [Std.Array.repeat, BitVec.getElem_cast,
     BitVec.getElem_ofBoolListLE, List.getElem_replicate, BitVec.getElem_zero]
 
 
@@ -276,7 +272,7 @@ theorem simple.iota_a_loop.spec(res : StateArray) (a : StateArray) (rc : Aeneas.
   ∀ (x y: Fin 5)(z': Fin (Spec.w 6)),
   output.toSpec.get x y z' = 
     if x = 0 ∧ y = 0 ∧ z.val ≤ z'.val then
-      a.toSpec.get 0 0 z' ^^ rc.toBitVec[z'.val]!
+      a.toSpec.get 0 0 z' ^^ rc.val.toBitVec[z'.val]!
     else
       res.toSpec.get x y z'
 := by
@@ -298,11 +294,8 @@ theorem simple.iota_a_loop.spec(res : StateArray) (a : StateArray) (rc : Aeneas.
     · scalar_tac
     · simp [Spec.Keccak.StateArray.get_set]
       have zz' := ‹z.val = z'.val›'
-      simp [zz']
+      simp only [Fin.isValue, zz', Fin.cast_val_eq_self, and_true]--, ite_eq_left_iff, not_and]
       simp_ifs
-      rw [getElem!_pos (h := by scalar_tac)]
-      rw [getElem!_pos (h := by scalar_tac)]
-      simp [BitVec.getElem_ofBoolListLE, Std.Array.toBitVec]
     · rw [Spec.Keccak.StateArray.get_set]
       have: ¬ (x = 0 ∧ y = 0 ∧ z' = z.val.cast) := by 
         -- TODO: Could we modify `scalar_tac` so that it handles this case?

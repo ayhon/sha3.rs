@@ -15,7 +15,7 @@ attribute [simp] Id.run Id.pure_eq Id.bind_eq
 
 attribute [simp_lists_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_le
 attribute [simp_lists_simps] List.drop_eq_nil_of_le List.forIn_yield_eq_foldl List.foldl_nil
-attribute [simp_lists_simps] List.drop_eq_getElem_cons List.getElem_finRange List.foldl_cons
+attribute [simp_lists_simps] List.getElem_finRange List.foldl_cons
 attribute [simp_lists_simps] List.getElem?_set_eq
 
 

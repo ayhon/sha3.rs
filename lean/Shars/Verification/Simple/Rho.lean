@@ -82,7 +82,7 @@ theorem simple.rho.inner_loop.spec(input res : StateArray) (t x y z : Std.Usize)
     let* ⟨ z1, z1_post ⟩ ← Std.Usize.add_spec
     let* ⟨ res, res_post ⟩ ← spec
     simp [*, Spec.Keccak.ρ.inner_loop]
-    simp_lists
+    simp_lists [List.drop_eq_getElem_cons]
     rw [Fin.cast_of_mk ‹z.val < Spec.w 6›']
     congr 3
     apply Fin.eq_of_val_eq
@@ -120,7 +120,7 @@ theorem simple.rho_loop.spec(input: simple.StateArray)
     let* ⟨ t1, t1_post ⟩ ← Std.Usize.add_spec
     let* ⟨ rest, rest_post ⟩ ← spec input
     simp [*, Spec.Keccak.ρ.loop]
-    simp_lists
+    simp_lists [List.drop_eq_getElem_cons]
     congr 4
     · simp [Fin.val_eq_of_eq, Fin.cast_of_mk]
     · apply Fin.eq_of_val_eq

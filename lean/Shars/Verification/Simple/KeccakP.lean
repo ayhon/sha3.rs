@@ -75,7 +75,7 @@ theorem Spec.Keccak.StateArray.ofBitVec_toBitVec(S: StateArray l)
 theorem simple.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
 : ∃ output,
   keccak_p input = .ok output ∧
-  output.toBitVec.cast (by simp [Spec.b, Spec.w]) = Spec.Keccak.P 6 24 (input.toBitVec.cast (by simp [Spec.b, Spec.w]))
+  output.val.toBitVec.cast (by simp [Spec.b, Spec.w]) = Spec.Keccak.P 6 24 (input.val.toBitVec.cast (by simp [Spec.b, Spec.w]))
 := by
   rw [keccak_p, keccak_p_aux]
   progress as ⟨res, res_post⟩
@@ -93,7 +93,8 @@ theorem simple.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
 theorem simple.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
 : ∃ output,
   keccak_p input = .ok output ∧
-  output.val = (Spec.Keccak.P 6 24 (input.toBitVec.cast (by simp [Spec.b, Spec.w]))).toList
+  output.length = input.length ∧
+  output.val = (Spec.Keccak.P 6 24 (input.val.toBitVec.cast (by simp [Spec.b, Spec.w]))).toList
 := by
   rw [keccak_p, keccak_p_aux]
   progress as ⟨res, res_post⟩
@@ -104,5 +105,5 @@ theorem simple.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
   apply List.ext_getElem
   · simp [Spec.b, Spec.w]
   intro j j_idx_res j_idx_other
-  simp only [List.getElem_map, List.getElem_finRange, Std.Array.toBitVec]
+  simp only [List.getElem_map, List.getElem_finRange]
   simp only [BitVec.getElem_cast, BitVec.getElem_ofBoolListLE, Fin.cast_mk]

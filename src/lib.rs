@@ -1,5 +1,4 @@
 pub mod simple;
-mod foo;
 
 pub fn get_vec_of_bits(s: &str) -> Vec<bool> {
     let mut res = vec![];

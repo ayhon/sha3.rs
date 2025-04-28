@@ -167,7 +167,7 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
 : ∃ c, 
   xor_long a b = .ok c ∧
   c.length = a.length ∧
-  c.toBitVec = (a.toBitVec ^^^ b.toBitVec.setWidth a.length).setWidth c.length
+  c.val.toBitVec = (a.val.toBitVec ^^^ b.val.toBitVec.setWidth a.length).setWidth c.length
   /- c = a.val.zipWith xor b ++ a.val.drop b.length -/
 := by/- {{{ -/
   rw [xor_long]
@@ -184,8 +184,7 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
   --        · `getElem_setWidth`
   simp only [Std.Slice.getElem!_Nat_eq] at res_bit
   simp only [getElem!_pos, *] at res_bit
-  /- simp only [BitVec.getElem_xor] -/
-  simp [Std.Slice.toBitVec, res_bit]; clear res_bit
+  simp [*]; clear res_bit
   split_all
   · simp [getElem!_pos, getElem?_pos, *]
   · simp [getElem?_neg, *]
@@ -195,8 +194,7 @@ theorem simple.xor_long.spec'(a b: Std.Slice Bool)
 : ∃ c, 
   xor_long a b = .ok c ∧
   c.length = a.length ∧
-  c.val = (a.toBitVec ^^^ b.toBitVec.setWidth a.length).toList
-  /- c = a.val.zipWith xor b ++ a.val.drop b.length -/
+  c = a.val.zipWith xor b ++ a.val.drop b.length
 := by/- {{{ -/
   rw [xor_long]
   progress*
@@ -204,14 +202,17 @@ theorem simple.xor_long.spec'(a b: Std.Slice Bool)
 
   simp [*, BitVec.ofNatLt, BitVec.toList]
 
-  apply List.ext_getElem (by simp [res_post_1]); intro j j_idx_res j_idx_other
-  simp at j_idx_other
+  have : (List.zipWith xor ↑a ↑b ++ List.drop b.length ↑a).length = a.length := by
+    by_cases h: (a.length ≥ b.length) <;> simp at h <;> simp [res_post_1, *, Nat.min_def, le_of_lt]
+  apply List.ext_getElem (by simp [this, res_post_1]; ); intro j j_idx_res j_idx_other
+  simp [this] at j_idx_other
   rw [getElem_eq_getElem!]
   rw [res_post_2 j j_idx_other]
+  simp [List.getElem_append, *]
   split_all
-  · simp [Std.Slice.toBitVec, List.getElem!_eq_getElem?_getD, j_idx_other]
-  · simp at *
-    simp [Std.Slice.toBitVec, *, getElem_eq_getElem!]
+  · simp [getElem_eq_getElem!]
+  · simp [getElem_eq_getElem!, *, ‹a.length ≥ b.length›', ‹j ≥ b.length›']
+
 
 @[progress]
 theorem  simple.StateArray.index.spec
@@ -261,7 +262,7 @@ theorem  simple.StateArray.index.spec
   simp [*, simple.W.spec, Std.Usize.max]
   simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex]
   simp [Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt z_idx]
-  simp [toSpec, Std.Array.toBitVec, BitVec.getElem_ofBoolListLE]
+  simp [toSpec, BitVec.getElem_ofBoolListLE]
   simp [getElem_eq_getElem!]
 
 @[progress]
@@ -317,7 +318,7 @@ theorem simple.StateArray.index_mut.spec
   have c_encode: c.val = @Spec.Keccak.StateArray.encodeIndex 6 x.val.cast y.val.cast z.val.cast := by
     simp [Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt z_idx, c_post, W.spec]
   constructor
-  · simp [Spec.Keccak.StateArray.get, ←c_encode, toSpec, Std.Array.toBitVec]; rw [getElem_eq_getElem!]
+  · simp [Spec.Keccak.StateArray.get, ←c_encode, toSpec]; rw [getElem_eq_getElem!]
   · intro b
     ext i j k
     simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.set, ←c_encode]
@@ -325,8 +326,30 @@ theorem simple.StateArray.index_mut.spec
     simp [BitVec.getElem_set]
     split
     case isTrue h =>
-      simp [←h, c_encode, Std.Array.toBitVec]
+      simp [←h, c_encode]
     case isFalse h =>
       rw [←c_encode] at h
-      simp [List.getElem_set_ne h, Std.Array.toBitVec]
+      simp [List.getElem_set_ne h]
 
+@[progress]
+theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index.spec(input: Slice α)(r: ops.range.Range Usize)
+: r.start.val ≤ r.end_.val
+→ r.end_.val ≤ input.length
+→ ∃ output,
+  core.slice.index.SliceIndexRangeUsizeSlice.index r input = .ok output ∧
+  output.val = input.val.extract r.start.val r.end_.val
+:= by
+  obtain ⟨start, end_⟩ := r
+  intro r_proper end_lt_length
+  simp at *
+  rw [index]
+  simp [List.slice, *]
+
+@[progress]
+theorem Aeneas.Std.core.slice.index.Slice.index.slice_index_range_usize_slice_spec(input: Slice α)(r: ops.range.Range Usize)
+: r.start.val ≤ r.end_.val
+→ r.end_.val ≤ input.length
+→ ∃ output,
+  core.slice.index.Slice.index (Std.core.slice.index.SliceIndexRangeUsizeSliceInst α) input r = .ok output ∧
+  output.val = input.val.extract r.start.val r.end_.val
+:= by simpa using SliceIndexRangeUsizeSlice.index.spec input r
