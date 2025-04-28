@@ -218,6 +218,69 @@ theorem BitVec.size_toArray(bv: BitVec n)
 : bv.toArray.size = n
 := by simp [toArray, Array.finRange]
 
+@[simp]
+theorem BitVec.getElem!_toList(bv: BitVec n)(i: Nat)
+: bv.toList[i]! = bv[i]!
+:= by
+  simp [toList]
+  by_cases i < n
+  case neg h =>
+    rw [getElem!_default]
+    case h => simpa using h
+    rw [getElem!_default]
+    case h => simpa using h
+  simp [List.getElem!_map, *, getElem_eq_getElem!]
+
+@[simp]
+theorem BitVec.getElem!_toArray(bv: BitVec n)(i: Nat)
+: bv.toArray[i]! = bv[i]!
+:= by
+  have: bv.toArray[i]! = bv.toList[i]! := by
+    simp [toList, toArray]
+    by_cases i_idx: i < n
+    case neg =>
+      rw [getElem!_default]
+      case h => simpa [Array.finRange] using i_idx
+      rw [getElem!_default]
+      case h => simpa [Array.finRange] using i_idx
+    rw [getElem!_pos (h := by simpa [Array.finRange] using i_idx)]
+    rw [getElem!_pos (h := by simpa using i_idx)]
+    simp [Array.finRange]
+  rw [this]
+  apply getElem!_toList
+
+#check Array.getElem!_append
+
+theorem Array.getElem!_toList[Inhabited α](arr: Array α)(i: Nat)
+: arr.toList[i]! = arr[i]!
+:= by congr
+
+
+theorem getElem!_padding(x m: Nat)(i: Nat)
+: (Spec.«pad10*1» x m)[i]! = if i = 0 ∨ i = (Spec.«pad10*1» x m).size - 1 then true else false
+:= by
+  split
+  case isTrue h =>
+    simp [Spec.«pad10*1»]
+    obtain h | h := h
+    · simp [h]; congr
+    · simp [h, Spec.«pad10*1»]; congr
+  case isFalse h =>
+    by_cases i_idx: i < (Spec.«pad10*1» x m).size
+    case neg => simp [getElem!_default, i_idx]
+    simp [Spec.«pad10*1»] at h i_idx ⊢
+    simp_ifs
+    rw [getElem!_pos]
+    case h => scalar_tac
+    simp
+
+@[simp_lists_simps, simp]
+theorem List.getElem!_singleton[Inhabited α](a: α)
+: i = 0 → [a][i]! = a
+:= by rintro rfl; congr
+
+attribute [simp_lists_simps] List.append_left_eq_self List.replicate_eq_nil_iff
+
 theorem ref.mod_manipulation(a b r: Nat)
   (h1: r ≥ 6)
   (h2: a < r)
@@ -249,6 +312,9 @@ theorem ref.mod_manipulation(a b r: Nat)
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec
+
+attribute [ext (iff := false)] List.ext_getElem!
+
 
 theorem Spec.«pad10*1_length» (x m : Nat)
 : (Spec.«pad10*1» x m).size = (2 + (-(m + 2: Int) % x).toNat)
@@ -363,6 +429,8 @@ theorem ref.interesting_part_of_the_proof.case1{r: Nat}{rest suffix: List Bool}
     simp [padding, this]
     scalar_tac
   sorry
+
+attribute [simp_lists_simps] List.take_append_drop
 
 theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
   (hyp: (rest ++ suffix).length = r-1)
@@ -498,8 +566,6 @@ theorem ref.getElem!_xor_long_at(a b: List Bool)(offset i: Nat)
     · have : ¬ i < (xor_long_at a b offset).length := by simpa using i_oob
       simp_lists
 
-attribute [ext (iff := false)] List.ext_getElem!
-
 theorem ref.xor_long_at_twice_separate(a b c: List Bool)(offset: Nat)
 (compatible_offset: offset2 ≥ offset + b.length)
 : xor_long_at (xor_long_at a b offset) c (offset2) -- Not offset + b.length so if offset is 0, it's defeq to b.length
@@ -554,68 +620,6 @@ theorem ref.xor_long_of_xor_long_at(a b: List Bool)(offset: Nat)
       simp
     case isFalse h => rfl
 
-@[simp]
-theorem BitVec.getElem!_toList(bv: BitVec n)(i: Nat)
-: bv.toList[i]! = bv[i]!
-:= by
-  simp [toList]
-  by_cases i < n
-  case neg h =>
-    rw [getElem!_default]
-    case h => simpa using h
-    rw [getElem!_default]
-    case h => simpa using h
-  simp [List.getElem!_map, *, getElem_eq_getElem!]
-
-@[simp]
-theorem BitVec.getElem!_toArray(bv: BitVec n)(i: Nat)
-: bv.toArray[i]! = bv[i]!
-:= by
-  have: bv.toArray[i]! = bv.toList[i]! := by
-    simp [toList, toArray]
-    by_cases i_idx: i < n
-    case neg =>
-      rw [getElem!_default]
-      case h => simpa [Array.finRange] using i_idx
-      rw [getElem!_default]
-      case h => simpa [Array.finRange] using i_idx
-    rw [getElem!_pos (h := by simpa [Array.finRange] using i_idx)]
-    rw [getElem!_pos (h := by simpa using i_idx)]
-    simp [Array.finRange]
-  rw [this]
-  apply getElem!_toList
-
-#check Array.getElem!_append
-
-theorem Array.getElem!_toList[Inhabited α](arr: Array α)(i: Nat)
-: arr.toList[i]! = arr[i]!
-:= by congr
-
-
-theorem getElem_padding(x m: Nat)(i: Nat)
-: (Spec.«pad10*1» x m)[i]! = if i = 0 ∨ i = (Spec.«pad10*1» x m).size - 1 then true else false
-:= by
-  split
-  case isTrue h =>
-    simp [Spec.«pad10*1»]
-    obtain h | h := h
-    · simp [h]; congr
-    · simp [h, Spec.«pad10*1»]; congr
-  case isFalse h =>
-    by_cases i_idx: i < (Spec.«pad10*1» x m).size
-    case neg => simp [getElem!_default, i_idx]
-    simp [Spec.«pad10*1»] at h i_idx ⊢
-    simp_ifs
-    rw [getElem!_pos]
-    case h => scalar_tac
-    simp
-
-@[simp_lists_simps, simp]
-theorem List.getElem!_singleton[Inhabited α](a: α)
-: i = 0 → [a][i]! = a
-:= by rintro rfl; congr
-
-attribute [simp_lists_simps] List.append_left_eq_self List.replicate_eq_nil_iff
 
 theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool)
 : preconditions r rest suffix
@@ -683,7 +687,7 @@ theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool
       · simp [padding_len]
         scalar_tac
       conv => rhs; rw [Array.getElem!_toList]
-      simp [getElem_padding, -List.cons_append, -List.singleton_append, -List.cons_append_fun]
+      simp [getElem!_padding, -List.cons_append, -List.singleton_append, -List.cons_append_fun]
       by_cases h: i = 0
       case pos => simp [h]
       by_cases h: i = (Spec.«pad10*1» r (rest.length + suffix.length)).size - 1
