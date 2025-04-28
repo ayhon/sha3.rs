@@ -470,39 +470,107 @@ theorem List.length_chunks_exact(ls: List α)(k: Nat)
       apply List.length_chunks_exact
 termination_by ls.length
 decreasing_by simp [ls_def, *]
+
+set_option maxRecDepth 100000000 in
 theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
   (hyp: (rest ++ suffix).length = r-1)
 : preconditions r rest suffix
 → let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
-  (rest ++ suffix ++ padding).chunks_exact k = [rest ++ suffix ++ [true], List.replicate (r-1) false ++ [true]]
+  (rest ++ suffix ++ padding).chunks_exact r = [rest ++ suffix ++ [true], List.replicate (r-1) false ++ [true]]
 := by
   rintro ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ padding
-  have: (rest.length + suffix.length + padding.length) = 2*r := by
-    have: (Spec.«pad10*1» r (rest.length + suffix.length)).size = 2*r - (rest.length + suffix.length) := by
-      simp at hyp
-      simp [Spec.«pad10*1_length», -neg_add_rev, hyp, r_big_enough]
-      zify
-      rw [Nat.cast_sub (by omega)]
-      rw [Nat.cast_sub (by omega)]
-      rw [Nat.cast_sub (by omega)]
-      rw [Nat.cast_mul]
-      ring_nf
-      simp
-      rw [
-        Int.neg_emod,
-        Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega),
-        Int.max_eq_left (by omega)
-      ]
-      omega
-    simp [padding, this]
-    scalar_tac
+  have len_padding: (Spec.«pad10*1» r (rest.length + suffix.length)).size = 2*r - (rest.length + suffix.length) := by
+    simp at hyp
+    simp [Spec.«pad10*1_length», -neg_add_rev, hyp, r_big_enough]
+    zify
+    rw [Nat.cast_sub (by omega)]
+    rw [Nat.cast_sub (by omega)]
+    rw [Nat.cast_sub (by omega)]
+    rw [Nat.cast_mul]
+    ring_nf
+    simp
+    rw [
+      Int.neg_emod,
+      Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega),
+      Int.max_eq_left (by omega)
+    ]
+    omega
+  have len_append: (rest.length + suffix.length + padding.length) = 2*r := by
+    simp [padding, len_padding]; scalar_tac
   /-
   · (rest ++ suffix) = r - 1
     Then we have
      (rest ++ suffix ++ padding).chunks_exact k =
      = [rest ++ suffix ++ [true], List.replicate false (r-1) ++ [true]]
   -/
-  sorry
+  simp at hyp
+  have len_chunks: ((rest ++ suffix ++ padding).chunks_exact r).length = 2 := by
+    simp
+    rw [←Nat.add_assoc, len_append, Nat.mul_div_cancel]
+    omega
+  ext i : 1
+  · simp only [len_chunks]; simp
+  by_cases i = 0 ∨ i = 1
+  case pos h =>
+    obtain rfl | rfl := h
+    · unfold List.chunks_exact
+      simp_ifs
+      simp [←List.append_assoc]
+      ext j
+      · simp [←Nat.add_assoc]; omega
+      -- Can probably treat rest ++ suffix as one
+      by_cases j < (rest.length + suffix.length)
+      case pos j_left =>
+        rw [List.getElem!_append_left]
+        case h => scalar_tac
+        rw [List.getElem!_take]
+        case a => scalar_tac
+        rw [List.getElem!_append_left]
+        case h => scalar_tac
+      case neg j_right =>
+        by_cases j < r
+        case neg => simp_lists
+        have: j = r - 1 := by scalar_tac
+        subst this
+        rw [List.getElem!_append_right]
+        case pos.h => scalar_tac
+        simp_lists [hyp]
+        simp [padding, Array.getElem!_toList, getElem!_padding]
+    · unfold List.chunks_exact
+      simp_ifs
+      simp
+      unfold List.chunks_exact
+      simp_ifs
+      simp
+      ext j
+      · simp [←Nat.add_assoc]; omega
+      by_cases j < r
+      case neg => simp_lists
+      rw [List.getElem!_take]
+      case pos.a => assumption
+      rw [List.getElem!_drop]
+      simp [←List.append_assoc]
+      rw [List.getElem!_append_right]
+      case pos.h => simp; scalar_tac
+      simp only [List.length_append, hyp]
+      unfold padding
+      rw [Array.getElem!_toList, getElem!_padding, len_padding, hyp]
+      by_cases j = r - 1
+      case pos h =>
+        rw [List.getElem!_append_right, List.length_replicate]
+        case h => simp
+        simp [h]
+      case neg h =>
+        rw [List.getElem!_append_left]
+        case h => simp; scalar_tac
+        simp_ifs
+        simp
+  case neg other =>
+    simp at other
+    rw [getElem!_default]
+    case h => simp only [len_chunks]; omega
+    rw [getElem!_default]
+    case h => simp; omega
 
 theorem ref.interesting_part_of_the_proof.case3{r: Nat}{rest suffix: List Bool}
   (hyp: (rest ++ suffix).length <= r-2)
