@@ -472,6 +472,7 @@ termination_by ls.length
 decreasing_by simp [ls_def, *]
 
 set_option maxRecDepth 100000000 in
+set_option maxHeartbeats 1000000 in
 theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
   (hyp: (rest ++ suffix).length = r-1)
 : preconditions r rest suffix
@@ -551,20 +552,24 @@ theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
       rw [List.getElem!_drop]
       simp [←List.append_assoc]
       rw [List.getElem!_append_right]
-      case pos.h => simp; scalar_tac
+      case pos.h => simp; omega
       simp only [List.length_append, hyp]
       unfold padding
       rw [Array.getElem!_toList, getElem!_padding, len_padding, hyp]
       by_cases j = r - 1
       case pos h =>
-        rw [List.getElem!_append_right, List.length_replicate]
-        case h => simp
+        rw [List.getElem!_append_right]
+        simp [List.length_replicate]
+        case h => simp; omega
         simp [h]
+        scalar_tac
       case neg h =>
         rw [List.getElem!_append_left]
         case h => simp; scalar_tac
         simp_ifs
         simp
+        rw [List.getElem!_replicate]
+        omega
   case neg other =>
     simp at other
     rw [getElem!_default]
