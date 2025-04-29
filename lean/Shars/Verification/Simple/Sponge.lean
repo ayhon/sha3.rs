@@ -281,6 +281,56 @@ theorem List.getElem!_singleton[Inhabited α](a: α)
 
 attribute [simp_lists_simps] List.append_left_eq_self List.replicate_eq_nil_iff
 
+attribute [simp_lists_simps] List.take_append_drop
+
+@[elab_as_elim, cases_eliminator]
+def List.cases_extract(k: Nat)[NeZero k]
+  {motive : List α → Prop}
+  (onSmall: (rest: List α) → (small: rest.length < k) → motive rest)
+  (onBig: (chunk: List α) → (rest: List α) → (small: chunk.length = k) → motive (chunk ++ rest))
+  (ls: List α)
+: motive ls
+:=
+  if h: ls.length < k then
+    onSmall ls h
+  else
+    let chunk: List α := ls.extract (stop := k)
+    let other := ls.extract (start := k)
+    have properPartition: chunk ++ other = ls := by simp [chunk, other]; simp_lists
+    properPartition ▸ onBig chunk other (by simp [chunk]; omega)
+
+def List.chunks_exact(k: Nat)(ls: List α): List (List α) :=
+  if ls.length < k ∨ k = 0 then
+    []
+  else
+    let chunk := (ls.take k)
+    let rest := (ls.drop k).chunks_exact k
+    chunk :: rest
+termination_by ls.length
+
+#guard [1,2,3,4,5].chunks_exact 2 == [[1,2], [3,4]]
+
+@[simp]
+theorem List.length_chunks_exact(ls: List α)(k: Nat)
+: (ls.chunks_exact k).length = ls.length / k
+:= by
+  by_cases h: k > 0
+  case neg => simp at h; subst h; simp [chunks_exact]
+  case pos =>
+    have k_neZero: NeZero k := { out := ne_zero_of_lt h }
+    unfold chunks_exact
+    cases ls_def: ls using List.cases_extract k
+    case onSmall small =>
+      simp [Nat.div_eq_zero_iff_lt h |>.mpr small]
+      simp [small]
+    case onBig chunk rest chunk_small =>
+      simp [chunk_small, k_neZero.ne]
+      rw [Nat.add_div_left (H:=h)]
+      simp
+      apply List.length_chunks_exact
+termination_by ls.length
+decreasing_by simp [ls_def, *]
+
 theorem ref.mod_manipulation(a b r: Nat)
   (h1: r ≥ 6)
   (h2: a < r)
@@ -393,17 +443,6 @@ def ref.absorb' (f: List Bool → List Bool) (s: List Bool) (chunks: List (List 
     s := f (xor_long s Pi)
   return s
 
-def List.chunks_exact(k: Nat)(ls: List α): List (List α) :=
-  if ls.length < k ∨ k = 0 then
-    []
-  else
-    let chunk := (ls.take k)
-    let rest := (ls.drop k).chunks_exact k
-    chunk :: rest
-termination_by ls.length
-
-#guard [1,2,3,4,5].chunks_exact 2 == [[1,2], [3,4]]
-
 abbrev ref.interesting_part_of_the_proof.preconditions(r: Nat)(rest suffix: List Bool) :=
   r ≥ 6 -- Otherwise, we don't have suffix + 2 ≤ r
 ∧ suffix.length ≤ 4 -- Taken from the actual uses of `suffix` in SHA3
@@ -432,44 +471,7 @@ theorem ref.interesting_part_of_the_proof.case1{r: Nat}{rest suffix: List Bool}
     scalar_tac
   sorry
 
-attribute [simp_lists_simps] List.take_append_drop
 
-@[elab_as_elim, cases_eliminator]
-def List.cases_extract(k: Nat)[NeZero k]
-  {motive : List α → Prop}
-  (onSmall: (rest: List α) → (small: rest.length < k) → motive rest)
-  (onBig: (chunk: List α) → (rest: List α) → (small: chunk.length = k) → motive (chunk ++ rest))
-  (ls: List α)
-: motive ls
-:=
-  if h: ls.length < k then
-    onSmall ls h
-  else
-    let chunk: List α := ls.extract (stop := k)
-    let other := ls.extract (start := k)
-    have properPartition: chunk ++ other = ls := by simp [chunk, other]; simp_lists
-    properPartition ▸ onBig chunk other (by simp [chunk]; omega)
-
-@[simp]
-theorem List.length_chunks_exact(ls: List α)(k: Nat)
-: (ls.chunks_exact k).length = ls.length / k
-:= by
-  by_cases h: k > 0
-  case neg => simp at h; subst h; simp [chunks_exact]
-  case pos =>
-    have k_neZero: NeZero k := { out := ne_zero_of_lt h }
-    unfold chunks_exact
-    cases ls_def: ls using List.cases_extract k
-    case onSmall small =>
-      simp [Nat.div_eq_zero_iff_lt h |>.mpr small]
-      simp [small]
-    case onBig chunk rest chunk_small =>
-      simp [chunk_small, k_neZero.ne]
-      rw [Nat.add_div_left (H:=h)]
-      simp
-      apply List.length_chunks_exact
-termination_by ls.length
-decreasing_by simp [ls_def, *]
 
 set_option maxRecDepth 100000000 in
 set_option maxHeartbeats 1000000 in
