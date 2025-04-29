@@ -48,7 +48,24 @@ theorem List.zipWith_append_right{α : Type u} (f: α → β → γ) (x : List �
 @[simp]
 theorem List.drop_eq_drop(ls: List α)(n m: Nat)
 : ls.drop n = ls.drop m ↔ n = m ∨ (n ≥ ls.length ∧ m ≥ ls.length)
-:= by sorry
+:= by
+  revert n m
+  induction ls
+  case nil =>
+    simp
+  case cons hd tl ih =>
+    intro n m
+    match n, m with
+    | 0, 0 => simp
+    | n'+1, m'+1 => simp [ih]
+    | n'+1, 0
+    | 0, m'+1 =>
+      simp
+      intro h
+      have: (hd :: tl).length = (hd::tl).length := by rfl
+      conv at this => lhs; (first | rw [←h] | rw [h])
+      simp at this
+      scalar_tac
 
 @[simp]
 theorem BitVec.length_toList(bv: BitVec n)
