@@ -448,11 +448,13 @@ abbrev ref.interesting_part_of_the_proof.preconditions(r: Nat)(rest suffix: List
 ∧ suffix.length ≤ 4 -- Taken from the actual uses of `suffix` in SHA3
 ∧   rest.length < r -- Since rest is what's left after absorb_initial
 
+set_option maxRecDepth 100000000 in
+set_option maxHeartbeats 1000000 in
 theorem ref.interesting_part_of_the_proof.case1{r: Nat}{rest suffix: List Bool}
   (hyp: (rest ++ suffix).length ≥ r)
 : preconditions r rest suffix
 → let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
-  (rest ++ suffix ++ padding).chunks_exact k = [(rest ++ suffix).take r, (suffix.drop (r - rest.length) ++ padding)]
+  (rest ++ suffix ++ padding).chunks_exact r = [(rest ++ suffix).take r, (suffix.drop (r - rest.length) ++ padding)]
 := by
   /-
   · (rest ++ suffix) >= r
@@ -461,17 +463,46 @@ theorem ref.interesting_part_of_the_proof.case1{r: Nat}{rest suffix: List Bool}
      = [(rest ++ suffix).take r, (suffix.drop (r - rest.length) ++ padding)]
   -/
   rintro ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ padding
-  have: (rest.length + suffix.length + padding.length) = 2*r := by
-    have: (Spec.«pad10*1» r (rest.length + suffix.length)).size = 2*r - (rest.length + suffix.length) := by
-      simp [Spec.«pad10*1_length», -neg_add_rev]
-      have := mod_manipulation (h1 := r_big_enough) (h2 := rest_len_lt) (h3 := suffix_len_le) (h4 := by scalar_tac)
-      rw [this]
-      scalar_tac
-    simp [padding, this]
+  have len_padding: (Spec.«pad10*1» r (rest.length + suffix.length)).size = 2*r - (rest.length + suffix.length) := by
+    simp [Spec.«pad10*1_length», -neg_add_rev]
+    have := mod_manipulation (h1 := r_big_enough) (h2 := rest_len_lt) (h3 := suffix_len_le) (h4 := by scalar_tac)
+    rw [this]
     scalar_tac
-  sorry
+  have len_append: (rest.length + suffix.length + padding.length) = 2*r := by
+    simp [padding, len_padding]
+    scalar_tac
+  simp at hyp
+  have len_chunks: ((rest ++ suffix ++ padding).chunks_exact r).length = 2 := by
+    simp
+    rw [←Nat.add_assoc, len_append, Nat.mul_div_cancel]
+    omega
 
+  -- Execute List.chunks_exact
+  unfold List.chunks_exact
+  simp_ifs
+  unfold List.chunks_exact
+  simp_ifs
+  unfold List.chunks_exact
+  simp_ifs
 
+  congr 1
+  · ext i
+    · simp [←Nat.add_assoc, len_append]
+      omega
+    by_cases i < r
+    case neg => simp_lists
+    rw [List.getElem!_take_append_beg]
+    case pos.x => assumption
+    case pos.x => simp; omega
+    rw [List.getElem!_take]
+    case pos.a => assumption
+  · congr
+    ext i
+    · simp [←Nat.add_assoc, len_append]
+      omega
+    simp_lists
+    congr
+    omega
 
 set_option maxRecDepth 100000000 in
 set_option maxHeartbeats 1000000 in
@@ -481,6 +512,12 @@ theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
 → let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
   (rest ++ suffix ++ padding).chunks_exact r = [rest ++ suffix ++ [true], List.replicate (r-1) false ++ [true]]
 := by
+  /-
+  · (rest ++ suffix) = r - 1
+    Then we have
+     (rest ++ suffix ++ padding).chunks_exact k =
+     = [rest ++ suffix ++ [true], List.replicate false (r-1) ++ [true]]
+  -/
   rintro ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ padding
   have len_padding: (Spec.«pad10*1» r (rest.length + suffix.length)).size = 2*r - (rest.length + suffix.length) := by
     simp at hyp
@@ -500,112 +537,90 @@ theorem ref.interesting_part_of_the_proof.case2{r: Nat}{rest suffix: List Bool}
     omega
   have len_append: (rest.length + suffix.length + padding.length) = 2*r := by
     simp [padding, len_padding]; scalar_tac
-  /-
-  · (rest ++ suffix) = r - 1
-    Then we have
-     (rest ++ suffix ++ padding).chunks_exact k =
-     = [rest ++ suffix ++ [true], List.replicate false (r-1) ++ [true]]
-  -/
+
   simp at hyp
   have len_chunks: ((rest ++ suffix ++ padding).chunks_exact r).length = 2 := by
     simp
     rw [←Nat.add_assoc, len_append, Nat.mul_div_cancel]
     omega
-  ext i : 1
-  · simp only [len_chunks]; simp
-  by_cases i = 0 ∨ i = 1
-  case pos h =>
-    obtain rfl | rfl := h
-    · unfold List.chunks_exact
-      simp_ifs
-      simp [←List.append_assoc]
-      ext j
-      · simp [←Nat.add_assoc]; omega
-      -- Can probably treat rest ++ suffix as one
-      by_cases j < (rest.length + suffix.length)
-      case pos j_left =>
-        rw [List.getElem!_append_left]
-        case h => scalar_tac
-        rw [List.getElem!_take]
-        case a => scalar_tac
-        rw [List.getElem!_append_left]
-        case h => scalar_tac
-      case neg j_right =>
-        by_cases j < r
-        case neg => simp_lists
-        have: j = r - 1 := by scalar_tac
-        subst this
-        rw [List.getElem!_append_right]
-        case pos.h => scalar_tac
-        simp_lists [hyp]
-        simp [padding, Array.getElem!_toList, getElem!_padding]
-    · unfold List.chunks_exact
-      simp_ifs
-      simp
-      unfold List.chunks_exact
-      simp_ifs
-      simp
-      ext j
-      · simp [←Nat.add_assoc]; omega
-      by_cases j < r
-      case neg => simp_lists
-      rw [List.getElem!_take]
-      case pos.a => assumption
-      rw [List.getElem!_drop]
-      simp [←List.append_assoc]
-      rw [List.getElem!_append_right]
-      case pos.h => simp; omega
-      simp only [List.length_append, hyp]
-      unfold padding
-      rw [Array.getElem!_toList, getElem!_padding, len_padding, hyp]
-      by_cases j = r - 1
-      case pos h =>
-        rw [List.getElem!_append_right]
-        simp [List.length_replicate]
-        case h => simp; omega
-        simp [h]
-        scalar_tac
-      case neg h =>
-        rw [List.getElem!_append_left]
-        case h => simp; scalar_tac
-        simp_ifs
-        simp
-        rw [List.getElem!_replicate]
-        omega
-  case neg other =>
-    simp at other
-    rw [getElem!_default]
-    case h => simp only [len_chunks]; omega
-    rw [getElem!_default]
-    case h => simp; omega
 
+  -- Execute List.chunks_exact
+  unfold List.chunks_exact
+  simp_ifs
+  unfold List.chunks_exact
+  simp_ifs
+  unfold List.chunks_exact
+  simp_ifs
+  congr
+  · ext i
+    · simp; scalar_tac
+    simp_lists
+    congr
+    simp [hyp, Nat.sub_sub_self, ‹r >= 1›', List.take_one, List.head?, padding, Spec.«pad10*1», BitVec.toList]
+  · ext i
+    · simp; scalar_tac
+    simp_lists
+    simp [hyp] at len_padding
+    simp [hyp, Nat.sub_sub_self, ‹r >= 1›', padding, Array.getElem!_toList, getElem!_padding, len_padding,
+       -Bool.if_false_right, -Bool.if_false_left, -Bool.if_true_left] -- Keep `if`s for `simp_ifs` to process
+    by_cases i = r -1
+    case pos h => simp_ifs [h]; simp
+    case neg =>
+      simp_ifs
+      by_cases i > r - 1
+      case neg => simp_ifs
+      case pos =>
+        simp_ifs
+        rw [getElem!_default]
+        simp
+        scalar_tac
+
+set_option maxRecDepth 100000000 in
+set_option maxHeartbeats 1000000 in
 theorem ref.interesting_part_of_the_proof.case3{r: Nat}{rest suffix: List Bool}
   (hyp: (rest ++ suffix).length <= r-2)
 : preconditions r rest suffix
 → let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
-  (rest ++ suffix ++ padding).chunks_exact k = [rest ++ suffix ++ [true] ++ List.replicate (r -2 - rest.length - suffix.length) false ++ [true]]
+  (rest ++ suffix ++ padding).chunks_exact r = [rest ++ suffix ++ [true] ++ List.replicate (r -2 - rest.length - suffix.length) false ++ [true]]
 := by
-  rintro ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ padding
-  have: (rest.length + suffix.length + padding.length) = r := by
-    have: (Spec.«pad10*1» r (rest.length + suffix.length)).size = r - (rest.length + suffix.length) := by
-      simp at hyp
-      simp [Spec.«pad10*1_length», -neg_add_rev]
-      zify
-      rw [Nat.cast_sub (by omega)]
-      rw [Int.neg_emod]
-      rw [Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega)]
-      simp
-      rw [Int.max_eq_left (by omega)]
-      omega
-    simp [padding, this]
-    scalar_tac
   /-
   · (rest ++ suffix) <= r - 2
     Then we have
      (rest ++ suffix ++ padding).chunks_exact k =
      = [rest ++ suffix ++ [true, true]]
   -/
-  sorry
+  rintro ⟨r_big_enough,suffix_len_le,rest_len_lt⟩ padding
+  have len_padding: (Spec.«pad10*1» r (rest.length + suffix.length)).size = r - (rest.length + suffix.length) := by
+    simp at hyp
+    simp [Spec.«pad10*1_length», -neg_add_rev]
+    zify
+    rw [Nat.cast_sub (by omega)]
+    rw [Int.neg_emod]
+    rw [Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega)]
+    simp
+    rw [Int.max_eq_left (by omega)]
+    omega
+  have len_append: (rest.length + suffix.length + padding.length) = r := by
+    simp [padding, len_padding]
+    scalar_tac
+  have len_chunks: ((rest ++ suffix ++ padding).chunks_exact r).length = 1 := by
+    simp [←Nat.add_assoc, len_append, Nat.div_self, ‹r > 0›']
+
+  unfold List.chunks_exact
+  simp_ifs
+
+  unfold List.chunks_exact
+  simp_ifs
+  simp
+  ext i
+  · simp; scalar_tac
+  simp_lists
+  congr
+  simp [padding, Spec.«pad10*1», BitVec.toList]
+  have := Spec.«pad10*1_length» r (rest.length + suffix.length)
+  simp at this
+  ring_nf at this ⊢
+  scalar_tac
 
 @[simp]
 theorem ref.length_list_keccak_p(ls: List Bool)
