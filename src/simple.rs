@@ -255,29 +255,42 @@ fn sponge_absorb_initial(bs: &[bool], r: usize, s: &mut [bool; B]) {
 }
 
 fn sponge_absorb_final(s: &mut [bool; B], rest: &[bool], suffix: &[bool], r: usize){
-    let not_covered = r - rest.len();
-    let suffix_cover = not_covered.min(suffix.len());
-    // rest.len() < r
+    // We must have that 
+    //     sponge_absorb_final(s, rest, suffix, r) 
+    //       = absorb(s, rest ++ suffix ++ padding r (rest.len() + suffix.len()))
+    // where 
+    //     absorb(s, bs) 
+    //       = bs.chunks_exact(r)
+    //           .reduce(|chunk, acc| keccak_p(chunk ^^ acc), s)
+    // We can assume that rest.len() < r and that suffix.len() is much smaller than r
+    //
+    // Therefore, we have that r can point to any of the X's below
+    //     [ --- rest --- ][ suffix ][10---  padding  ---01]
+    //                       XXXXXXX][XXXXXXXXXXXXXXXXXXXXXX
     xor_long(s, rest);
-    xor_long_at(s, &suffix[..suffix_cover], rest.len()); // This shouldn't work, it should cap at r!
-    if suffix_cover < suffix.len() {
-        // We have already xored `r` points into the state `s`.
-        // Absorb and move on.
-        keccak_p(s); 
-        // suffix.len() - leftover → elements to be xored
-        xor_long(s, &suffix[suffix_cover..]);
-        // TODO: Would it be easier if I get rid of the xor_long_at call
-        xor_long_at(s, &[true], suffix.len() - suffix_cover);
-        xor_long_at(s, &[true], r-1);
+    let nb_left = rest.len() + suffix.len();
+    if nb_left >= r {
+        // [ --- rest --- ][ suffix ][10 --- padding --- 01]
+        //                   XXXXXXX][X
+        xor_long_at(s, &suffix[..r - rest.len()], rest.len());
+        keccak_p(s);
+        xor_long(s, &suffix[r - rest.len()..]);
+        xor_long_at(s, &[true], nb_left - r);
+        xor_long_at(s, &[true], r - 1);
     } else {
-        let nb_left = rest.len() + suffix.len();
-        // then nb_left < r 
+        // [ --- rest --- ][ suffix ][10 --- padding --- 01]
+        //                             XXXXXXXXXXXXXXXXXXXXX
+        xor_long_at(s, suffix, rest.len());
         xor_long_at(s, &[true], nb_left);
         if nb_left + 1 < r {
-            xor_long_at(s, &[true], r-1);
+        // [ --- rest --- ][ suffix ][10 --- padding --- 01]
+        //                              XXXXXXXXXXXXXXXXXXXX
+            xor_long_at(s, &[true], r - 1);
         } else {
+        // [ --- rest --- ][ suffix ][10 --- padding --- 01]
+        //                             X
             keccak_p(s);
-            xor_long_at(s, &[true], r-1);
+            xor_long_at(s, &[true], r - 1);
         }
     }
     keccak_p(s);
