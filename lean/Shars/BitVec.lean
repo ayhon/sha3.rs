@@ -125,3 +125,8 @@ theorem BitVec.cast_right{bv: BitVec n}{bv2: BitVec m}(eq: m = n)
 
 @[simp] theorem BitVec.getElem!_cast (h : w = v) (x : BitVec w)(i: Nat) : (x.cast h)[i]! = x[i]! := by
   subst h; simp
+
+@[simp]
+theorem BitVec.length_toList(bv: BitVec n)
+: bv.toList.length = n
+:= by simp [toList]

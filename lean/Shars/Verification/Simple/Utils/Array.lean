@@ -68,4 +68,37 @@ theorem Array.foldl_step_left(arr: Array α)(l r: Nat)(upd: β → α → β)(in
       rw [Array.extract_one (l_idx := ‹r' < arr.size›')]
       simp [‹r' + 1 ≤ arr.size›']
 
+@[simp]
+theorem Array.getElem!_append[Inhabited α]
+  (ls ls2: Array α)(i: Nat)
+: (ls ++ ls2)[i]! = if i < ls.size then ls[i]! else ls2[i - ls.size]!
+:= by
+  split
+  case isTrue i_idx =>
+    simp [getElem!_pos, i_idx, ‹i < ls.size + ls2.size›', Array.getElem_append]
+  case isFalse i_oob =>
+    by_cases i < ls.size + ls2.size
+    case pos h => simp [getElem!_pos, ‹i - ls.size < ls2.size›', h, Array.getElem_append, i_oob]
+    case neg h =>
+      rw [getElem!_neg]
+      case h => simpa using h
+      rw [getElem!_neg]
+      case h => scalar_tac
 
+theorem Array.getElem!_toList[Inhabited α](arr: Array α)(i: Nat)
+: arr.toList[i]! = arr[i]!
+:= by congr
+
+theorem Array.foldl_extract(arr: Array α)(l r: Nat)(upd: β → α → β)(init: β)
+: (arr.extract l r).foldl upd init = arr.foldl upd init l r
+:= by simp only [foldl, ←foldlM_start_stop (m := Id)]
+
+
+theorem Array.toList_foldl(arr: _root_.Array α)
+: arr.toList.foldl upd init = (arr.foldl upd init)
+:= by simp only [foldl_toList]
+
+theorem Array.foldl_mk(ls: List α)
+: (Array.mk ls).foldl upd init = (ls.foldl upd init)
+:= by
+  simp only [size_toArray, List.foldl_toArray']
