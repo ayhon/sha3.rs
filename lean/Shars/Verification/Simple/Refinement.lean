@@ -1,6 +1,5 @@
 import Aeneas
 import Shars.Definitions.Simple
-import Shars.Verification.Simple.Utils
 import Sha3.Spec
 
 
@@ -17,4 +16,3 @@ def simple.StateArray.toSpec(self: simple.StateArray): Spec.Keccak.StateArray 6 
 
 /- abbrev Aeneas.Std.Array.toArray{size: Usize}(self: Aeneas.Std.Array α size): _root_.Array α := Array.mk self.val -/
 /- abbrev Aeneas.Std.Slice.toArray(self: Aeneas.Std.Slice α): _root_.Array α := Array.mk self.val -/
-

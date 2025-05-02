@@ -111,13 +111,13 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
   simp [*, BitVec.ofNatLt]
 
   ext j j_idx_res
-  have j_idx_a: j < a.length := by simpa [*] using j_idx_res
-  replace res_bit := res_post_2 j j_idx_a
-  -- NOTE: Replace [·]! with [·] so I can use theorems such as 
+  replace res_bit := res_post_2 j j_idx_res
+  -- NOTE: Replace [·]! with [·] so I can use theorems such as
   --        · `getElem_cast`
   --        · `getElem_xor`
   --        · `getElem_setWidth`
   simp only [Std.Slice.getElem!_Nat_eq] at res_bit
+  have j_idx_a: j < a.length := by simpa [*] using j_idx_res
   simp only [getElem!_pos, *] at res_bit
   simp [*]; clear res_bit
   split_all

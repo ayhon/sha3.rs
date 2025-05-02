@@ -11,8 +11,6 @@ import Shars.Verification.Simple.Utils
 import Shars.Verification.Simple.Auxiliary
 
 set_option maxHeartbeats 1000000
-attribute [-simp] List.getElem!_eq_getElem?_getD
-attribute [simp] Aeneas.Std.Slice.set
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec 
