@@ -25,71 +25,6 @@ theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
   simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult]
 
 @[progress]
-theorem simple.add_to_vec_loop.spec(dst: Vec Bool)(other: Vec Bool)(o n i: Std.Usize)
-: o.val + n.val < Std.Usize.max
-→ n.val < other.length
-→ ∃ nb_added output,
-  add_to_vec_loop core.marker.CopyBool dst o other n i = .ok (nb_added, output) ∧
-  nb_added = Nat.min (n.val) (dst.length - o.val) - i.val + i.val ∧
-  ∀ j: Nat, j < dst.length →
-    output.val[j]! = if o.val + i.val ≤ j ∧ j < o.val + n.val then other.val[j-o.val]!
-    else dst.val[j]!
-:= by/- {{{ -/
-  intro no_overflow o_other_idx
-  rw [add_to_vec_loop]
-  split
-  case isTrue i_bnd =>
-    let* ⟨ oi, oi_post ⟩ ← Aeneas.Std.Usize.add_spec
-    split
-    case isTrue oi_idx => 
-      let* ⟨ t, t_post ⟩ ← Aeneas.Std.Slice.index_usize_spec
-      let* ⟨ dst', dst'_post ⟩ ← Aeneas.Std.Slice.update_spec
-      fsimp [*] at dst'_post
-      let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
-      let* ⟨ nb_added, output, nb_added_post, output_post ⟩ ← spec
-      simp [*] at *
-      constructor
-      · scalar_tac
-      · intro j j_idx
-        rw [output_post j j_idx]; clear output_post
-        split_all
-        · rfl
-        · scalar_tac
-        · simp [‹j = o + i›']
-          simp_lists
-        · simp_lists
-    case isFalse oi_oob=>
-      simp [*] at *
-      constructor
-      · scalar_tac
-      · intros j _
-        simp_ifs
-  case isFalse =>
-    simp
-    constructor
-    · scalar_tac
-    · intro j _ 
-      simp_ifs
-termination_by n.val - i.val
-decreasing_by scalar_decr_tac/- }}} -/
-
-/- @[reducible] def UScalar.ofNat {ty : UScalarTy} (x : Nat) -/
-/-   (hInBounds : x ≤ UScalar.cMax ty := by decide) : UScalar ty := -/
-
-
-@[progress]
-theorem simple.add_to_vec.spec(dst: Std.Slice Bool)(other: Vec Bool)(o n: Std.Usize)
-: o.val + n.val < Std.Usize.max
-→ n.val < other.length
-→ ∃ nb_added output,
-  add_to_vec core.marker.CopyBool dst o other n = .ok (nb_added, output) ∧
-  nb_added = Nat.min (n.val) (dst.length - o.val) ∧
-  ∀ j < dst.length, 
-    output.val[j]! = if o.val ≤ j ∧ j < o.val + n.val then other.val[j-o.val]!
-    else  dst.val[j]!
-:= by simpa using add_to_vec_loop.spec dst other o n (i := 0#usize)
-
-@[progress]
 theorem simple.binxor.spec(a b: Bool)
 : ∃ c, binxor a b = .ok c ∧ c = (a ^^ b)
 := by rw [binxor]; cases a <;> cases b <;> simp
@@ -188,31 +123,6 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
   split_all
   · simp [getElem!_pos, getElem?_pos, *]
   · simp [getElem?_neg, *]
-
-@[progress]
-theorem simple.xor_long.spec'(a b: Std.Slice Bool)
-: ∃ c, 
-  xor_long a b = .ok c ∧
-  c.length = a.length ∧
-  c = a.val.zipWith xor b ++ a.val.drop b.length
-:= by/- {{{ -/
-  rw [xor_long]
-  progress*
-  simp at *
-
-  simp [*, BitVec.ofNatLt, BitVec.toList]
-
-  have : (List.zipWith xor ↑a ↑b ++ List.drop b.length ↑a).length = a.length := by
-    by_cases h: (a.length ≥ b.length) <;> simp at h <;> simp [res_post_1, *, Nat.min_def, le_of_lt]
-  apply List.ext_getElem (by simp [this, res_post_1]; ); intro j j_idx_res j_idx_other
-  simp [this] at j_idx_other
-  rw [getElem_eq_getElem!]
-  rw [res_post_2 j j_idx_other]
-  simp [List.getElem_append, *]
-  split_all
-  · simp [getElem_eq_getElem!]
-  · simp [getElem_eq_getElem!, *, ‹a.length ≥ b.length›', ‹j ≥ b.length›']
-
 
 @[progress]
 theorem  simple.StateArray.index.spec
