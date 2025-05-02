@@ -15,10 +15,10 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Aeneas.Std.Slice.set
 
 open Aeneas hiding Std.Array
-open Std.alloc.vec 
+open Std.alloc.vec
 
 -- TODO: derive automatically with `progress_pure_def` applied to `Std.core.cmp.impls.OrdUsize.min`
-open Aeneas hiding Std.Array in 
+open Aeneas hiding Std.Array in
 @[progress]
 theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
   ∃ z, Std.toResult (Std.core.cmp.impls.OrdUsize.min x y) = .ok z ∧ z = Std.core.cmp.impls.OrdUsize.min x y := by
@@ -100,9 +100,9 @@ theorem simple.xor_long_at_loop.spec(a b: Std.Slice Bool)(pos n i: Std.Usize)
 → n = Nat.min a.length (b.length + ↑pos)
 → i ≥ pos
 → ∃ output,/- {{{ -/
-  xor_long_at_loop a b pos n i = .ok output ∧ 
+  xor_long_at_loop a b pos n i = .ok output ∧
   output.length = a.length ∧
-  ∀ j <a.length, 
+  ∀ j <a.length,
     if i ≤ j ∧ j < n then output[j]! = (a[j]! ^^ b[j-pos.val]!)
     else output[j]! = a[j]!
 := by
@@ -128,14 +128,14 @@ decreasing_by scalar_decr_tac/- }}} -/
 theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
 : b.length + pos.val ≤ Std.Usize.max
 → ∃ output,
-  xor_long_at a b pos = .ok output ∧ 
+  xor_long_at a b pos = .ok output ∧
   output.length = a.length ∧
-  ∀ j < a.length, 
-      output[j]! =
-      if pos.val ≤ j ∧ j < pos.val + b.length then 
-         (a[j]! ^^ b[j-pos.val]!)
-      else 
-          a[j]!
+  ∀ j < output.length,
+      output.val[j]! =
+      if pos.val ≤ j ∧ j < pos.val + b.length then
+         (a.val[j]! ^^ b.val[j-pos.val]!)
+      else
+          a.val[j]!
 := by/- {{{ -/
   intro no_overflowa
   rw [xor_long_at]
@@ -164,7 +164,7 @@ theorem BitVec.setWidth_eq_cast{n m: Nat}(bv: BitVec n)(h: n = m)
 
 @[progress]
 theorem simple.xor_long.spec(a b: Std.Slice Bool)
-: ∃ c, 
+: ∃ c,
   xor_long a b = .ok c ∧
   c.length = a.length ∧
   c.val.toBitVec = (a.val.toBitVec ^^^ b.val.toBitVec.setWidth a.length).setWidth c.length
@@ -174,7 +174,7 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
   progress*
 
   simp [*, BitVec.ofNatLt]
-  
+
   ext j j_idx_res
   have j_idx_a: j < a.length := by simpa [*] using j_idx_res
   replace res_bit := res_post_2 j j_idx_a
@@ -220,16 +220,16 @@ theorem  simple.StateArray.index.spec
 (x_idx: x.val < 5)
 (y_idx: y.val < 5)
 (z_idx: z.val < Spec.w 6)
-: ∃ output, self.index (x,y,z) = .ok output ∧ 
+: ∃ output, self.index (x,y,z) = .ok output ∧
     output = self.toSpec.get x.val y.val z.val
-:= by 
+:= by
   rw [index]
   let* ⟨ i, i_post ⟩ ← Aeneas.Std.Usize.mul_spec
   let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
   simp [i_post] at i1_post
   let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
   · simp [*, simple.W.spec]
-    apply le_of_lt 
+    apply le_of_lt
     calc Spec.w 6 * (5 * ↑y + ↑x)
      _ ≤ Spec.w 6 * (5 * 5) := by
           apply Nat.mul_le_mul_left (k := Spec.w 6)
@@ -238,9 +238,9 @@ theorem  simple.StateArray.index.spec
      _ ≤ Std.Usize.max := Std.Usize.max_bound
   let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
   · simp [*, simple.W.spec]
-    apply le_of_lt 
+    apply le_of_lt
     calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
-     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by 
+     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by
           apply Nat.add_le_add_right (k := ↑z)
           apply Nat.mul_le_mul_left (k := Spec.w 6)
           exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
@@ -251,7 +251,7 @@ theorem  simple.StateArray.index.spec
   have: Spec.w 6 * (5 * ↑y + ↑x) + ↑z < 1600 := by
     simp [Spec.w]
     calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
-     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by 
+     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by
           apply Nat.add_le_add_right (k := ↑z)
           apply Nat.mul_le_mul_left (k := Spec.w 6)
           exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
@@ -271,10 +271,10 @@ theorem simple.StateArray.index_mut.spec
 (x_idx: x.val < 5)
 (y_idx: y.val < 5)
 (z_idx: z.val < Spec.w 6)
-: ∃ val upd, self.index_mut (x,y,z) = .ok (val, upd) ∧ 
+: ∃ val upd, self.index_mut (x,y,z) = .ok (val, upd) ∧
     val = self.toSpec.get x.val y.val z.val ∧
     ∀ b, (upd b).toSpec = self.toSpec.set x.val y.val z.val b
-:= by 
+:= by
   rw [index_mut]
   let* ⟨ i, i_post ⟩ ← Aeneas.Std.Usize.mul_spec
   let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
@@ -284,7 +284,7 @@ theorem simple.StateArray.index_mut.spec
     -- TODO: Hmm, this should be using transitivity to get <, no?
     apply le_of_lt
     calc Spec.w 6 * (5 * y.val + x.val)
-      _ < Spec.w 6 * (5 * 5) := by 
+      _ < Spec.w 6 * (5 * 5) := by
           apply Nat.mul_lt_mul_left (by simp [Spec.w]: 0 < Spec.w 6) |>.mpr
           exact Nat.lt_packing_right x_idx y_idx
       _ < 2^32 - 1 := by decide
@@ -294,7 +294,7 @@ theorem simple.StateArray.index_mut.spec
   · simp [*, W.spec]
     apply le_of_lt
     calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
-     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by 
+     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by
           apply Nat.add_le_add_right (k := ↑z)
           apply Nat.mul_le_mul_left (k := Spec.w 6)
           exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
@@ -306,7 +306,7 @@ theorem simple.StateArray.index_mut.spec
   have c_idx :↑c < Std.Array.length self := by
     simp [*, W.spec]
     calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
-     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by 
+     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by
           apply Nat.add_le_add_right (k := ↑z)
           apply Nat.mul_le_mul_left (k := Spec.w 6)
           exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)

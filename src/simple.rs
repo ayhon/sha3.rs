@@ -5,16 +5,6 @@ const W:  usize = 1<<L;
 const B:  usize = 5*5*W;
 const NR: usize = 24;
 
-/// Adds n elements of src to dst at offset o
-fn add_to_vec<'a, A: Copy>(dst: &'a mut [A], o: usize, src: &'a [A], n: usize) -> usize {
-    let mut i= 0;
-    while i < n && o + i < dst.len() {
-        dst[o+i] = src[i];
-        i += 1;
-    }
-    return i
-}
-
 fn binxor(a: bool, b: bool) -> bool {
     (a && !b) || (b && !a)
 }
@@ -272,7 +262,7 @@ fn sponge_absorb_final(s: &mut [bool; B], rest: &[bool], suffix: &[bool], r: usi
     if nb_left >= r {
         // [ --- rest --- ][ suffix ][10 --- padding --- 01]
         //                   XXXXXXX][X
-        xor_long_at(s, &suffix[..r - rest.len()], rest.len());
+        xor_long_at(s, &suffix[0..r - rest.len()], rest.len());
         keccak_p(s);
         xor_long(s, &suffix[r - rest.len()..]);
         xor_long_at(s, &[true], nb_left - r);
@@ -297,33 +287,35 @@ fn sponge_absorb_final(s: &mut [bool; B], rest: &[bool], suffix: &[bool], r: usi
 }
 
 fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
-    sponge_absorb_initial(bs, r, s);
+    sponge_absorb_initial(bs, r, s); // → absorb
     let n = bs.len() / r;
     let rest = &bs[r*n..];
-    sponge_absorb_final(s, rest, suffix, r);
-}
+    sponge_absorb_final(s, rest, suffix, r); // → panic_free → absorb'
+} // → absorb'
 
 /// Expects `z` to have the proper size (d)
 fn sponge_squeeze(r: usize, z: &mut [bool], s: [bool; B]) {
     let mut s = s;
     let mut i = 0;
+    let d = z.len();
     loop {
-        // z.extend(s.iter().take(r));
-        let added = add_to_vec::<bool>(z, i, &mut s, r);
-        i += added;
-        if z.len() <= i {
-            break
-        } else {
+        if i + r < d {
+            z[i..i+r].copy_from_slice(&s[0..r]);
             keccak_p(&mut s);
+            i += r;
+        } else {
+            let nb_left = d - i;
+            z[i..].copy_from_slice(&s[0..nb_left]);
+            return;
         }
     }
-}
+} // → sequeeze' TODO 
 
 fn sponge(r: usize, bs: &[bool], output: &mut [bool], suffix: &[bool]) {
     let mut s = [false; B];
     sponge_absorb(bs, r, &mut s, suffix);
     sponge_squeeze(r, output, s);
-}
+} // → TODO
 
 const SHA3_SUFFIX: [bool; 2] = [false, true];
 pub fn sha3_224(bs: &[bool]) -> [bool;224] { let mut output = [false;224]; sponge(B - 2*224, &bs, &mut output, &SHA3_SUFFIX); return output }

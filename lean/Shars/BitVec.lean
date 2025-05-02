@@ -8,7 +8,7 @@ import Sha3.Utils
 /-   let bv' := bv.setWidth (paddedLen*8) -/
 /-   ByteArray.mk <| Array.finRange paddedLen -/
 /-     |>.map fun i => -/
-/-       let x := List.finRange 8 |>.map (fun o => -/ 
+/-       let x := List.finRange 8 |>.map (fun o => -/
 /-         2^o.val * if bv'[8*i.val+o.val]'(by omega) then 1 else 0 -/
 /-       ) |>.sum -/
 /-       UInt8.ofNat x -/
@@ -17,11 +17,11 @@ import Sha3.Utils
 @[ext]
 theorem BitVec.ext{bv1 bv2: BitVec n}
 {point_eq: ∀ i: Nat, (_: i < n) → bv1[i] = bv2[i]}
-: bv1 = bv2 
+: bv1 = bv2
 := by
   obtain ⟨⟨a, a_lt⟩⟩ := bv1
   obtain ⟨⟨b, b_lt⟩⟩ := bv2
-  simp 
+  simp
   simp [BitVec.getElem_eq_testBit_toNat] at point_eq
   apply Nat.eq_of_testBit_eq
   intro i
@@ -41,13 +41,13 @@ theorem BitVec.ext{bv1 bv2: BitVec n}
 theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
 :  {j_lt: j < n}
 → (bv.set i b)[j] = if i = j then b else bv[j]
-:= by 
+:= by
   intro j_lt
   have n_pos: n > 0 := by cases n <;> (first | cases i.isLt | apply Nat.zero_lt_succ )
 
   rw [set]
   split
-  case isTrue h => 
+  case isTrue h =>
     subst h
     simp [Nat.testBit, BitVec.getLsbD]
     cases bv[i] <;> cases b <;> simp [n_pos]
@@ -68,9 +68,9 @@ theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
 : ∀ (h: i < ls.length), (BitVec.ofBoolListLE ls)[i] = ls[i]
 := by
   let rec odd_div(x: Nat): (2*x + 1) / 2 = x := by
-    cases x 
+    cases x
     case zero => simp only [Nat.mul_zero, Nat.zero_add, Nat.reduceDiv]
-    case succ => 
+    case succ =>
       rw [Nat.mul_add, Nat.add_assoc, Nat.add_comm _ 1, ←Nat.add_assoc]
       rw [Nat.add_div_right (H := Nat.two_pos), Nat.add_right_cancel_iff, Nat.add_comm]
       apply odd_div
@@ -81,8 +81,8 @@ theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
     simp [BitVec.ofBoolListLE, BitVec.getElem_eq_testBit_toNat]
     cases i
     case zero => simp [Nat.mod_eq_of_lt (Bool.toNat_lt hd)]
-    case succ i' => 
-      have: ((ofBoolListLE tl).toNat * 2 + hd.toNat).testBit (i' + 1) = (ofBoolListLE tl).toNat.testBit i' := by 
+    case succ i' =>
+      have: ((ofBoolListLE tl).toNat * 2 + hd.toNat).testBit (i' + 1) = (ofBoolListLE tl).toNat.testBit i' := by
         cases hd <;> simp [Nat.testBit_succ]; rw [Nat.mul_comm, odd_div]
       simp [this] at i_lt ⊢
       rw [←BitVec.getElem_eq_testBit_toNat (ofBoolListLE tl) i']
@@ -90,7 +90,7 @@ theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
 
 @[simp] theorem BitVec.getElem!_ofBoolListLE{ls: List Bool}{i: Nat}
 : (BitVec.ofBoolListLE ls)[i]! = ls[i]!
-:= by 
+:= by
   if i_idx: i < ls.length then
     repeat rw [getElem!_pos (h := by simpa using i_idx)]
     apply BitVec.getElem_ofBoolListLE

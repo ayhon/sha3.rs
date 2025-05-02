@@ -13,7 +13,7 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Aeneas.Std.Slice.set
 
 open Aeneas hiding Std.Array
-open Std.alloc.vec 
+open Std.alloc.vec
 
 
 @[progress]
@@ -44,7 +44,7 @@ theorem simple.keccak_p_aux_loop.spec(input: StateArray)(ir: Std.Usize)
 → ∃ output,
   keccak_p_aux_loop input ir = .ok output ∧
   output.toSpec = Spec.Keccak.P.loop 6 24 input.toSpec ir.val
-:= by 
+:= by
   intro ir_loop_bound
   rw [keccak_p_aux_loop]
   split
@@ -57,7 +57,7 @@ theorem simple.keccak_p_aux_loop.spec(input: StateArray)(ir: Std.Usize)
     symm
     simp [←Nat.add_sub_assoc ir_loop_bound, ←Nat.add_sub_assoc (‹ir.val ≤ 23›')]
     rw [Nat.add_comm, ←Nat.add_assoc, Nat.add_comm, ←Nat.add_assoc, Nat.add_sub_cancel]
-    rw [SRRange.foldWhile_step (h := by simpa using ir_lt)] 
+    rw [SRRange.foldWhile_step (h := by simpa using ir_lt)]
   case isFalse ir_oob =>
     simp [‹ir.val = 24›', Spec.Keccak.P.loop]
 termination_by 24 - ir.val
@@ -79,7 +79,7 @@ theorem simple.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
 := by
   rw [keccak_p, keccak_p_aux]
   progress as ⟨res, res_post⟩
-  cases bv_val: res.toSpec 
+  cases bv_val: res.toSpec
   rw [bv_val] at res_post
   case ofBitVec bv =>
     simp [StateArray.toSpec] at bv_val
