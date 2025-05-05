@@ -738,33 +738,8 @@ theorem Aeneas.Std.core.num.Usize.saturating_sub.spec(a b: Std.Usize)
   reduce
   rfl
 
-theorem Aeneas.Std.Array.to_slice_mut.spec'.{u} {α : Type u} {n : Std.Usize} (a : Aeneas.Std.Array α n)
-: ∃ old new, Std.toResult a.to_slice_mut = Std.Result.ok (old, new) ∧
-  old.val = a.val ∧ ∀ s: Slice α, (new s).val = (a.from_slice s).val
-:= by
-  progress as ⟨old, new, old_post, new_post⟩
-  simp [*, Std.Array.to_slice]
 
 
-@[progress]
-theorem simple.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
-: ∃ output,
-  keccak_p input = .ok output ∧
-  output.val = ListIR.list_keccak_p input.val
-:= by
-  rw [keccak_p, keccak_p_aux]
-  progress as ⟨res, res_post⟩
-  simp [ListIR.list_keccak_p]
-  simp  [StateArray.toSpec] at res_post
-  -- conv at res_post => arg 2; rw [StateArray.toSpec]
-  rw [Spec.Keccak.P.loop.spec, BitVec.setWidth_eq_cast]
-  case h => simp [Spec.b, Spec.w]
-  simp [←res_post]
-
-@[progress] theorem Aeneas.Std.Usize.sub_spec' {x y : Aeneas.Std.Usize} (h : y.val ≤ x.val) :
-  ∃ z, x - y = Std.Result.ok z ∧ z.val = x.val - y.val := by
-  progress as ⟨z, post⟩
-  rw [post, Nat.add_sub_cancel]
 
 @[progress]
 theorem simple.xor_long_at.spec'(a b: Std.Slice Bool)(offset: Std.Usize)

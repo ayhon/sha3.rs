@@ -263,3 +263,18 @@ theorem Aeneas.Std.core.slice.index.Slice.index.slice_index_range_usize_slice_sp
   core.slice.index.Slice.index (Std.core.slice.index.SliceIndexRangeUsizeSliceInst α) input r = .ok output ∧
   output.val = input.val.extract r.start.val r.end_.val
 := by simpa using SliceIndexRangeUsizeSlice.index.spec input r
+
+
+@[progress] theorem Aeneas.Std.Array.to_slice_mut.spec'.{u} {α : Type u} {n : Std.Usize} (a : Aeneas.Std.Array α n)
+: ∃ old new, Std.toResult a.to_slice_mut = Std.Result.ok (old, new) ∧
+  old.val = a.val ∧ ∀ s: Slice α, (new s).val = (a.from_slice s).val
+:= by
+  progress as ⟨old, new, post⟩
+  simp [Std.Array.to_slice, Std.Array.to_slice_mut] at post
+  simp [post, Std.Array.to_slice, Std.Array.from_slice]
+
+attribute [-progress] Aeneas.Std.Usize.sub_spec
+@[progress] theorem Aeneas.Std.Usize.sub_spec' {x y : Aeneas.Std.Usize} (h : y.val ≤ x.val) :
+  ∃ z, x - y = Std.Result.ok z ∧ z.val = x.val - y.val := by
+  progress as ⟨z, post⟩
+  rw [post, Nat.add_sub_cancel]

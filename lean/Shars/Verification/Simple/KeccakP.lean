@@ -7,6 +7,7 @@ import Shars.Verification.Simple.Rho
 import Shars.Verification.Simple.Pi
 import Shars.Verification.Simple.Chi
 import Shars.Verification.Simple.Iota
+import Shars.Verification.Simple.ListIR
 
 set_option maxHeartbeats 10000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -88,3 +89,18 @@ theorem simple.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
     rw [res_post]
     congr
     -- NOTE: Does `congr` unfold definitions?
+
+@[progress]
+theorem simple.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
+: ∃ output,
+  keccak_p input = .ok output ∧
+  output.val = ListIR.list_keccak_p input.val
+:= by
+  rw [keccak_p, keccak_p_aux]
+  progress as ⟨res, res_post⟩
+  simp [ListIR.list_keccak_p]
+  simp  [StateArray.toSpec] at res_post
+  -- conv at res_post => arg 2; rw [StateArray.toSpec]
+  rw [Spec.Keccak.P.loop.spec, BitVec.setWidth_eq_cast]
+  case h => simp [Spec.b, Spec.w]
+  simp [←res_post]
