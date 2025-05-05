@@ -22,8 +22,6 @@ open Aeneas
 
 -- attribute [scalar_tac_simps] Nat.pos_of_neZero
 
-#check simple.sponge_squeeze_loop
-
 def simple.sponge_squeeze.panic_free(r: Nat)[NeZero r](dst s: List Bool)(offset: Nat): List Bool :=
   assert! s.length ≥ r
   if offset + r < dst.length then
@@ -61,7 +59,7 @@ def simple.sponge.squeeze.length_panic_free(r: Nat)(dst s: List Bool)(offset: Na
 termination_by dst.length - offset
 decreasing_by simp [List.replace_slice]; scalar_tac
 
-attribute [scalar_tac_simps] not_le in
+attribute [local scalar_tac_simps] not_le in
 def ListIR.sponge.squeeze(d: Nat)(r: Nat)[NeZero r](dst s: List Bool): List Bool :=
   if d ≤ dst.length then
     dst.take d
@@ -105,7 +103,7 @@ theorem List.getElem!_take_eq_ite[Inhabited α](ls: List α)(n i: Nat)
 := by split <;> simp_lists
 
 
-attribute [simp_lists_simps] List.getElem!_take_eq_ite in
+attribute [local simp_lists_simps] List.getElem!_take_eq_ite in
 theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
   (r_bnd: 0 < r ∧ r < 1600)
   (dst s: List Bool)(offset : Nat)
@@ -141,51 +139,14 @@ theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
 termination_by dst.length - offset
 decreasing_by scalar_decr_tac
 
-theorem simple.sponge_squeeze.panic_free.extracted_2 (r i : Std.Usize) (dst : Std.Slice Bool)
-  (s : Std.Array Bool 1600#usize) (r_bnd : 0 < (↑r : ℕ) ∧ (↑r : ℕ) < 1600) (i_idx : (↑i : ℕ) < dst.length)
-  (no_overflow : dst.length + (↑r : ℕ) < Std.Usize.max) (i1 : Std.Usize) (__1 : [> let i1 ← i + r <])
-  (i1_post : (↑i1 : ℕ) = (↑i : ℕ) + (↑r : ℕ)) (h : i1 < dst.len) (s4 : Std.Array Bool 1600#usize)[NeZero r.val]
-  (_ : [> let s4 ← keccak_p s <])
-:
-  ∃ output,
-    sponge_squeeze_loop r
-          (if h : (↑i : ℕ) + ((↑r : ℕ) + ((↑dst : List Bool).length - ((↑i : ℕ) + (↑r : ℕ)))) ≤ Std.Usize.max then
-            ⟨List.take (↑i : ℕ) (↑dst : List Bool) ++
-                (List.take (↑r : ℕ) (↑s : List Bool) ++ List.drop ((↑i : ℕ) + (↑r : ℕ)) (↑dst : List Bool)),
-              by simp; scalar_tac⟩
-          else dst)
-          s4 i1 =
-        Std.Result.ok output ∧
-      (↑output : List Bool) = panic_free (↑r : ℕ) (↑dst : List Bool) (↑s : List Bool) (↑i : ℕ)
-:= by
-  -- conv => rhs; ext output; enter [1,1, 2]; tactic => simp_ifs
-  simp_ifs
-  simp only [‹i.val + (r.val + (dst.length - (i.val + r.val))) ≤ Std.Usize.max›', ↓reduceDIte]
-  sorry
-
-set_option trace.SimpIfs true
-set_option maxRecDepth 1000000000 in
-set_option maxHeartbeats 1000000000 in
-theorem simple.sponge_squeeze.panic_free.extracted_3 (r i : Std.Usize) (dst : Std.Slice Bool)
-  (i1 : Std.Usize) (i1_post : (↑i1 : ℕ) = (↑i : ℕ) + (↑r : ℕ)) (h : i1 < dst.len)
-: (if h : i.val + r.val + dst.length - (i.val + r.val) ≤ Std.Usize.max then True else False)
-:= by
-  simp_ifs -- Does nothing.
-  have: i.val + r.val + dst.length - (i.val + r.val) ≤ Std.Usize.max := by scalar_tac
-  simp only [this, reduceDIte]
-
-
-#check Std.Usize.sub_spec'
-
 @[simp]
 theorem Aeneas.Std.Slice.val_drop{T: Type}(s: Slice T)(k: Usize)
 : (s.drop k).val = s.val.drop k.val
 := by simp [Slice.drop]
 
-set_option maxHeartbeats 1000000 in
-set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 100000000 in
+set_option maxRecDepth 10000000 in
 -- set_option trace.meta.Tactic.simp true in
-set_option diagnostics true in
 theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
   (dst: Std.Slice Bool)(s: Aeneas.Std.Array Bool 1600#usize)
 : (r_bnd: 0 < r.val ∧ r.val < 1600)
@@ -243,15 +204,6 @@ theorem BitVec.toList_inj{bv bv2: BitVec n}
   replace cond := List.getElem_of_eq cond (by simp; exact i_idx)
   simpa [getElem_eq_getElem!] using cond
 
-
-set_option trace.SimpIfs true in
-theorem ListIR.sponge.squeeze.extracted_1 {m d : ℕ} (Z : BitVec m) (base_case : d ≤ m) (i : ℕ) (h : i < d)
-: Z.getLsbD i = if h : i < m then Z[i] else false
-:= by
-  simp_ifs at h
-
-  sorry
-
 theorem BitVec.getLsbD_eq_getElem! {x : BitVec w} {i : Nat} :
     x.getLsbD i = x[i]! := by
   if h: i < w then
@@ -281,6 +233,7 @@ theorem BitVec.toList_setWidth(bv: BitVec n)(m: Nat)
   case otherwise h => simp [getElem!_neg, h]
   simp [getElem!_pos, *]
 
+attribute [local simp_lists_simps] List.getElem!_take_eq_ite in
 set_option maxRecDepth 1000000 in
 def ListIR.sponge.squeeze.refinement(r: Nat) [NeZero r]
     (Z: BitVec m)
@@ -312,6 +265,24 @@ def ListIR.sponge.squeeze.refinement(r: Nat) [NeZero r]
 termination_by d - m
 decreasing_by scalar_decr_tac
 
+
+theorem simple.sponge_squeeze.spec(r i: Std.Usize)
+  (dst: Std.Slice Bool)(s: Aeneas.Std.Array Bool 1600#usize)
+: (r_bnd: 0 < r.val ∧ r.val < 1600)
+→ i < dst.length
+→ dst.length + r.val < Std.Usize.max
+→ let _: NeZero r.val := {out:= Nat.not_eq_zero_of_lt r_bnd.left}
+  ∃ output,
+  sponge_squeeze_loop r dst s i = .ok output ∧
+  output.val = ListIR.sponge.squeeze dst.length r (dst.val.take i.val) s.val
+:= by
+  intros
+  progress with simple.sponge_squeeze.panic_free.refinement as ⟨res, res_post⟩
+  rw [res_post]
+  rw [simple.sponge_squeeze.panic_free.spec]
+  · assumption
+  · simp
+  · simpa
 
 -- abbrev List.is_chunks_of(chunks: List (List α))(n: Nat) := ∀ c ∈ chunks, c.length = n
 
