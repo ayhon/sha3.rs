@@ -8,18 +8,18 @@ import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
 
-open Aeneas hiding Std.Array in 
+open Aeneas hiding Std.Array in
 @[simp, scalar_tac_simps]
 theorem OrdUsize.min_val (x y : Std.Usize) : (Std.core.cmp.impls.OrdUsize.min x y).val = Nat.min x.val y.val := by
   simp [Std.core.cmp.impls.OrdUsize.min]; split <;> simp [*] <;> omega
 
 attribute [scalar_tac_simps] Classical.not_and_iff_or_not_not
-attribute [scalar_tac_simps] Fin.val_add Fin.val_mul 
+attribute [scalar_tac_simps] Fin.val_add Fin.val_mul
 attribute [scalar_tac_simps] List.length_finRange List.length_zipWith
 attribute [scalar_tac_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_le
-    
-attribute [scalar_tac_simps] Nat.mod_succ 
-attribute [scalar_tac_simps] Nat.cast_add Nat.cast_mul Nat.cast_ofNat Nat.cast_inj Nat.cast_le Nat.cast_ite 
+
+attribute [scalar_tac_simps] Nat.mod_succ
+attribute [scalar_tac_simps] Nat.cast_add Nat.cast_mul Nat.cast_ofNat Nat.cast_inj Nat.cast_le Nat.cast_ite
 attribute [scalar_tac a.val] Fin.is_le'
 attribute [scalar_tac self] Fin.isLt
 
@@ -34,7 +34,7 @@ theorem Fin.val_ofNat{n: Nat}[NeZero n]{x: Nat}
 theorem Nat.zero_mod_or_mod_lt(x v: Nat): v = 0 ∨ x % v < v := by
   match h: v with
   | 0 => left; rfl
-  | v'+1 => 
+  | v'+1 =>
     right
     apply Nat.mod_lt
     exact Nat.zero_lt_succ v'
@@ -42,7 +42,7 @@ theorem Nat.zero_mod_or_mod_lt(x v: Nat): v = 0 ∨ x % v < v := by
 attribute [scalar_tac_simps] Spec.w Spec.b
 
 @[simp, scalar_tac_simps]
-theorem simple.W.spec 
+theorem simple.W.spec
 : simple.W = Spec.w 6
 := by native_decide
 
@@ -54,7 +54,7 @@ theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
   calc n*y + x
     _ = n * y + x := rfl
     _ ≤ n * (m-1) + x := by
-      apply Nat.add_le_add_right 
+      apply Nat.add_le_add_right
       apply Nat.mul_le_mul_left
       apply Nat.le_pred_iff_lt m_pos |>.mpr
       exact y_lt
@@ -62,9 +62,9 @@ theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
       apply Nat.add_le_add_left
       apply Nat.le_pred_iff_lt n_pos |>.mpr
       exact x_lt
-    _ < n * m := by 
+    _ < n * m := by
       simp [Nat.mul_sub, ←Nat.add_sub_assoc n_pos]
-      have: n*m >= n := by 
+      have: n*m >= n := by
         conv => arg 2; rw [←Nat.mul_one n]
         apply Nat.mul_le_mul (Nat.le_refl n) m_pos
       simp [Nat.sub_add_cancel this]
@@ -97,3 +97,6 @@ theorem Aeneas.Std.Usize.max_bound
 theorem Fin.cast_of_mk{n: Nat}{x: Nat}(x_lt: x < n)
 : Fin.mk x x_lt = @Nat.cast (Fin n) (@Fin.instNatCast n ⟨Nat.not_eq_zero_of_lt x_lt⟩) x := by
     simp only [Nat.cast, NatCast.natCast, Fin.instNatCast, Fin.ofNat', Nat.mod_eq_of_lt x_lt]
+
+@[scalar_tac inst]
+def Nat.pos_of_neZero'{n: Nat}(inst: NeZero n): n > 0 := @Nat.pos_of_neZero n inst

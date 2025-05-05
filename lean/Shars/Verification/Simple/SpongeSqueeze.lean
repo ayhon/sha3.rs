@@ -22,9 +22,6 @@ open Aeneas
 
 -- attribute [scalar_tac_simps] Nat.pos_of_neZero
 
-@[scalar_tac inst]
-def Nat.pos_of_neZero'{n: Nat}(inst: NeZero n): n > 0 := @Nat.pos_of_neZero n inst
-
 #check simple.sponge_squeeze_loop
 
 def simple.sponge_squeeze.panic_free(r: Nat)[NeZero r](dst s: List Bool)(offset: Nat): List Bool :=
