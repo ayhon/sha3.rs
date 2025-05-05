@@ -715,30 +715,28 @@ theorem Aeneas.Std.core.slice.index.Slice.index_range_from_usize_spec(T: Type)
   simp_ifs
   simp [Slice.drop]
 
-@[simp]
-def Aeneas.Std.UScalar.saturating_sub' {ty : UScalarTy} (x y : UScalar ty) : UScalar ty :=
-  UScalar.mk <| BitVec.ofFin ⟨x.val - y.val, Nat.lt_of_le_of_lt (Nat.sub_le _ _) x.bv.toFin.isLt⟩
+-- @[simp]
+-- def Aeneas.Std.UScalar.saturating_sub' {ty : UScalarTy} (x y : UScalar ty) : UScalar ty :=
+--   UScalar.mk <| BitVec.ofFin ⟨x.val - y.val, Nat.lt_of_le_of_lt (Nat.sub_le _ _) x.bv.toFin.isLt⟩
 
-@[simp]
-theorem Aeneas.Std.UScalar.saturating_sub_def(a b: Std.UScalar ty)
-: a.saturating_sub b = a.saturating_sub' b
-:= by
-  simp only [saturating_sub, BitVec.ofNat, Fin.ofNat', saturating_sub']
-  simp
-  rw [Nat.mod_eq_of_lt]
-  exact Nat.lt_of_le_of_lt (Nat.sub_le _ _) a.bv.toFin.isLt
+-- @[simp]
+-- theorem Aeneas.Std.UScalar.saturating_sub_def(a b: Std.UScalar ty)
+-- : a.saturating_sub b = a.saturating_sub' b
+-- := by
+--   simp only [saturating_sub, BitVec.ofNat, Fin.ofNat', saturating_sub']
+--   simp
+--   rw [Nat.mod_eq_of_lt]
+--   exact Nat.lt_of_le_of_lt (Nat.sub_le _ _) a.bv.toFin.isLt
 
-/- attribute [scalar_tac_simps] Std.Array.to_slice -/
--- TODO: Me da el límite de recursión, no se por qué.
+-- /- attribute [scalar_tac_simps] Std.Array.to_slice -/
+-- -- TODO: Me da el límite de recursión, no se por qué.
 
-theorem Aeneas.Std.core.num.Usize.saturating_sub.spec(a b: Std.Usize)
-: ∃ c, Std.toResult (saturating_sub a b) = .ok c ∧ c.val = a.val - b.val
-:= by
-  simp [saturating_sub, UScalar.saturating_sub', Std.toResult]
-  reduce
-  rfl
-
-
+-- theorem Aeneas.Std.core.num.Usize.saturating_sub.spec(a b: Std.Usize)
+-- : ∃ c, Std.toResult (saturating_sub a b) = .ok c ∧ c.val = a.val - b.val
+-- := by
+--   simp [saturating_sub, UScalar.saturating_sub', Std.toResult]
+--   reduce
+--   rfl
 
 
 @[progress]
