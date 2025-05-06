@@ -104,21 +104,15 @@ theorem simple.chi.inner.inner_loop.spec(res a: StateArray)(x y z: Std.Usize)
     simp_ifs
 termination_by Spec.w 6 - z.val
 decreasing_by 
-  /- rw [z1_post] -/
-  /- apply Nat.sub_lt_left_of_lt_add z_idx -/
-  /- rw [←Nat.add_sub_assoc <| le_of_lt z_idx, Nat.add_comm, Nat.succ_eq_add_one, Nat.add_comm z.val, Nat.add_sub_assoc (by omega), Nat.add_sub_cancel] -/
-  /- exact lt_add_one (Spec.w 6) -/
   scalar_decr_tac
   simp [z1_post]
   scalar_tac
-  /- sorry -/
 
-theorem asdf(z: Std.Usize): z.val < Spec.w 6 → Spec.w 6 - (z.val + 1) < Spec.w 6 - z.val := by
-  intro z_idx
-  apply Nat.sub_lt_left_of_lt_add z_idx
-  rw [←Nat.add_sub_assoc <| le_of_lt z_idx, Nat.add_comm, Nat.succ_eq_add_one, Nat.add_comm z.val, Nat.add_sub_assoc (by omega), Nat.add_sub_cancel]
-  exact lt_add_one (Spec.w 6)
-
+/- theorem asdf(z: Std.Usize): z.val < Spec.w 6 → Spec.w 6 - (z.val + 1) < Spec.w 6 - z.val := by -/
+/-   intro z_idx -/
+/-   apply Nat.sub_lt_left_of_lt_add z_idx -/
+/-   rw [←Nat.add_sub_assoc <| le_of_lt z_idx, Nat.add_comm, Nat.succ_eq_add_one, Nat.add_comm z.val, Nat.add_sub_assoc (by omega), Nat.add_sub_cancel] -/
+/-   exact lt_add_one (Spec.w 6) -/
 
 @[progress]
 theorem simple.chi.inner_loop.spec(res a: StateArray)(x y : Std.Usize)

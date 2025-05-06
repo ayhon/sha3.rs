@@ -19,8 +19,6 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [ext (iff := false)] List.ext_getElem!
 /- attribute [simp] Aeneas.Std.Slice.set -/
 
-#check Nat.div_le_div_right
-
 example(a b c: Nat): 0 < b → a * b < c → a ≤ c / b := by
   intros b_pos a_b_lt_c
   calc a
@@ -167,32 +165,6 @@ theorem BitVec.cast_xor(bv bv2: BitVec n)(eq: n = m)
 
 attribute [simp] Aeneas.Std.core.slice.index.Slice.index
 
-@[simp]
--- theorem Array.toList_chunks_exact(arr: Array α)(k: Nat)
--- : (arr.chunks_exact k).toList = (arr.toList.chunks_exact k).attach.map (fun data => ⟨data.val.toArray, by
---     have := data.property
---     simp [List.mem_iff_get] at this
---     obtain ⟨_ , len⟩ := this
---     simp [getElem_eq_getElem!, ←len]
---     rw [List.length_getElem!_chunks_exact]
---     omega
---   ⟩)
--- := by
---   rw [chunks_exact]
---   split
---   case isTrue h =>
---     simp
---     rw [List.chunks_exact]
---     simp [h]
---   case isFalse h =>
---     simp only [not_or] at h
---     simp [Array.toList_chunks_exact]
---     conv => rhs; arg 2;
---     have: arr.toList.chunks_exact k = _ := rfl
---     conv at this => rhs; rw [List.chunks_exact]; simp [*]
---     rw [this]
---     have : arr = arr.take k ++ arr.drop k := by exact?
---     sorry
 
 private theorem List.foldl_congr{ls ls': List α}
 : ls = ls'
