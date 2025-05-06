@@ -130,3 +130,23 @@ theorem BitVec.cast_right{bv: BitVec n}{bv2: BitVec m}(eq: m = n)
 theorem BitVec.length_toList(bv: BitVec n)
 : bv.toList.length = n
 := by simp [toList]
+
+@[simp]
+theorem BitVec.ofBoolListLE_set(ls: List Bool)(i: Nat)(b: Bool)
+: {i_idx: i < ls.length}
+→ BitVec.ofBoolListLE (ls.set i b) = ((BitVec.ofBoolListLE ls).set ⟨i, i_idx⟩ b).cast (by simp)
+:= by
+  intro i_idx
+  ext j j_idx
+  simp at j_idx
+  simp [BitVec.getElem_set]
+  split <;> simp [*]
+
+def BitVec.set!{n: Nat}(i: Nat)(b: Bool)(bv: BitVec n): BitVec n :=
+  if _: i < n then
+    bv.set ⟨i, ‹i < n›⟩ b
+  else bv
+
+theorem BitVec.set!_eq_set{n: Nat}(i: Nat)(b: Bool)(bv: BitVec n)⦃i_idx: i < n⦄
+: bv.set! i b = bv.set ⟨i, i_idx⟩ b
+:= by simp only [set!, reduceDIte, i_idx]

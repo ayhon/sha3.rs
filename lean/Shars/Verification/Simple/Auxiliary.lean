@@ -278,3 +278,24 @@ attribute [-progress] Aeneas.Std.Usize.sub_spec
   ∃ z, x - y = Std.Result.ok z ∧ z.val = x.val - y.val := by
   progress as ⟨z, post⟩
   rw [post, Nat.add_sub_cancel]
+
+theorem Aeneas.Std.UScalar.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar ty1)
+  (hy : y.val < ty0.numBits)
+: ∃ z, (1#ty0.numBits#uscalar) <<< y = .ok z ∧
+  z.val = 2^y.val ∧
+  z.bv = 1#ty0.numBits <<< y.val
+  := by
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_UScalar, shiftLeft, hy, reduceIte, UScalar.size]
+  simp only [BitVec.shiftLeft_eq, Result.ok.injEq, _root_.exists_eq_left', and_true, val]
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_UScalar, shiftLeft, hy, reduceIte, UScalar.size]
+  simp only [bv_toNat, BitVec.shiftLeft_eq, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, Nat.shiftLeft_eq, Nat.mod_mul_mod, one_mul]
+  apply Nat.mod_eq_of_lt
+  apply Nat.pow_lt_pow_of_lt Nat.one_lt_two ‹y.val < ty0.numBits›
+
+/- theorem Aeneas.Std.Usize.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar ty1) (size : Nat) -/
+@[progress] theorem Aeneas.Std.Usize.one_ShiftLeft_spec (y : UScalar ty1) (hy : y.val < UScalarTy.Usize.numBits)
+: ∃ (z : Usize),
+  1#usize <<< y = .ok z ∧
+  z.val = 2 ^ y.val ∧
+  z.bv = (1#usize).bv <<< y.val
+:= UScalar.one_ShiftLeft_spec _ _ hy

@@ -67,14 +67,6 @@ theorem simple.sponge.spec(r : Std.Usize) (bs dst suffix : Std.Slice Bool)
   · omega
 
 
-@[simp] theorem simple.B.spec: simple.B = 1600#usize := by native_decide
-
-@[simp] theorem simple.SHA3_SUFFIX.spec: simple.SHA3_SUFFIX = ⟨ [ false, true ], by simp ⟩ := by
-  simp [SHA3_SUFFIX, Std.eval_global, SHA3_SUFFIX_body, Std.Array.make]
-
-@[simp] theorem simple.SHAKE_SUFFIX.spec: simple.SHAKE_SUFFIX = ⟨[true, true, true, true], by simp⟩ := by
-  simp [SHAKE_SUFFIX, Std.eval_global, SHAKE_SUFFIX_body, Std.Array.repeat, Std.Array.make]
-
 attribute [local simp] Std.Array.make Std.Array.to_slice Std.Array.from_slice Std.Array.length Std.Array.repeat
 attribute [-simp] List.reduceReplicate
 -- attribute [-progress] Std.Array.to_slice_mut.spec

@@ -100,3 +100,9 @@ theorem Fin.cast_of_mk{n: Nat}{x: Nat}(x_lt: x < n)
 
 @[scalar_tac inst]
 def Nat.pos_of_neZero'{n: Nat}(inst: NeZero n): n > 0 := @Nat.pos_of_neZero n inst
+
+attribute [scalar_tac_simps] Nat.one_le_two_pow
+
+@[scalar_tac Aeneas.Std.UScalarTy.Usize.numBits]
+theorem Std.UScalarTy.Usize_numBits_le: Aeneas.Std.UScalarTy.Usize.numBits ≥ 32 := by
+  rcases System.Platform.numBits_eq with h | h <;> simp [h]
