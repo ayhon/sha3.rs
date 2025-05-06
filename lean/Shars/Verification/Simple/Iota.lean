@@ -187,15 +187,26 @@ def Spec.Keccak.ι.RC.loop.foldl_spec(iᵣ: Nat)(init: BitVec (w 6))(start: Nat)
   rw [BitVec.set!_eq_set]
 
 theorem Aeneas.SRRange.foldWhile_eq_foldWhile'{α : Type u} 
-(i max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (init : α)
-: foldWhile max step hStep f i init = SRRange.foldWhile' {
-    start := i
+(i max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (init : α)(start: Nat)
+: (cond: start ≤ i ∧ (i - start) % step = 0)
+→ foldWhile max step hStep f i init = SRRange.foldWhile' {
+    start := start
     stop  := max
     step  := step
     step_pos := hStep
-  } (fun acc e _ => f acc e) i init (hi := by simp)
+  } (fun acc e _ => f acc e) i init (hi := by simp [cond])
 := by
-  sorry
+  intro ⟨start_le, start_modeq_i⟩
+  unfold foldWhile foldWhile'
+  simp
+  split
+  · rw [Aeneas.SRRange.foldWhile_eq_foldWhile']
+    constructor
+    · omega
+    · rw [Nat.add_comm i, Nat.add_sub_assoc (start_le)]
+      simp [start_modeq_i]
+  · rfl
+termination_by max - i
 
 def simple.iota_rc_init_loop.foldWhile.spec(iᵣ: Nat)(init: BitVec (Spec.w 6))(start: Nat)
 : SRRange.foldWhile 
@@ -210,7 +221,8 @@ def simple.iota_rc_init_loop.foldWhile.spec(iᵣ: Nat)(init: BitVec (Spec.w 6))(
   simp
   if start_idx: start < 7 then
     rw [‹start  + (7 - start) = 7›']
-    rw [SRRange.foldWhile_eq_foldWhile', SRRange.foldWhile_eq_foldWhile']
+    rw [SRRange.foldWhile_eq_foldWhile' (start:=start) (cond := by simp)]
+    rw [SRRange.foldWhile_eq_foldWhile' (start:=start) (cond := by simp)]
     congr
     ext input j j_idx : 3
     rw [←BitVec.set!_eq_set]
