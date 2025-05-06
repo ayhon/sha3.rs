@@ -108,7 +108,7 @@ theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
   (r_bnd: 0 < r ∧ r < 1600)
   (dst s: List Bool)(offset : Nat)
 : s.length = 1600
-→ offset < dst.length
+→ offset ≤ dst.length
 → have : NeZero r := {out := Nat.not_eq_zero_of_lt r_bnd.left}
   panic_free r dst s offset = ListIR.sponge.squeeze dst.length r (dst.take offset) s
 := by
@@ -116,13 +116,16 @@ theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
   simp
   unfold panic_free ListIR.sponge.squeeze
   simp_ifs
+  simp
   split
   case isTrue next_offset_lt =>
     have: (List.replace_slice offset (offset + r) dst (List.take r s)).length = dst.length := by
       simp [List.replace_slice]; scalar_tac
+    have: offset ≠ dst.length := by scalar_tac
+    simp_ifs
     rw [spec r r_bnd]
     case a => simp
-    case a => simp [*]
+    case a => simp [*, le_of_lt]
     congr 1
     ext i
     · simp [*, le_of_lt]
@@ -132,10 +135,13 @@ theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
   case isFalse next_offset_lt =>
     unfold ListIR.sponge.squeeze
     simp_ifs
-    ext i
-    · simp [*, List.replace_slice]; scalar_tac
-    simp_lists [List.getElem!_replace_slice]
-    simp_ifs
+    split
+    · have: offset = dst.length := by scalar_tac
+      simp [this, List.replace_slice]
+    · ext i
+      · simp [*, List.replace_slice]; scalar_tac
+      simp_lists [List.getElem!_replace_slice]
+      simp_ifs
 termination_by dst.length - offset
 decreasing_by scalar_decr_tac
 
@@ -145,12 +151,12 @@ theorem Aeneas.Std.Slice.val_drop{T: Type}(s: Slice T)(k: Usize)
 := by simp [Slice.drop]
 
 set_option maxHeartbeats 100000000 in
-set_option maxRecDepth 10000000 in
+set_option maxRecDepth 1000000 in
 -- set_option trace.meta.Tactic.simp true in
 theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
   (dst: Std.Slice Bool)(s: Aeneas.Std.Array Bool 1600#usize)
 : (r_bnd: 0 < r.val ∧ r.val < 1600)
-→ i < dst.length
+→ i ≤ dst.length
 → dst.length + r.val < Std.Usize.max
 → let _: NeZero r.val := {out:= Nat.not_eq_zero_of_lt r_bnd.left}
   ∃ output,
@@ -174,11 +180,9 @@ theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
     split
     case isFalse =>
       scalar_tac -- contradiction
-      done
     case isTrue h =>
       let* ⟨ rest, rest_post⟩ ← refinement
       simp [*]
-      done
   . let* ⟨ nb_left, nb_left_post ⟩ ← Aeneas.Std.Usize.sub_spec'
     simp at nb_left_post
     simp [Std.core.slice.index.Slice.index_mut, Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut]
@@ -191,8 +195,6 @@ theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
     try simp_ifs -- TODO: Again, why does this not work?
     have : (dst.length - ↑i) ⊓ 1600 + i.val ≤ Std.Usize.max := by scalar_tac
     simp [this, List.replace_slice]
-    rw [←Nat.add_sub_assoc (le_of_lt i_idx), Nat.add_comm i.val, Nat.add_sub_cancel]
-    done
 termination_by dst.length - i
 decreasing_by scalar_decr_tac
 
@@ -269,7 +271,7 @@ decreasing_by scalar_decr_tac
 theorem simple.sponge_squeeze.spec(r i: Std.Usize)
   (dst: Std.Slice Bool)(s: Aeneas.Std.Array Bool 1600#usize)
 : (r_bnd: 0 < r.val ∧ r.val < 1600)
-→ i < dst.length
+→ i ≤ dst.length
 → dst.length + r.val < Std.Usize.max
 → let _: NeZero r.val := {out:= Nat.not_eq_zero_of_lt r_bnd.left}
   ∃ output,
