@@ -25,7 +25,7 @@ attribute [scalar_tac self] Fin.isLt
 
 @[scalar_tac_simps] theorem Fin.val_eq_iff_eq{n : ℕ} {a b : Fin n} : a = b ↔ a.val = b.val := @Fin.val_inj n a b |>.symm
 
-@[scalar_tac_simps]
+@[scalar_tac_simps, simp]
 theorem Fin.val_ofNat{n: Nat}[NeZero n]{x: Nat}
 : (ofNat(x): Fin n).val = x % n
 := by simp [OfNat.ofNat, Fin.instOfNat]
