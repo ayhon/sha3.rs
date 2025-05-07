@@ -17,7 +17,9 @@ attribute [simp_lists_simps] List.getElem_finRange List.foldl_cons
 attribute [simp_lists_simps] List.getElem?_set_eq
 
 
-attribute [simp_lists_simps] List.length_append List.take_append_eq_append_take List.take_zipWith List.length_zipWith List.length_take List.take_all_of_le List.length_drop List.drop_eq_nil_of_le List.drop_append_eq_append_drop List.nil_append List.zipWith_nil_left List.append_nil List.drop_drop List.take_take
+attribute [simp_lists_simps] List.length_append List.take_append_eq_append_take List.take_zipWith List.length_zipWith List.length_take
+attribute [simp_lists_simps] List.take_of_length_le List.length_drop List.drop_eq_nil_of_le List.drop_append_eq_append_drop
+attribute [simp_lists_simps] List.nil_append List.zipWith_nil_left List.append_nil List.drop_drop List.take_take
 
 attribute [simp_lists_simps] List.getElem!_drop
 

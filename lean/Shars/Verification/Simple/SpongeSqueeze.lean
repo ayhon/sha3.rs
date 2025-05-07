@@ -38,7 +38,7 @@ def simple.sponge.squeeze.length_panic_free(r: Nat)(dst s: List Bool)(offset: Na
   (r_pos: r > 0)
   (r_lt: r < 1600)
 : s.length ≥ r
-→ have: NeZero r := {out := Nat.not_eq_zero_of_lt r_pos}
+→ have: NeZero r := {out := Nat.ne_zero_of_lt r_pos}
   (simple.sponge_squeeze.panic_free r dst s offset).length = dst.length
 := by
   intro s_big_enough
@@ -109,7 +109,7 @@ theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
   (dst s: List Bool)(offset : Nat)
 : s.length = 1600
 → offset ≤ dst.length
-→ have : NeZero r := {out := Nat.not_eq_zero_of_lt r_bnd.left}
+→ have : NeZero r := {out := Nat.ne_zero_of_lt r_bnd.left}
   panic_free r dst s offset = ListIR.sponge.squeeze dst.length r (dst.take offset) s
 := by
   intro len_s offset_idx
@@ -158,7 +158,7 @@ theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
 : (r_bnd: 0 < r.val ∧ r.val < 1600)
 → i ≤ dst.length
 → dst.length + r.val < Std.Usize.max
-→ let _: NeZero r.val := {out:= Nat.not_eq_zero_of_lt r_bnd.left}
+→ let _: NeZero r.val := {out:= Nat.ne_zero_of_lt r_bnd.left}
   ∃ output,
   sponge_squeeze_loop r dst s i = .ok output ∧
   output.val = panic_free r.val dst.val s.val i.val
@@ -193,7 +193,7 @@ theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
     simp_ifs
     simp [*]
     try simp_ifs -- TODO: Again, why does this not work?
-    have : (dst.length - ↑i) ⊓ 1600 + i.val ≤ Std.Usize.max := by scalar_tac
+    have : i.val + (dst.length - ↑i) ⊓ 1600 ≤ Std.Usize.max := by scalar_tac
     simp [this, List.replace_slice]
 termination_by dst.length - i
 decreasing_by scalar_decr_tac
@@ -258,7 +258,6 @@ def ListIR.sponge.squeeze.refinement(r: Nat) [NeZero r]
     assume i < d
     case otherwise h => simp [h]
     simp [*, ‹i < m›']
-    rfl
   case isFalse _ =>
     rw [ListIR.sponge.squeeze.refinement]
     simp [ListIR.list_keccak_p, BitVec.toBitVec_toList]
@@ -273,7 +272,7 @@ theorem simple.sponge_squeeze.spec(r i: Std.Usize)
 : (r_bnd: 0 < r.val ∧ r.val < 1600)
 → i ≤ dst.length
 → dst.length + r.val < Std.Usize.max
-→ let _: NeZero r.val := {out:= Nat.not_eq_zero_of_lt r_bnd.left}
+→ let _: NeZero r.val := {out:= Nat.ne_zero_of_lt r_bnd.left}
   ∃ output,
   sponge_squeeze_loop r dst s i = .ok output ∧
   output.val = ListIR.sponge.squeeze dst.length r (dst.val.take i.val) s.val

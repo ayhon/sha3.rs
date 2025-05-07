@@ -63,7 +63,7 @@ theorem ListIR.xor_long_at_twice_compatible(a b c: List Bool)(offset: Nat)
     case pos => simp_lists
     case neg =>
       simp [le_of_lt (not_le.mp h)]
-      simp_arith
+      simp +arith
 
 @[simp_lists_simps]
 theorem ListIR.getElem!_xor_long_at_inside(a b: List Bool)(offset i: Nat)
@@ -74,7 +74,7 @@ theorem ListIR.getElem!_xor_long_at_inside(a b: List Bool)(offset i: Nat)
   intro cond i_idx
   simp [xor_long_at]
   simp_lists
-  simp_arith [cond]
+  simp +arith [cond]
 
 @[simp_lists_simps]
 theorem ListIR.getElem!_xor_long_at_outside(a b: List Bool)(offset i: Nat)

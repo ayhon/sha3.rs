@@ -95,7 +95,7 @@ theorem Aeneas.Std.Usize.max_bound
 
 @[scalar_tac_simps]
 theorem Fin.cast_of_mk{n: Nat}{x: Nat}(x_lt: x < n)
-: Fin.mk x x_lt = @Nat.cast (Fin n) (@Fin.instNatCast n ⟨Nat.not_eq_zero_of_lt x_lt⟩) x := by
+: Fin.mk x x_lt = @Nat.cast (Fin n) (@Fin.instNatCast n ⟨Nat.ne_zero_of_lt x_lt⟩) x := by
     simp only [Nat.cast, NatCast.natCast, Fin.instNatCast, Fin.ofNat', Nat.mod_eq_of_lt x_lt]
 
 @[scalar_tac inst]

@@ -14,21 +14,17 @@ theorem BitVec.toList_append(bv: BitVec n)(bv2: BitVec m)
 := by
   simp [toList, BitVec.getElem_append]
   apply List.ext_getElem!
-  · simp_arith
+  · simp +arith
   intro i
   simp_lists
   by_cases h: i < n
   case pos =>
     simp [h, ‹i < m + n›']
-    congr
   case neg =>
     simp [h]
     split
-    case isTrue h =>
-      simp [‹i < m + n›']
-      congr
-    case isFalse h =>
-      simp [‹¬ i < m + n›']
+    case isTrue h => simp [‹i - n < m›']
+    case isFalse h => simp [‹¬ i - n < m›']
 
 @[simp]
 theorem BitVec.toList_toArray(bv: BitVec n)

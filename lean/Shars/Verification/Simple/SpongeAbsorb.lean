@@ -81,18 +81,16 @@ open Std.alloc.vec
 
 theorem Spec.«pad10*1_length» (x m : Nat)
 : (Spec.«pad10*1» x m).size = (2 + (-(m + 2: Int) % x).toNat)
-:= by
-  simp_arith [«pad10*1», neg_add, -neg_add_rev, -Int.reduceNeg]
-  rfl
+:= by simp +arith [«pad10*1», neg_add, -neg_add_rev, -Int.reduceNeg]
 
 def spec_sponge (r: Nat)(r_pos: r > 0):=
-  have: NeZero r := ⟨Nat.not_eq_zero_of_lt r_pos⟩
+  have: NeZero r := ⟨Nat.ne_zero_of_lt r_pos⟩
   Spec.sponge (f := Spec.Keccak.P 6 24) (pad := Spec.«pad10*1»)
 def spec_sponge_absorb (r: Nat)(r_pos: r > 0) :=
-  have: NeZero r := ⟨Nat.not_eq_zero_of_lt r_pos⟩
+  have: NeZero r := ⟨Nat.ne_zero_of_lt r_pos⟩
   Spec.sponge.absorb (f := Spec.Keccak.P 6 24) (pad := Spec.«pad10*1») (r := r)
 def spec_sponge_squeze{m d}(r: Nat)(r_pos: r > 0) :=
-  have: NeZero r := ⟨Nat.not_eq_zero_of_lt r_pos⟩
+  have: NeZero r := ⟨Nat.ne_zero_of_lt r_pos⟩
   Spec.sponge.squeeze (m := m) (d := d) (f := Spec.Keccak.P 6 24) (r := r)
 
 /- #check BitVec.setWidth_cast -/
@@ -175,7 +173,7 @@ private theorem List.foldl_congr{ls ls': List α}
 
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 1000000 in
-theorem absorb.refinement{r: Nat}(S: BitVec (Spec.b 6))(bs: Array Bool)
+theorem absorb.refinement(r: Nat)(S: BitVec (Spec.b 6))(bs: Array Bool)
 : (absorb S (bs.chunks_exact r)).toList = ListIR.absorb' ListIR.list_keccak_p S.toList (bs.toList.chunks_exact r)
 := by
   unfold absorb ListIR.absorb'
@@ -196,7 +194,7 @@ theorem absorb.refinement{r: Nat}(S: BitVec (Spec.b 6))(bs: Array Bool)
   case isFalse h =>
     simp
     generalize_proofs _ len_extract
-    have ih := @absorb.refinement r (@upd r S ⟨bs.extract 0 r, len_extract⟩) (bs.extract r)
+    have ih := absorb.refinement r (@upd r S ⟨bs.extract 0 r, len_extract⟩) (bs.extract r)
     simp [absorb,ListIR.absorb', ListIR.list_keccak_p, ListIR.xor_long.def] at ih
     rw [ih]
     rw [List.foldl_congr]
@@ -213,16 +211,14 @@ theorem absorb.refinement{r: Nat}(S: BitVec (Spec.b 6))(bs: Array Bool)
       rw [ListIR.xor_long, ListIR.xor_long_at]
       simp at i_idx
       simp [←Bool.default_bool,←List.getElem!_eq_getElem?_getD, i_idx]
-      simp_lists
-      simp [i_idx]
-      split
-      · rename_i i_le_r
-        simp_lists [getElem_eq_getElem!]
-      · rename_i i_gt_r
+      have: S.toList.length = 1600 := by simp [Spec.b, Spec.w]
+      if h: i < r then
         simp_lists
         simp [getElem_eq_getElem!]
-        congr
-        omega
+      else
+        simp_lists
+        simp at h
+        simp +arith [getElem_eq_getElem!, ←Nat.add_sub_assoc, h]
 termination_by bs.size
 
 abbrev ref.interesting_part_of_the_proof.preconditions(r: Nat)(s rest suffix: List Bool) :=
@@ -311,9 +307,8 @@ theorem ref.interesting_part_of_the_proof.case2{r: Nat}{s rest suffix: List Bool
     rw [Nat.cast_sub (by omega)]
     rw [Nat.cast_mul]
     ring_nf
-    simp
+    simp [Int.neg_emod_eq_sub_emod]
     rw [
-      Int.neg_emod,
       Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega),
       Int.max_eq_left (by omega)
     ]
@@ -377,9 +372,9 @@ theorem ref.interesting_part_of_the_proof.case3{r: Nat}{s rest suffix: List Bool
     simp at hyp
     simp [Spec.«pad10*1_length», -neg_add_rev]
     zify
-    rw [Nat.cast_sub (by omega)]
-    rw [Int.neg_emod]
-    rw [Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega)]
+    rw [Nat.cast_sub (by omega),
+        Int.neg_emod_eq_sub_emod,
+        Int.emod_eq_of_lt (H1:=by omega) (H2:=by omega)]
     simp
     rw [Int.max_eq_left (by omega)]
     omega
@@ -448,9 +443,8 @@ theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool
     case compatible_offset => scalar_tac
 
     congr
-    · simp_arith [List.take_append_of_ge_length, le_of_lt rest_len_lt]
-    · simp_arith
-      scalar_tac
+    · simp +arith [List.take_append_of_ge_length, le_of_lt rest_len_lt]
+    · simp +arith; scalar_tac
     · have padding_len
       : (Spec.«pad10*1» r (rest.length + suffix.length)).size = 2 * r - rest.length - suffix.length
       := by
@@ -832,9 +826,9 @@ theorem List.chunks_exact_truncate{α: Type}(bs: List α)(r: Nat)
     have: r <= r*(rest.length / r + 1) := by ring_nf; simp
     have: rest.length / r + 1 = (chunk ++ rest).length / r := by simp [len_chunk, Nat.add_div_left, r_pos]
     simp_lists [len_chunk]
-    simp_arith
+    simp +arith
     ring_nf
-    simp_arith
+    simp +arith
     apply List.chunks_exact_truncate
 termination_by bs.length
 decreasing_by simp [*]

@@ -203,6 +203,7 @@ theorem simple.iota_rc_init_loop.spec(ir : Std.Usize) (input : Aeneas.Std.Array 
     simple.iota_rc_init_loop.foldWhile.spec,
   ]
 
+set_option maxRecDepth 1000000 in
 @[progress]
 theorem simple.iota_rc_init.spec(ir: Std.Usize)
 : ir.val < 24
@@ -214,11 +215,7 @@ theorem simple.iota_rc_init.spec(ir: Std.Usize)
   simp [iota_rc_init]
   let* ⟨output , output_post⟩ ← iota_rc_init_loop.spec
   rw [output_post, ←Spec.Keccak.ι.RC.loop_refinement]
-  congr
-  ext i i_idx
-  simp only [Std.Array.repeat, BitVec.getElem_cast,
-    BitVec.getElem_ofBoolListLE, List.getElem_replicate, BitVec.getElem_zero]
-
+  rfl
 
 @[progress]
 theorem simple.iota_a_loop.spec(res : StateArray) (a : StateArray) (rc : Aeneas.Std.Array Bool 64#usize)(z: Std.Usize)

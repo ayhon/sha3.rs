@@ -35,12 +35,12 @@ theorem simple.sponge.spec(r : Std.Usize) (bs dst suffix : Std.Slice Bool)
 → dst.length + r.val < Std.Usize.max
 → ∃ output,
   sponge r bs dst suffix = .ok output ∧
-  have: NeZero r.val := {out:=Nat.not_eq_zero_of_lt r_big_enough}
+  have: NeZero r.val := {out:=Nat.ne_zero_of_lt r_big_enough}
   output.val = (Spec.sponge (f := Spec.Keccak.P 6 24) Spec.«pad10*1» r (bs.val ++ suffix.val).toArray dst.length).toList
 := by
   intros
   rw [sponge]
-  have: NeZero r.val := {out:=Nat.not_eq_zero_of_lt (by assumption)}
+  have: NeZero r.val := {out:=Nat.ne_zero_of_lt (by assumption)}
   progress with simple.sponge_absorb.spec_list as ⟨mid, mid_post⟩
   · simp [Std.Array.repeat]
   progress with simple.sponge_squeeze.spec as ⟨res, post⟩
@@ -51,7 +51,6 @@ theorem simple.sponge.spec(r : Std.Usize) (bs dst suffix : Std.Slice Bool)
   rw [ListIR.sponge.squeeze.refinement, absorb_spec, absorb.refinement]
   simp
   congr 6
-  · native_decide
   · unfold Spec.«pad10*1»
     simp
     congr 2

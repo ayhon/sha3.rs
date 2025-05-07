@@ -108,7 +108,7 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
   rw [xor_long]
   progress*
 
-  simp [*, BitVec.ofNatLt]
+  simp [*, BitVec.ofNatLT]
 
   ext j j_idx_res
   replace res_bit := res_post_2 j j_idx_res
@@ -298,4 +298,8 @@ theorem Aeneas.Std.UScalar.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar 
   1#usize <<< y = .ok z ∧
   z.val = 2 ^ y.val ∧
   z.bv = (1#usize).bv <<< y.val
-:= UScalar.one_ShiftLeft_spec _ _ hy
+:= by
+  have: 1#usize = 1#(UScalarTy.Usize.numBits)#uscalar := by
+    simp [Usize.ofNat, UScalar.ofNat, UScalar.ofNatCore, BitVec.ofNat, Fin.ofNat']
+  rw [this]
+  apply UScalar.one_ShiftLeft_spec _ _ hy
