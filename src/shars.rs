@@ -1,8 +1,12 @@
 #![allow(dead_code)]
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-#[derive(Default, Clone, Copy)]
+#[derive(Clone, Copy)]
 struct StateArray([u64; 25]);
+
+impl Default for StateArray {
+    fn default() -> Self { StateArray([0u64; 25]) }
+}
 
 impl Deref for StateArray {
     type Target = [u64; 25];
@@ -15,13 +19,27 @@ impl From<StateArray> for [u64; 25] {
     fn from(value: StateArray) -> Self { value.0 }
 }
 
+impl Index<(usize,usize)> for StateArray {
+    type Output = Lane;
+
+    fn index(&self, (x,y): (usize, usize)) -> &Self::Output {
+        &self.0[5*y + x]
+    }
+}
+impl IndexMut<(usize,usize)> for StateArray {
+
+    fn index_mut(&mut self, (x,y): (usize,usize)) -> &mut Self::Output {
+        &mut self.0[5*y + x]
+    }
+}
+
 impl StateArray {
-    pub fn get(&self, x: usize, y: usize) -> Lane {
-        self[5*y + x]
-    }
-    pub fn set(&mut self, x: usize, y: usize, line: Lane) {
-        self[5*y + x] = line;
-    }
+    // pub fn get(&self, x: usize, y: usize) -> Lane {
+    //     self.0[5*y + x]
+    // }
+    // pub fn set(&mut self, x: usize, y: usize, line: Lane) {
+    //     self.0[5*y + x] = line;
+    // }
 
     fn xor_bytes_at(dst: &mut u64, src: &[u8], pos: usize) {
         let mut buf = dst.to_le_bytes();
@@ -38,7 +56,7 @@ impl StateArray {
         let mut offset = pos % 8;
         let mut i = 0;
         while block_idx < self.len() && i < other.len() {
-            Self::xor_bytes_at(&mut self[block_idx], &other[i..], offset);
+            Self::xor_bytes_at(&mut self.0[block_idx], &other[i..], offset);
             block_idx += 1;
             i += 8 - offset;
             offset = 0;
@@ -52,10 +70,10 @@ impl StateArray {
         let mut i = 0;
         while i < self.len()  && 8*i < dst.len() {
             if 8*i + 8 < dst.len() {
-                dst[8*i..8*(i + 1)].copy_from_slice(&self[i].to_le_bytes()[..]);
+                dst[8*i..8*(i + 1)].copy_from_slice(&self.0[i].to_le_bytes()[0..]);
             } else {
                 let nb_left = dst.len() - 8*i;
-                dst[8*i..].copy_from_slice(&self[i].to_le_bytes()[..nb_left]);
+                dst[8*i..].copy_from_slice(&self.0[i].to_le_bytes()[0..nb_left]);
             }
             i += 1;
         }
@@ -69,7 +87,8 @@ const W: usize = 64;
 
 fn theta(a: StateArray) -> StateArray {
     fn c(a: &StateArray, x: usize) -> Lane {
-        a.get(x, 0) ^ a.get(x, 1) ^ a.get(x, 2) ^ a.get(x, 3) ^ a.get(x, 4)
+        a[(x,0)] ^ a[(x,1)] ^ a[(x,2)] ^ a[(x,3)] ^ a[(x,4)]
+        // a.get(x, 0) ^ a.get(x, 1) ^ a.get(x, 2) ^ a.get(x, 3) ^ a.get(x, 4)
     }
     fn d(a: &StateArray, x: usize) -> Lane {
         let x1 = (x + 4) % 5;
@@ -83,9 +102,10 @@ fn theta(a: StateArray) -> StateArray {
             let mut y = 0;
             while y < 5 {
                 #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize, y: usize) {
-                    res.set(x, y, 
-                        a.get(x, y) ^ d(a, x)
-                    );
+                    res[(x,y)] = a[(x,y)] ^ d(a, x);
+                    // res.set(x, y, 
+                    //     a.get(x, y) ^ d(a, x)
+                    // );
                 } inner(res, a, x, y);
                 y += 1;
             }
@@ -103,7 +123,8 @@ fn rho(a: StateArray) -> StateArray {
     let mut res = a; // Since (0,0) is never touched.
     let mut t = 0;
     while t < 24 {
-        res.set(x, y, a.get(x, y).rotate_left(offset(t)));
+        res[(x,y)] = a[(x,y)].rotate_left(offset(t));
+        // res.set(x, y, a.get(x, y).rotate_left(offset(t)));
         (x, y) = (y, (2*x + 3*y) % 5);
         t += 1;
     }
@@ -119,7 +140,8 @@ fn pi(a: StateArray) -> StateArray {
             while y < 5 {
                 let x2 = (x + 3*y) % 5;
                 let y2 = x;
-                res.set(x, y, a.get(x2,y2));
+                res[(x,y)] = a[(x2,y2)];
+                // res.set(x, y, a.get(x2,y2));
                 y += 1;
             }
         } inner(&mut res, &a, x);
@@ -129,7 +151,7 @@ fn pi(a: StateArray) -> StateArray {
 }
 
 fn chi(a: StateArray) -> StateArray {
-    let mut res = a.clone();
+    let mut res = a;
     let mut x = 0;
     while x < 5 {
         #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize) {
@@ -137,11 +159,12 @@ fn chi(a: StateArray) -> StateArray {
             while y < 5 {
                 let x1 = (x + 1) % 5;
                 let x2 = (x + 2) % 5;
-                res.set(x, y,
-                    a.get(x, y) ^ (
-                        (a.get(x1, y) ^ u64::MAX) & a.get(x2, y)
-                    )
-                );
+                res[(x,y)] = a[(x,y)] ^ ( (a[(x1,y)] ^ u64::MAX) & a[(x2,y)] );
+                // res.set(x, y,
+                //     a.get(x, y) ^ (
+                //         (a.get(x1, y) ^ u64::MAX) & a.get(x2, y)
+                //     )
+                // );
                 y += 1;
             } 
         } inner(&mut res, &a, x);
@@ -172,13 +195,14 @@ const IOTA_RC: [u64; 24] = [0x0000000000000001, 0x0000000000008082, 0x8000000000
 
 fn iota(ir: usize, a: StateArray) -> StateArray {
     // let rc = iota_init_rc(ir);
-    let mut res = a.clone();
-    res.set(0, 0, a.get(0, 0) ^ IOTA_RC[ir]);
+    let mut res = a;
+    res[(0,0)] = a[(0,0)] ^ IOTA_RC[ir];
+    // res.set(0, 0, a.get(0, 0) ^ IOTA_RC[ir]);
     return res;
 }
 
 fn round(a: &mut StateArray, ir: usize) {
-    let a1 = a.clone();
+    let a1 = *a;
     let a1 = theta(a1);
     let a1 = rho(a1);
     let a1 = pi(a1);
@@ -196,7 +220,7 @@ fn keccak_p(s: &mut StateArray) {
 
 /* Xor the bytes in `other` with the state `s`.
  * The position `pos` is given in the byte alignment on s.
- */
+*/
 // fn xor_long_at(s: &mut [u64], other: &[u8], pos: usize) {
 //     let mut block_idx = pos / 8;
 //     let mut offset = pos % 8;
@@ -345,27 +369,27 @@ mod tests {
     #[test] fn theta_works() {
         let buf: [u64; 25] = [1851876684, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "4c65616e000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc00000000";
-        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&theta(StateArray(buf))[..]));
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&theta(StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
 
     #[test] fn rho_works() {
         let buf: [u64; 25] = [7523094288207667809, 8101815670912281193, 8680537053616894577, 3833745473465776761, 4918848065919006518, 5497569448741520965, 6076290831446134349, 99339780707925, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "6162636465666768d2d4d6d8dadcdee09cdc1c5d9ddd1d5e33435393a7071323121a22b2b9c1c90994a4b4c4546474840415253545d5e4f44095d5155696160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&rho(StateArray(buf))[..]));
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&rho(StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
 
     #[test] fn pi_works() {
         let buf: [u64; 25] = [7523094288207667809, 8101815670912281193, 8680537053616894577, 3833745473465776761, 4918848065919006518, 5497569448741520965, 6076290831446134349, 99339780707925, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "61626364656667684d4e4f5051525354000000000000000000000000000000000000000000000000797a3031323334350000000000000000000000000000000000000000000000000000000000000000696a6b6c6d6e6f7055565758595a0000000000000000000000000000000000000000000000000000363738394142434445464748494a4b4c00000000000000000000000000000000000000000000000071727374757677780000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&pi(StateArray(buf))[..]));
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&pi(StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
     #[test] fn chi_works() {
         let buf: [u64; 25] = [7523094288207667809, 8101815670912281193, 8680537053616894577, 3833745473465776761, 4918848065919006518, 5497569448741520965, 6076290831446134349, 99339780707925, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "717273747576776061626b6d6f6f6f7577777b7c34363438383a73751617101d3e3f3031494a4b545556574041424b4c4d4e4f505152535455565758595a000045464748494a4b4c0808081010101010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&chi(StateArray(buf))[..]));
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&chi(StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
 
@@ -384,17 +408,17 @@ mod tests {
     #[test] fn iota_works() {
         let buf = [7523094288207667809, 8101815670912281193, 8680537053616894577, 3833745473465776761, 4918848065919006518, 5497569448741520965, 6076290831446134349, 99339780707925, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "e3e2636465666768696a6b6c6d6e6f707172737475767778797a303132333435363738394142434445464748494a4b4c4d4e4f505152535455565758595a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(1, StateArray(buf))[..]));
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(1, StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
 
         let buf = [7450753080332940129, 7667492055134201444, 7812454975315535975, 8390880619439421297, 8464925009632326245, 8028076975085418868, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "eaf3646673646667646667686667686a67686a6b686a6b6c71776572776572746572747972747975747975697975696f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(4, StateArray(buf))[..]));
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(4, StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
 
         let buf = [7885348258236753271, 8320509671759178347, 7740964729211089509, 1966618985, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "7fe572e676626eed6b6a68677663787365727467686e6d6b6939387500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(23, StateArray(buf))[..]));
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(23, StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
 
@@ -407,13 +431,13 @@ mod tests {
             let mut state_bits = [false; 1600];
             state_bits[..state_len*64].copy_from_slice(&bits);
             let mut state = StateArray::default();
-            state[..].copy_from_slice(&compress_u64(&state_bits)[..]);
+            state.0[..].copy_from_slice(&compress_u64(&state_bits)[..]);
 
             simple::keccak_p(&mut state_bits);
             let expected = crate::hex_of_vec_of_bits(&state_bits);
 
             keccak_p(&mut state);
-            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state[..]));
+            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..]));
             
             assert_eq!(actual, expected);
         }
@@ -432,13 +456,13 @@ mod tests {
 
             let mut state_bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
             let mut state = StateArray::default();
-            state[..state_len].copy_from_slice(&compress_u64(&state_bits)[..]);
+            state.0[..state_len].copy_from_slice(&compress_u64(&state_bits)[..]);
 
             let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
             let data = compress_u8(&data_bits);
 
             state.xor_at(&data, offset);
-            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state[..state_len]));
+            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..state_len]));
 
             for (i, bit) in data_bits.iter().enumerate() {
                 if 8*offset + i < state_bits.len() {
@@ -462,7 +486,7 @@ mod tests {
             let mut state_bits = [false; 1600];
             state_bits[..state_len*64].copy_from_slice(&bits);
             let mut state: StateArray = Default::default();
-            state[..].copy_from_slice(&compress_u64(&state_bits)[..]);
+            state.0[..].copy_from_slice(&compress_u64(&state_bits)[..]);
 
             let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
             let data = compress_u8(&data_bits);
@@ -471,7 +495,7 @@ mod tests {
             let expected = crate::hex_of_vec_of_bits(&state_bits[..64*state_len]);
 
             sponge_absorb_initial(&data, r/8, &mut state);
-            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state[..state_len]));
+            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..state_len]));
 
             assert_eq!(actual, expected);
         }
@@ -489,7 +513,7 @@ mod tests {
             let mut state_bits = [false; 1600];
             state_bits[..state_len*64].copy_from_slice(&bits);
             let mut state: StateArray = Default::default();
-            state[..].copy_from_slice(&compress_u64(&state_bits)[..]);
+            state.0[..].copy_from_slice(&compress_u64(&state_bits)[..]);
 
             let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
             let data = compress_u8(&data_bits);
@@ -498,7 +522,7 @@ mod tests {
             let expected = crate::hex_of_vec_of_bits(&state_bits[..]);
 
             sponge_absorb_final(&mut state, &data, SHA3_EXTRA, r/8);
-            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state[..]));
+            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..]));
 
             assert_eq!(actual, expected);
         }
@@ -521,7 +545,7 @@ mod tests {
             let mut state_bits = [false; 1600];
             state_bits[..state_len*64].copy_from_slice(&bits);
             let mut state: StateArray = Default::default();
-            state[..].copy_from_slice(&compress_u64(&state_bits)[..]);
+            state.0[..].copy_from_slice(&compress_u64(&state_bits)[..]);
             dbg!(crate::hex_of_vec_of_bits(&state_bits));
 
             let mut dst = vec![0u8; d];
