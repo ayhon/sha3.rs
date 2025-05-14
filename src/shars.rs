@@ -1,22 +1,21 @@
 #![allow(dead_code)]
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
+type Lane = u64;
+
 #[derive(Clone, Copy)]
-struct StateArray([u64; 25]);
+struct StateArray([Lane; 25]);
 
 impl Default for StateArray {
-    fn default() -> Self { StateArray([0u64; 25]) }
+    fn default() -> Self { StateArray([0; 25]) }
 }
 
 impl Deref for StateArray {
-    type Target = [u64; 25];
+    type Target = [Lane; 25];
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 impl DerefMut for StateArray {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
-}
-impl From<StateArray> for [u64; 25] {
-    fn from(value: StateArray) -> Self { value.0 }
 }
 
 impl Index<(usize,usize)> for StateArray {
@@ -26,22 +25,15 @@ impl Index<(usize,usize)> for StateArray {
         &self.0[5*y + x]
     }
 }
-impl IndexMut<(usize,usize)> for StateArray {
 
+impl IndexMut<(usize,usize)> for StateArray {
     fn index_mut(&mut self, (x,y): (usize,usize)) -> &mut Self::Output {
         &mut self.0[5*y + x]
     }
 }
 
 impl StateArray {
-    // pub fn get(&self, x: usize, y: usize) -> Lane {
-    //     self.0[5*y + x]
-    // }
-    // pub fn set(&mut self, x: usize, y: usize, line: Lane) {
-    //     self.0[5*y + x] = line;
-    // }
-
-    fn xor_bytes_at(dst: &mut u64, src: &[u8], pos: usize) {
+    fn xor_bytes_at(dst: &mut Lane, src: &[u8], pos: usize) {
         let mut buf = dst.to_le_bytes();
         let mut i = 0;
         while pos + i < 8 && i < src.len() {
@@ -80,20 +72,17 @@ impl StateArray {
     }
 }
 
-// type StateArray = [u64; 25];
-type Lane = u64;
-
+// const W: usize = (Lane::BITS as usize)
 const W: usize = 64;
 
 fn theta(a: StateArray) -> StateArray {
     fn c(a: &StateArray, x: usize) -> Lane {
         a[(x,0)] ^ a[(x,1)] ^ a[(x,2)] ^ a[(x,3)] ^ a[(x,4)]
-        // a.get(x, 0) ^ a.get(x, 1) ^ a.get(x, 2) ^ a.get(x, 3) ^ a.get(x, 4)
     }
     fn d(a: &StateArray, x: usize) -> Lane {
         let x1 = (x + 4) % 5;
         let x2 = (x + 1) % 5;
-        c(a, x1) ^ c(a,x2).rotate_left(1)
+        c(a,x1) ^ c(a,x2).rotate_left(1)
     }
     let mut res = StateArray::default();
     let mut x = 0;
@@ -103,9 +92,6 @@ fn theta(a: StateArray) -> StateArray {
             while y < 5 {
                 #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize, y: usize) {
                     res[(x,y)] = a[(x,y)] ^ d(a, x);
-                    // res.set(x, y, 
-                    //     a.get(x, y) ^ d(a, x)
-                    // );
                 } inner(res, a, x, y);
                 y += 1;
             }
@@ -124,7 +110,6 @@ fn rho(a: StateArray) -> StateArray {
     let mut t = 0;
     while t < 24 {
         res[(x,y)] = a[(x,y)].rotate_left(offset(t));
-        // res.set(x, y, a.get(x, y).rotate_left(offset(t)));
         (x, y) = (y, (2*x + 3*y) % 5);
         t += 1;
     }
@@ -141,7 +126,6 @@ fn pi(a: StateArray) -> StateArray {
                 let x2 = (x + 3*y) % 5;
                 let y2 = x;
                 res[(x,y)] = a[(x2,y2)];
-                // res.set(x, y, a.get(x2,y2));
                 y += 1;
             }
         } inner(&mut res, &a, x);
@@ -160,11 +144,6 @@ fn chi(a: StateArray) -> StateArray {
                 let x1 = (x + 1) % 5;
                 let x2 = (x + 2) % 5;
                 res[(x,y)] = a[(x,y)] ^ ( (a[(x1,y)] ^ u64::MAX) & a[(x2,y)] );
-                // res.set(x, y,
-                //     a.get(x, y) ^ (
-                //         (a.get(x1, y) ^ u64::MAX) & a.get(x2, y)
-                //     )
-                // );
                 y += 1;
             } 
         } inner(&mut res, &a, x);
@@ -173,31 +152,11 @@ fn chi(a: StateArray) -> StateArray {
     return res;
 }
 
-// const IOTA_RC_POINTS: [u64; 4] = [1057190368628935937, 11840710497638075718, 12752921908941921477, 10242804897969909164];
-// fn iota_init_rc(ir: usize) -> u64 {
-//     fn point(t: usize) -> bool {
-//         let t = t % 256;
-//         (IOTA_RC_POINTS[t / 4] >> (t % 4)) % 2 == 1
-//     }
-//     let mut rc = 0;
-//     let mut j = 0;
-//     while j <= 6 {
-//         let offset = (1 << j) - 1;
-//         rc |= u64::from(point(j + 7*ir)) << offset;
-//         j += 1;
-//     }
-//     return rc
-// }
-
-
-// const IOTA_RC: [u64; 24] = [1, 32898, 9223372036854808714, 9223372039002292224, 32907, 2147483649, 9223372039002292353, 9223372036854808585, 138, 136, 2147516425, 2147483658, 2147516555, 9223372036854775947, 9223372036854808713, 9223372036854808579, 9223372036854808578, 9223372036854775936, 32778, 9223372039002259466, 9223372039002292353, 9223372036854808704, 2147483649, 9223372039002292232];
 const IOTA_RC: [u64; 24] = [0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000, 0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009, 0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a, 0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003, 0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a, 0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008];
 
 fn iota(ir: usize, a: StateArray) -> StateArray {
-    // let rc = iota_init_rc(ir);
     let mut res = a;
     res[(0,0)] = a[(0,0)] ^ IOTA_RC[ir];
-    // res.set(0, 0, a.get(0, 0) ^ IOTA_RC[ir]);
     return res;
 }
 
@@ -217,26 +176,6 @@ fn keccak_p(s: &mut StateArray) {
         ir += 1;
     }
 }
-
-/* Xor the bytes in `other` with the state `s`.
- * The position `pos` is given in the byte alignment on s.
-*/
-// fn xor_long_at(s: &mut [u64], other: &[u8], pos: usize) {
-//     let mut block_idx = pos / 8;
-//     let mut offset = pos % 8;
-//     let mut i = 0;
-//     while block_idx < s.len() && i < other.len() {
-//         xor_bytes_at(&mut s[block_idx], &other[i..], offset);
-//         block_idx += 1;
-//         i += 8 - offset;
-//         offset = 0;
-//     }
-// }
-
-// fn xor_long(s: &mut [u64], other: &[u8]){
-//     xor_long_at(s, other, 0);
-// }
-
 
 fn sponge_absorb_initial(bs: &[u8], r: usize, s: &mut StateArray) {
     let n = bs.len() / r ;
@@ -265,20 +204,10 @@ fn sponge_absorb_final(s: &mut StateArray, rest: &[u8], extra: u8, r: usize){
 }
 
 fn sponge_absorb(bs: &[u8], r: usize, s: &mut StateArray, extra: u8) {
-    sponge_absorb_initial(bs, r, s); // → absorb
+    sponge_absorb_initial(bs, r, s);
     let n = bs.len() / r;
     let rest = &bs[r*n..];
-    sponge_absorb_final(s, rest, extra, r); // → panic_free → absorb'
-} // → absorb'
-
-
-fn copy_from_state(dst: &mut [u8], src: &[u64], num: usize) {
-    let mut i = 0;
-    while i < num {
-        let byte = (src[i/8] >> ((i % 8) * 8)) as u8;
-        dst[i] = dst[i] ^ byte;
-        i += 1;
-    }
+    sponge_absorb_final(s, rest, extra, r);
 }
 
 fn sponge_squeeze(r: usize, z: &mut [u8], s: StateArray) {
@@ -287,7 +216,6 @@ fn sponge_squeeze(r: usize, z: &mut [u8], s: StateArray) {
     let d = z.len();
     loop {
         if i + r < d {
-            // TODO: u64::to_le_bytes
             s.copy_to(&mut z[i..i+r]);
             keccak_p(&mut s);
             i += r;
