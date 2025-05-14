@@ -381,11 +381,11 @@ mod tests {
 
     #[test] fn xor_long_at_works() {
         for _attempt in 0..100 {
-            let min_state_len = 10;
+            let min_state_len = 0;
             dbg!(&min_state_len);
             let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
             dbg!(&state_len);
-            let bytes_len = state_len * 8 - (random::<usize>() % (8*state_len));
+            let bytes_len = state_len * 8 - (random::<usize>() % (8*state_len).max(1));
             dbg!(&bytes_len);
             let offset = random::<usize>() % (8*state_len + 1 - bytes_len);
             dbg!(&offset);
@@ -440,8 +440,7 @@ mod tests {
     #[test] fn sponge_absorb_final_works() {
         for _attempt in 0..100 {
             let min_state_len = 0;
-            let state_len = 1;
-            // let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
+            let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
             let r = (random::<usize>() % (25*8 - 1) + 1) * 8;
             let bytes_len = random::<usize>() % (r/8);
             // let bytes_len = random::<usize>() % (r / 8);
