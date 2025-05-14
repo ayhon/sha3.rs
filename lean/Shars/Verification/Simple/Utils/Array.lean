@@ -9,25 +9,24 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Id.run Id.pure_eq Id.bind_eq
 
 
-theorem Array.foldl_split(arr: Array α)(upd: β → α → β)(init: β)
-    (l m r: Nat)
-    (l_idx: l < arr.size := by assumption)
-    (r_le: r ≤ arr.size := by assumption)
-    (m_inside: l ≤ m ∧ m < r := by simp; omega)
-: arr.foldl upd init l r = arr.foldl upd (arr.foldl upd init l m) m r
-:= by
-  simp only [Array.foldl]
-  rw [Array.foldlM_start_stop (m := Id), ←Array.foldlM_toList]
-  rw [Array.foldlM_start_stop (m := Id), ←Array.foldlM_toList]
-  rw [Array.foldlM_start_stop (m := Id), ←Array.foldlM_toList]
-  simp only [Id.run]
-  have : arr.extract l r = arr.extract l m ++ arr.extract m r := by
-    simp; congr
-    · simp [*]
-    · simp [*, le_of_lt]
-  rw [this, Array.toList_append]
-  rw [List.foldlM_append]
-  simp
+theorem Array.append_of_extract{arr: Array α}{l r: Nat}
+  (m: Nat)(m_ge: l ≤ m)(m_lt: m ≤ r)
+: arr.extract l r = arr.extract l m ++ arr.extract m r
+:= by simp [m_ge, m_lt]
+
+-- private theorem Array.foldl_split(arr: Array α)(upd: β → α → β)(init: β)
+--     (l m r: Nat)
+--     (l_idx: l < arr.size)
+--     (r_le: r ≤ arr.size)
+--     (m_inside: l ≤ m ∧ m < r)
+-- : arr.foldl upd init l r = arr.foldl upd (arr.foldl upd init l m) m r
+-- := by
+--   simp only [Array.foldl]
+--   rw [Array.foldlM_start_stop (m := Id), ←Array.foldlM_toList]
+--   rw [Array.foldlM_start_stop (m := Id), ←Array.foldlM_toList]
+--   rw [Array.foldlM_start_stop (m := Id), ←Array.foldlM_toList]
+--   simp only [Array.append_of_extract m, *, le_of_lt]
+--   simp [-Array.extract_append_extract]
 
 theorem Array.extract_one(arr: Array α)(l: Nat)
    (l_idx: l < arr.size)
@@ -44,9 +43,8 @@ theorem Array.append_left_extract_of_extract(arr: Array α)(l r: Nat)
 → arr.extract l r = #[arr[l]] ++ arr.extract (l+1) r
 := by
   intro l_idx nonempty
-  rw [←Array.extract_one]
-  rw [Array.extract_append_extract]
-  simp [*, ‹l + 1 ≤ r›']
+  rw [Array.append_of_extract (l+1), Array.extract_one]
+  all_goals omega
 
 theorem Array.foldl_step_right(arr: Array α)(l r: Nat)(upd: β → α → β)(init: β)(l_idx: l < arr.size)(r_le: r ≤ arr.size)(nontriv: l < r)
 : arr.foldl upd init l r = arr.foldl upd (upd init arr[l]) (l+1) r
@@ -61,10 +59,9 @@ theorem Array.append_right_extract_of_extract(arr: Array α)(l r: Nat)
 → (nonempty: l ≤ r)
 → arr.extract l (r+1) = arr.extract l r ++ #[arr[r]]
 := by
-  intro r_bnd nonempty
-  rw [←Array.extract_one]
-  rw [Array.extract_append_extract]
-  simp [*]
+  intro l_idx nonempty
+  rw [Array.append_of_extract r, Array.extract_one]
+  all_goals omega
 
 theorem Array.foldl_step_left(arr: Array α)(l r: Nat)(upd: β → α → β)(init: β)(l_idx: l < arr.size)(r_le: r ≤ arr.size)(nontriv: l < r)
 : arr.foldl upd init l r = upd (arr.foldl upd init l (r-1)) arr[r-1]
@@ -100,10 +97,6 @@ theorem Array.getElem!_append[Inhabited α]
       case h => simpa using h
       rw [getElem!_neg]
       case h => scalar_tac
-
-theorem Array.getElem!_toList[Inhabited α](arr: Array α)(i: Nat)
-: arr.toList[i]! = arr[i]!
-:= by simp [getElem!_def]
 
 theorem Array.foldl_extract(arr: Array α)(l r: Nat)(upd: β → α → β)(init: β)
 : (arr.extract l r).foldl upd init = arr.foldl upd init l r

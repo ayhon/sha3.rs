@@ -121,16 +121,13 @@ theorem List.length_setLength(ls: List α)(n: Nat)(fill: α)
     simp [setLength, List.length_setLength]
 
 @[simp_lists_simps]
-theorem List.getElem!_take[Inhabited α](ls: List α)(i n: Nat)
-: i < n → (ls.take n)[i]! = ls[i]!
+theorem List.getElem!_finRange_pos(n: Nat)[NeZero n](i: Nat)
+: i < n → (List.finRange n)[i]! = i
 := by
-  by_cases i < ls.length
-  case pos h =>
-    intro h2
-    apply List.getElem!_take_same <;> assumption
-  case neg =>
-    intro
-    simp_lists
+  intro h
+  simp [finRange, getElem!_pos, h]
+  congr
+  simp [Nat.mod_eq_of_lt, h]
 
 @[simp_lists_simps]
 theorem List.getElem!_zip[Inhabited α] [Inhabited β]

@@ -16,7 +16,7 @@ theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
 := by
   obtain ⟨a⟩ := a
   obtain ⟨b⟩ := b
-  have bv_point_eq: ∀ (c: Fin (Spec.b l)), a[c] = b[c] := by 
+  have bv_point_eq: ∀ (c: Fin (Spec.b l)), a[c] = b[c] := by
     simp [get] at point_eq
     intro c
     have := point_eq (decodeIndex c).1 (decodeIndex c).2.1 (decodeIndex c).2.2
@@ -35,7 +35,7 @@ theorem Bool.toNat_mod2_self(b: Bool)
 := by cases b <;> simp
 
 theorem Spec.Keccak.StateArray.get_set(a: Spec.Keccak.StateArray l)(x x' y y': Fin 5)(z z': Fin (w l))
-: (a.set x' y' z' val).get x y z = if x = x' ∧ y = y' ∧ z = z' then val else a.get x y z
+: (a.set x' y' z' val).get x y z = if x' = x ∧ y' = y ∧ z' = z then val else a.get x y z
 := by
   simp [get, set, BitVec.getElem_set]
   split
@@ -43,8 +43,8 @@ theorem Spec.Keccak.StateArray.get_set(a: Spec.Keccak.StateArray l)(x x' y y': F
     replace h := encode_inj x x' y y' z z' |>.mp <| Fin.eq_of_val_eq h.symm
     simp [h]
   case isFalse h =>
-    have : ¬ (x = x' ∧ y = y' ∧ z = z') := by rintro ⟨rfl,rfl,rfl⟩; exact h rfl
-    simp [this]
+    rw [ite_cond_eq_false]
+    simp; rintro rfl rfl rfl; exact h rfl
 
 @[simp]
 theorem Spec.Keccak.StateArray.get_set_eq(a: Spec.Keccak.StateArray l)(x y : Fin 5)(z : Fin (w l))
@@ -55,13 +55,12 @@ theorem Spec.Keccak.StateArray.get_set_eq(a: Spec.Keccak.StateArray l)(x y : Fin
 theorem Spec.Keccak.StateArray.get_set_neq(a: Spec.Keccak.StateArray l)(x x' y y': Fin 5)(z z': Fin (w l))
 : (x,y,z) ≠ (x',y',z')
 → (a.set x' y' z' val).get x y z = a.get x y z
-:= by 
+:= by
   intros not_cond
-  simp only [ne_eq, Prod.mk.injEq] at not_cond
-  simp [not_cond, get_set]
+  rw [get_set]
+  simp [not_cond]; rintro rfl rfl rfl; simp at not_cond
 
 theorem Spec.Keccak.StateArray.get_set_pos(a: Spec.Keccak.StateArray l)(x x' y y': Fin 5)(z z': Fin (w l))
 (eq: (x,y,z) = (x',y',z'))
 : (a.set x y z val).get x' y' z' = val
 := by simp at eq; simp [eq]
-

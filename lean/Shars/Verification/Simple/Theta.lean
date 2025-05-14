@@ -15,7 +15,7 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Aeneas.Std.Slice.set
 
 open Aeneas hiding Std.Array
-open Std.alloc.vec 
+open Std.alloc.vec
 
 
 @[progress]
@@ -33,33 +33,28 @@ theorem simple.theta.theta_d.spec(input : simple.StateArray)(x z: Std.Usize)
 := by
   rw [theta.d]
   progress*
-  simp [*, Spec.Keccak.θ.D]
+  simp [*, Spec.Keccak.θ.D, Spec.w]
+
   congr 2
-  · apply Fin.eq_of_val_eq
-    simp [Fin.sub_def, Nat.add_comm]
-  · apply Fin.eq_of_val_eq
-    simp [Fin.add_def]
-  · apply Fin.eq_of_val_eq
-    simp [Fin.sub_def, ←i2_post, W.spec]
-    have: i2.val = W.val - 1 := by scalar_tac
-    simp [this, W.spec, Nat.add_comm]
+  all_goals zmodify; try ring_nf
+  rfl
 
 @[progress]
 theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: Std.Usize)
 (x_idx: x.val < 5)
 (y_idx: y.val < 5)
 (z_loop_bnd: z.val <= Spec.w 6)
-: ∃ output, theta.inner.inner_loop input a x y z = .ok output ∧ 
+: ∃ output, theta.inner.inner_loop input a x y z = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-  output.toSpec.get x' y' z' = 
-    if x = x' ∧ y = y' ∧ z.val ≤ z'.val then 
+  output.toSpec.get x' y' z' =
+    if x = x' ∧ y = y' ∧ z.val ≤ z'.val then
         a.toSpec.get x y z'  ^^ Spec.Keccak.θ.D a.toSpec x z'
       else input.toSpec.get x' y' z'
 := by
   rw [theta.inner.inner_loop]
   split
   case isTrue z_idx =>
-    simp [W.spec] at z_idx
+    simp at z_idx
     let* ⟨ acc_elem, acc_elem_post ⟩ ← simple.StateArray.index.spec
     let* ⟨ aux, aux_post ⟩ ← simple.theta.theta_d.spec
     let* ⟨ res_elem, res_elem_post ⟩ ← simple.binxor.spec
@@ -68,18 +63,22 @@ theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: St
     let* ⟨ res, res_post ⟩ ← spec
 
     intro x' y' j
-    simp [*] at res_post
-    rw [res_post]; clear res_post
-    split_all
-    · rfl
-    · scalar_tac
-    · simp [‹j= z.val.cast›', *]
-    · simp_ifs [Spec.Keccak.StateArray.get_set]
-  case isFalse z_end =>
-    have: z = Spec.w 6 := by simp [W.spec] at z_end; scalar_tac
-    simp [this]
-    intro x y z'
-    simp [Nat.not_le_of_gt z'.isLt]
+    simp [*, Spec.Keccak.StateArray.get_set, Fin.ext_iff, Nat.mod_eq_of_lt]
+    split
+    case isTrue prev_case => simp_ifs
+    case isFalse curr_case =>
+      split
+      case isFalse unprocessed =>
+        simp_ifs
+      case isTrue new_case =>
+        simp_ifs
+        simp [*]
+        -- done
+  case isFalse z_oob =>
+    simp
+    try simp_ifs -- TODO: Doesn't work from here, nor just after the split.
+    intro x' y' z'
+    simp_ifs
 termination_by (Spec.w 6) - z.val
 decreasing_by scalar_decr_tac
 
@@ -90,86 +89,60 @@ theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
 (y_loop_bnd: y.val <= 5)
 : ∃ output, theta.inner_loop input a x y = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-  output.toSpec.get x' y' z' = 
+  output.toSpec.get x' y' z' =
     if x = x' ∧ y.val ≤ y'.val then
       a.toSpec.get x y' z'  ^^ Spec.Keccak.θ.D a.toSpec x z'
     else input.toSpec.get x' y' z'
-:= by 
+:= by
   rw [inner_loop, inner.inner]
-  split
-  case isTrue y_idx =>
-    let* ⟨ res_z, res_z_post ⟩ ← simple.theta.inner.inner_loop.spec
-    let* ⟨ y_succ, y_succ_post ⟩ ← Aeneas.Std.Usize.add_spec
-    let* ⟨ res, res_post ⟩ ← spec  -- (y := y_succ) -- ← I do this instead of `· exact a`
-
+  progress*
+  · simp at ‹y.val < 5›
     intro x' y' z'
-    simp [res_post, y_succ_post, res_z_post]
-
-    if h: x = x' ∧ y.val ≤ y'.val then
-      obtain ⟨rfl,y'_range?⟩ := h
-      simp [y'_range?]
-      intro j_upper_bnd
-      have y_y' : y.val = y'.val := by scalar_tac
-      simp [y_y']
-    else
-      rw [not_and_or] at h
-      obtain h | j_range? := h
-      · simp [h, res_z_post]
-
-      have: ¬ y.val + 1 <= y'.val := by scalar_tac
-      simp [j_range?, this]
-      rintro rfl rfl
-      scalar_tac
-  case isFalse y_oob =>
-    simp
-    have: y.val = 5 := by scalar_tac
-    simp [this]
-    intro x' y' z'
-    simp [Nat.not_le_of_gt y'.isLt]
+    simp [*, Fin.ext_iff, Nat.mod_eq_of_lt]
+    split
+    case isTrue prev_case => simp_ifs
+    case isFalse curr_case =>
+      split
+      case isFalse unprocessed => simp_ifs
+      case isTrue new_processed =>
+        simp_ifs
+        simp [*]
+  · simp_ifs; simp[*]
 termination_by (5 +1) - y.val
-decreasing_by 
-  
+decreasing_by
+
   scalar_decr_tac
 
 @[progress]
 theorem simple.theta_loop.spec(input a: simple.StateArray)(x: Std.Usize)
 (x_loop_bnd: x.val <= 5)
-: ∃ output, theta_loop a input x = .ok output ∧ 
+: ∃ output, theta_loop a input x = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-    output.toSpec.get x' y' z' = 
-      if x.val ≤ x'.val then 
+    output.toSpec.get x' y' z' =
+      if x.val ≤ x'.val then
         a.toSpec.get x' y' z'  ^^ Spec.Keccak.θ.D a.toSpec x' z'
-      else 
+      else
         input.toSpec.get x' y' z'
 := by
   rw [theta_loop, theta.inner]
-  split
-  case isTrue x_idx =>
-    let* ⟨ res_y, res_y_post ⟩ ← simple.theta.inner_loop.spec
-    let* ⟨ x_succ, x_succ_post ⟩ ← Aeneas.Std.Usize.add_spec
-    let* ⟨ res, res_post ⟩ ← spec
+  progress*
+  · simp at ‹x.val < 5›
     intro x' y' z'
-    simp [res_post, res_y_post, x_succ_post]
-    if h: x.val <= x'.val then
-      simp [h]; intro _
-      have x_x' : x.val = x'.val := by scalar_tac
-      simp [x_x']
-    else
-      have: ¬ x.val + 1 <= x'.val := by scalar_tac
-      simp [h, this]; rintro rfl
-      scalar_tac
-  case isFalse x_oob =>
-    have : x.val = 5 := by scalar_tac
-    simp [this]
-    intro x' y' z'
-    simp [Nat.not_le_of_gt x'.isLt]
+    simp [*, Nat.mod_eq_of_lt, Fin.ext_iff]
+    split
+    case isTrue prev_case => simp_ifs
+    case isFalse curr_case =>
+      split
+      case isFalse unprocessed => simp_ifs
+      case isTrue new_processed => simp_ifs; simp [*]
+  · simp_ifs; simp
 termination_by 5+1 - x.val
 decreasing_by scalar_decr_tac
 
 @[progress]
 theorem simple.theta.spec(input: simple.StateArray)
 : ∃ output, theta input = .ok output ∧ output.toSpec = Spec.Keccak.θ input.toSpec
-:= by 
+:= by
   rw [theta, Spec.Keccak.θ, DefaultsimpleStateArray.default]
   let* ⟨ res, res_post ⟩ ← simple.theta_loop.spec
   ext x y z

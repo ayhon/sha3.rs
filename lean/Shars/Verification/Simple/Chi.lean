@@ -15,97 +15,75 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Aeneas.Std.Slice.set
 
 open Aeneas hiding Std.Array
-open Std.alloc.vec 
+open Std.alloc.vec
 
+#check Fin.val_natCast
+attribute [scalar_tac_simps] Fin.val_natCast
+-- attribute [-scalar_tac_simps] Nat.mod_eq_of_lt
+-- attribute [scalar_tac x % m] Nat.over_mod_or_mod_eq
+
+@[simp]
+theorem Fin.natCast_mod(x n: Nat)[NeZero n]: ((x % n : Nat) : Fin n) = (x : Fin n) := by
+  simp only [Nat.cast, NatCast.natCast, Fin.ofNat', Nat.mod_mod]
 
 @[progress]
 theorem simple.chi.inner.inner_loop.spec(res a: StateArray)(x y z: Std.Usize)
 : x.val < 5
 → y.val < 5
 → z.val <= Spec.w 6
-→ ∃ output, 
+→ ∃ output,
   inner_loop res a x y z = .ok output ∧
-  (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), 
-    output.toSpec.get x' y' z' = 
+  (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
+    output.toSpec.get x' y' z' =
       if x = x' ∧ y = y' ∧ z.val ≤ z'  then
         (a.toSpec.get x' y' z' ^^ ((a.toSpec.get (x' + 1) y' z' ^^ true) && a.toSpec.get (x' + 2) y' z'))
       else
         res.toSpec.get x' y' z')
-  /- (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), x = x' ∧ y = y' ∧ z.val ≤ z' → -/ 
+  /- (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), x = x' ∧ y = y' ∧ z.val ≤ z' → -/
   /-   output.toSpec.get x' y' z' = (a.toSpec.get x' y' z' ^^ ((a.toSpec.get (x + 1) y' z' ^^ true) && a.toSpec.get (x' + 2) y' z'))) ∧ -/
-  /- (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), ¬ (x = x' ∧ y = y' ∧ z ≤ z') → -/ 
+  /- (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), ¬ (x = x' ∧ y = y' ∧ z ≤ z') → -/
   /-   output.toSpec.get x' y' z' = res.toSpec.get x' y' z') -/
 := by
   intro x_lt y_lt z_loop_bound
   rw [inner_loop]
-  split
-  case isTrue z_lt =>
-    progress as ⟨ i, i_post ⟩
-    progress as ⟨ x1, x1_post ⟩
-    fsimp only [*] at x1_post; clear i_post i
-    progress as ⟨ i1, i1_post ⟩
-    progress as ⟨ x2, x2_post ⟩
-    fsimp only [*] at x2_post; clear i1_post i1
-    progress as ⟨ b, b_post ⟩
-    progress as ⟨ b1, b1_post ⟩
-    fsimp only [*] at b1_post; clear x1_post x1
-    progress as ⟨ b2, b2_post ⟩
-    fsimp only [*] at b2_post; clear b1_post b1
-    split <;> rename_i b2_val
-    . progress as ⟨ b3, b3_post ⟩
-      fsimp only [*] at b3_post; clear x2_post x2
-      progress as ⟨ b4, b4_post ⟩
-      rw [←Bool.true_and b3, ←b2_val] at b4_post
-      fsimp only [*] at b4_post; clear b3_post b3 b_post b b2_post b2_val b2
-      progress as ⟨ old_res, new_res, old_res_post, new_res_post ⟩
-      progress as ⟨ z1, z1_post ⟩
-      progress as ⟨ rest, rest_post ⟩
-      /- progress as ⟨ rest, rest_post_1, rest_post_2 ⟩ -/
-      fsimp only [*] at rest_post; clear old_res_post new_res_post old_res new_res z1 z1_post b4 b4_post
-      intro x' y' z'
-      rw [rest_post]
-      split_all
-      · rfl
-      · scalar_tac
-      · simp [‹z.val.cast = z'›', *]
-        rename_i h; obtain ⟨h, h2, h3⟩ := h
-        congr 2
-        · congr 1
-          scalar_tac
-        · scalar_tac
-      · rw [Spec.Keccak.StateArray.get_set_neq]
-        scalar_tac_preprocess
-        scalar_tac
-    · simp at b2_val
-      simp [b2_val] at b2_post
-      progress as ⟨b4, b4_post⟩
-      fsimp only [b_post] at b4_post; clear b_post b
-      progress as ⟨old_res, new_res, old_res_post, new_res_post⟩
-      progress as ⟨z1, z1_post⟩
-      progress as ⟨rest, rest_post⟩
-      fsimp only [*] at rest_post; clear old_res new_res old_res_post new_res_post z1_post z1
-      intro x' y' z'
-      rw [rest_post]
-      split_all
-      · rfl
-      · scalar_tac
-      · simp [‹z.val.cast = z'›', *] at b2_post ⊢
-        have: Spec.Keccak.StateArray.get (x' + 1) y' z' a.toSpec = true := by
-          rw [←b2_post]
-          congr 2
-          scalar_tac
-        simp [this]
-      · rw [Spec.Keccak.StateArray.get_set_neq]
-        scalar_tac_preprocess
-        scalar_tac
-  case isFalse z_oob =>
+  progress*
+  · -- z < W
+    -- b2 = true
+    simp at ‹z < W›
+    simp [*, Spec.Keccak.StateArray.get_set] --, Fin.ext_iff, Nat.mod_eq_of_lt]
+    intro x' y' z'
+    split
+    case isTrue => simp_ifs
+    case isFalse =>
+      split
+      case isFalse =>
+        simp_ifs
+      case isTrue h =>
+        simp only [h, Fin.cast_val_eq_self]
+        simp [x1_post, i_post, h, Fin.cast_val_eq_self] at b1_post b2_post
+        simp_ifs
+        simp [*, -b1_post, ←b1_post, ←b2_post]
+  · -- z < W
+    -- b2 = false
+    simp [*, Spec.Keccak.StateArray.get_set]
+    intro x' y' z'
+    split
+    case isTrue => simp_ifs
+    case isFalse =>
+      split
+      case isFalse => simp_ifs
+      case isTrue h =>
+        simp_ifs
+        simp [x1_post, i_post, h, Fin.cast_val_eq_self] at b1_post b2_post
+        simp [*, -b1_post, ←b1_post, ←b2_post]
+  · -- z ≥ W
     simp [‹z.val = Spec.w 6›']
     intros
     simp_ifs
 termination_by Spec.w 6 - z.val
-decreasing_by 
+decreasing_by
   scalar_decr_tac
-  simp [z1_post]
+  simp [*]
   scalar_tac
 
 /- theorem asdf(z: Std.Usize): z.val < Spec.w 6 → Spec.w 6 - (z.val + 1) < Spec.w 6 - z.val := by -/
@@ -135,20 +113,19 @@ theorem simple.chi.inner_loop.spec(res a: StateArray)(x y : Std.Usize)
     simp at res1_post
     let* ⟨ y1, y1_post ⟩ ← Std.Usize.add_spec
     let* ⟨ rest, rest_post ⟩ ← spec
+
     intro x' y' z'
-    rw [rest_post, y1_post]
-    split_all
-    · rfl
-    · scalar_tac
-    · simp [‹y.val.cast = y'›', *]
-    · simp [*]
-      intro xx' yy'
-      scalar_tac
+    simp [*]
+    split
+    case isTrue already => simp_ifs
+    case isFalse =>
+      split
+      case isFalse unprocessed => simp_ifs
+      case isTrue new_case => simp_ifs
   case isFalse h =>
-    simp
-    intros
     simp_ifs
-termination_by 5 - y.val 
+    simp [*]
+termination_by 5 - y.val
 decreasing_by scalar_decr_tac
 
 @[progress]
@@ -173,15 +150,14 @@ theorem simple.chi_loop.spec(res a: StateArray)(x: Std.Usize)
     let* ⟨ x1, x1_post ⟩ ← Std.Usize.add_spec
     let* ⟨ res, res_post ⟩ ← spec
 
-    simp [res_post, x1_post]
     intro x' y' z'
-    split_all
-    · rfl
-    · scalar_tac
-    · simp [*, ‹x.val.cast = x'›']
-    · simp [*]
-      intro xx'
-      scalar_tac
+    simp [*]
+    split
+    case isTrue already => simp_ifs
+    case isFalse =>
+      split
+      case isFalse unprocessed => simp_ifs
+      case isTrue new_case => simp_ifs
   case isFalse x_oob =>
     simp [‹x.val = 5›']
     intro x' y' z'

@@ -30,12 +30,7 @@ theorem simple.iota_rc_point.spec(t: Std.Usize)
 := by
   simp [iota_rc_point]
   progress*
-  simp [*, IOTA_RC_POINTS.spec (t.val % 255) (by scalar_tac)]
-  rw[
-    Spec.Keccak.ι.rc,
-    ‹Fin.ofNat' 255 (↑t % 255) = Fin.ofNat' 255 ↑t›',
-    ←Spec.Keccak.ι.rc
-  ]
+  simp [*, IOTA_RC_POINTS.spec (t.val % 255) (by scalar_tac), Spec.Keccak.ι.rc_mod_eq_rc]
 
 def simple.iota_rc_init_loop.ref(ir: Nat)(rc: BitVec (Spec.w 6))(j: Nat) :=
   if j <= 6
@@ -67,10 +62,9 @@ theorem simple.iota_rc_init_loop.ref_spec(ir : Std.Usize) (input : Aeneas.Std.Ar
     let* ⟨ b, b_post ⟩ ← iota_rc_point.spec
     simp [i1_post, i_post] at b_post
     let* ⟨ i2, i2_post_1, i2_post_2 ⟩ ← Std.Usize.one_ShiftLeft_spec
+    · have:= Std.UScalarTy.Usize_numBits_le
+      scalar_tac
     let* ⟨ i3, i3_post ⟩ ← Std.Usize.sub_spec
-    have i3_val: i3.val = i2.val - 1 := by
-      rw [i3_post, Nat.add_sub_cancel]
-    simp [i2_post_1] at i3_val
     have i3_idx: i3.val < input.length := by
       simp [*]
       calc  2 ^ ↑j - 1
@@ -83,14 +77,14 @@ theorem simple.iota_rc_init_loop.ref_spec(ir : Std.Usize) (input : Aeneas.Std.Ar
     rw [res_post, ←BitVec.cast_set (i_idx := ?first)]
     case first =>
       simp [Nat.shiftLeft_eq, NatCast.natCast, Fin.ofNat']
-      rw [Nat.mod_eq_of_lt] <;> simpa [i3_val] using i3_idx
+      rw [Nat.mod_eq_of_lt] <;> simpa [*] using i3_idx
     rw [rc1_post, List.toBitVec, Std.Array.set, BitVec.ofBoolListLE_set (i_idx := by simpa using i3_idx)]
     simp
     simp_ifs
     congr 3
-    simp [i3_val]
+    simp [*]
     rw [Nat.shiftLeft_eq, Nat.one_mul, Nat.mod_eq_of_lt]
-    simpa [i3_val] using i3_idx
+    simpa [*] using i3_idx
   case isFalse => simp [‹j.val = 7›']
 termination_by 7 - j.val
 decreasing_by scalar_decr_tac
@@ -167,7 +161,7 @@ def simple.iota_rc_init_loop.foldWhile.spec(iᵣ: Nat)(init: BitVec (Spec.w 6))(
     (f    := fun input j => BitVec.set (1 <<< j - 1).cast (Spec.Keccak.ι.rc (j + 7 * iᵣ)) input)
 = Spec.Keccak.ι.RC.loop iᵣ init start
 := by
-  rw [Spec.Keccak.ι.RC.loop.foldl_spec, List.drop_range, SRRange.foldl_range' (hStep := Nat.one_pos)]
+  rw [Spec.Keccak.ι.RC.loop.foldl_spec, List.drop_range, SRRange.foldl_range'_eq_foldWhile (hStep := Nat.one_pos)]
   simp
   if start_idx: start < 7 then
     rw [‹start  + (7 - start) = 7›']
@@ -263,7 +257,9 @@ theorem simple.iota_a_loop.spec(res : StateArray) (a : StateArray) (rc : Aeneas.
         rcases h1 with (h1 | h1 | h1) <;> try simp [h1]
         rcases h2 with (h1 | h1 | h1) <;> try simp [h1]
         right;right
-        intro
+        intro aux
+        replace aux := Fin.val_eq_of_eq aux
+        simp [Nat.mod_eq_of_lt, ‹z.val < Spec.w 6›'] at aux
         scalar_tac
       simp_ifs
   case isFalse z_oob =>

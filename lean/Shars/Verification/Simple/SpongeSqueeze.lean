@@ -25,14 +25,14 @@ open Aeneas
 def simple.sponge_squeeze.panic_free(r: Nat)[NeZero r](dst s: List Bool)(offset: Nat): List Bool :=
   assert! s.length ≥ r
   if offset + r < dst.length then
-    let dst' := dst.replace_slice offset (offset + r) (s.take r)
+    let dst' := dst.setSlice! offset (s.take r)
     let s' := ListIR.list_keccak_p s
     panic_free r dst' s' (offset + r)
   else
     let nb_left := dst.length - offset
-    dst.replace_slice offset (offset + nb_left) (s.take nb_left)
+    dst.setSlice! offset (s.take nb_left)
 termination_by dst.length - offset
-decreasing_by simp [List.replace_slice]; scalar_tac
+decreasing_by simp [List.setSlice!]; scalar_tac
 
 def simple.sponge.squeeze.length_panic_free(r: Nat)(dst s: List Bool)(offset: Nat)
   (r_pos: r > 0)
@@ -50,14 +50,15 @@ def simple.sponge.squeeze.length_panic_free(r: Nat)(dst s: List Bool)(offset: Na
     case r_pos => assumption
     case r_lt => assumption
     case a => simp; omega
-    simp [List.replace_slice, h, le_of_lt, s_big_enough, ←Nat.add_assoc, ‹offset ≤ dst.length›',]
+    simp [List.setSlice!, h, le_of_lt, s_big_enough, ‹offset ≤ dst.length›']
+    omega
   case isFalse h =>
-    simp [List.replace_slice, h, le_of_lt, s_big_enough, ←Nat.add_assoc]
+    simp [List.setSlice!, h, le_of_lt, s_big_enough, ←Nat.add_assoc]
     simp only [Nat.min_def]
     simp_ifs
     split <;> simp at * <;> simp [*, Nat.sub_eq_zero_of_le, le_of_lt]
 termination_by dst.length - offset
-decreasing_by simp [List.replace_slice]; scalar_tac
+decreasing_by simp [List.setSlice!]; scalar_tac
 
 attribute [local scalar_tac_simps] not_le in
 def ListIR.sponge.squeeze(d: Nat)(r: Nat)[NeZero r](dst s: List Bool): List Bool :=
@@ -80,21 +81,11 @@ theorem ListIR.sponge.length_squeeze(d: Nat)(r: Nat)[NeZero r](dst s: List Bool)
 termination_by d - dst.length
 decreasing_by scalar_decr_tac
 
+#check List.getElem!_setSlice!_prefix
+#check List.getElem!_setSlice!_middle
+#check List.getElem!_setSlice!_suffix
 
-theorem List.getElem!_replace_slice[Inhabited α](ls ls2: List α)(s e: Nat)
-: s ≤ e -- Proper range
-→ e ≤ ls.length -- e goes up to end
-→ s < ls.length -- s goes up to last
-→ (ls.replace_slice s e ls2)[i]! =
-    if       i < s              then ls[i]!
-    else if  i - s < ls2.length then ls2[i - s]!
-    else ls[i - (s + ls2.length) + e]!
-:= by
-  intros
-  simp [replace_slice]
-  split_ifs <;> simp_lists
-  rw [Nat.add_comm, Nat.sub_add_eq]
-
+#check List.length_setSlice!
 
 attribute [scalar_tac_simps] List.length_setWidth
 
@@ -102,8 +93,20 @@ theorem List.getElem!_take_eq_ite[Inhabited α](ls: List α)(n i: Nat)
 : (ls.take n)[i]! = if i < n then ls[i]! else default
 := by split <;> simp_lists
 
+theorem List.getElem!_setSlice!_eq_ite[Inhabited α](ls slice: List α)(offset i: Nat)
+: i < ls.length
+→ offset < ls.length
+→ (ls.setSlice! offset slice)[i]! =
+  if i < offset then ls[i]!
+  else if i  < offset + slice.length then slice[i - offset]!
+  else ls[i]!
+:= by
+  intro i_idx offset_idx
+  split_ifs <;> simp_lists
+
 
 attribute [local simp_lists_simps] List.getElem!_take_eq_ite in
+set_option maxHeartbeats 1000000 in
 theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
   (r_bnd: 0 < r ∧ r < 1600)
   (dst s: List Bool)(offset : Nat)
@@ -119,8 +122,7 @@ theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
   simp
   split
   case isTrue next_offset_lt =>
-    have: (List.replace_slice offset (offset + r) dst (List.take r s)).length = dst.length := by
-      simp [List.replace_slice]; scalar_tac
+    have: (dst.setSlice! offset (List.take r s)).length = dst.length := by simp
     have: offset ≠ dst.length := by scalar_tac
     simp_ifs
     rw [spec r r_bnd]
@@ -131,16 +133,20 @@ theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
     · simp [*, le_of_lt]
     assume i < offset + r
     case otherwise => simp_lists
-    simp_lists [List.getElem!_replace_slice]
+    simp_lists [List.getElem!_take_eq_ite, List.getElem!_setSlice!_eq_ite]
+    simp_ifs
   case isFalse next_offset_lt =>
     unfold ListIR.sponge.squeeze
     simp_ifs
+    -- by_cases (List.take offset dst ++ s.setWidth r).length
     split
     · have: offset = dst.length := by scalar_tac
-      simp [this, List.replace_slice]
+      simp [this, List.setSlice!]
     · ext i
-      · simp [*, List.replace_slice]; scalar_tac
-      simp_lists [List.getElem!_replace_slice]
+      · simp [*, List.setSlice!]; scalar_tac
+      assume i < dst.length
+      case otherwise => simp_lists
+      simp_lists [List.getElem!_take_eq_ite, List.getElem!_setSlice!_eq_ite]
       simp_ifs
 termination_by dst.length - offset
 decreasing_by scalar_decr_tac
@@ -149,6 +155,15 @@ decreasing_by scalar_decr_tac
 theorem Aeneas.Std.Slice.val_drop{T: Type}(s: Slice T)(k: Usize)
 : (s.drop k).val = s.val.drop k.val
 := by simp [Slice.drop]
+
+attribute [simp_ifs_simps] dite_eq_ite
+@[simp_ifs_simps]
+theorem dite_eq_then {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (e : ¬c → α) (h : c) :
+  dite c t e = t h := by simp only [↓reduceDIte, h]
+
+@[simp_ifs_simps]
+theorem dite_eq_else {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (e : ¬c → α) (h : ¬ c) :
+  dite c t e = e h := by simp only [↓reduceDIte, h]
 
 set_option maxHeartbeats 100000000 in
 set_option maxRecDepth 1000000 in
@@ -167,34 +182,27 @@ theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
   unfold simple.sponge_squeeze_loop panic_free
   let* ⟨ i1, i1_post ⟩ ← Std.Usize.add_spec
   split
-  . simp [Std.core.slice.index.Slice.index_mut, Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut]
+  . simp [Std.core.slice.index.Slice.index_mut, Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut, *]
     simp_ifs
-    simp [Std.core.array.Array.index, Std.core.ops.index.IndexSliceInst, Std.core.slice.index.Slice.index, Std.core.slice.index.SliceIndexRangeUsizeSlice.index, Std.Array.to_slice]
+    simp [Std.core.array.Array.index, Std.core.ops.index.IndexSliceInst, Std.core.slice.index.Slice.index, Std.core.slice.index.SliceIndexRangeUsizeSlice.index, Std.Array.to_slice, *]
     simp_ifs
-    simp [Std.core.slice.Slice.copy_from_slice, List.slice, Std.Slice.len]
+    simp [Std.core.slice.Slice.copy_from_slice, List.slice, Std.Slice.len, *]
     simp_ifs
-    simp
+    simp [*, le_of_lt]
     let* ⟨ s4, s4_post ⟩ ← keccak_p.spec'
-    simp [List.replace_slice, *, le_of_lt]
-    try simp_ifs -- TODO: Why does this not work?
-    split
-    case isFalse =>
-      scalar_tac -- contradiction
-    case isTrue h =>
-      let* ⟨ rest, rest_post⟩ ← refinement
-      simp [*]
+    let* ⟨ s4, s4_post ⟩ ← refinement
+    simp [*]
   . let* ⟨ nb_left, nb_left_post ⟩ ← Aeneas.Std.Usize.sub_spec'
     simp at nb_left_post
-    simp [Std.core.slice.index.Slice.index_mut, Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut]
-    simp_ifs
-    simp [Std.core.array.Array.index, Std.core.ops.index.IndexSliceInst, Std.core.slice.index.Slice.index, Std.core.slice.index.SliceIndexRangeUsizeSlice.index, Std.Array.to_slice]
+    simp [Std.core.slice.index.Slice.index_mut, Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut, *]
+    simp [Std.core.array.Array.index, Std.core.ops.index.IndexSliceInst, Std.core.slice.index.Slice.index, Std.core.slice.index.SliceIndexRangeUsizeSlice.index, Std.Array.to_slice, *]
     simp_ifs
     simp [Std.core.slice.Slice.copy_from_slice, List.slice, Std.Slice.len, *, Nat.min_def, List.length_drop]
     simp_ifs
     simp [*]
-    try simp_ifs -- TODO: Again, why does this not work?
-    have : i.val + (dst.length - ↑i) ⊓ 1600 ≤ Std.Usize.max := by scalar_tac
-    simp [this, List.replace_slice]
+    simp_ifs
+    simp [List.setSlice!, *]
+    simp_lists
 termination_by dst.length - i
 decreasing_by scalar_decr_tac
 

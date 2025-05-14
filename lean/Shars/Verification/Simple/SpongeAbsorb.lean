@@ -19,17 +19,6 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [ext (iff := false)] List.ext_getElem!
 /- attribute [simp] Aeneas.Std.Slice.set -/
 
-example(a b c: Nat): 0 < b → a * b < c → a ≤ c / b := by
-  intros b_pos a_b_lt_c
-  calc a
-    _ = (a * b) / b := by
-      rw [Nat.mul_div_cancel (H:=b_pos)]
-    _ ≤ c / b := by
-      apply Nat.div_le_div_right
-      simp [*, le_of_lt]
-
--- attribute [simp_lists_simps] List.length_append List.take_append_eq_append_take List.take_zipWith List.length_zipWith List.length_take List.take_all_of_le List.length_drop List.drop_eq_nil_of_le List.drop_append_eq_append_drop List.nil_append List.zipWith_nil_left List.append_nil List.drop_drop List.take_take
-
 theorem getElem!_padding(x m: Nat)(i: Nat)
 : (Spec.«pad10*1» x m)[i]! = if i = 0 ∨ i = (Spec.«pad10*1» x m).size - 1 then true else false
 := by
@@ -40,13 +29,12 @@ theorem getElem!_padding(x m: Nat)(i: Nat)
     · simp [h]; congr
     · simp [h, Spec.«pad10*1»]; congr
   case isFalse h =>
-    by_cases i_idx: i < (Spec.«pad10*1» x m).size
-    case neg => simp [getElem!_neg, i_idx]
+    assume i_idx: i < (Spec.«pad10*1» x m).size
+    case otherwise => simp [getElem!_neg, i_idx]
     simp [Spec.«pad10*1»] at h i_idx ⊢
     simp_ifs
-    rw [getElem!_pos]
-    case h => scalar_tac
-    simp
+    simp_lists
+    simp [default]
 
 theorem ref.mod_manipulation(a b r: Nat)
   (h1: r ≥ 6)
@@ -55,26 +43,24 @@ theorem ref.mod_manipulation(a b r: Nat)
   (h4: (a + b) ≥ r)
 : ((- (a + b + 2: Int)) % r).toNat = 2*r - (a + b + 2)
 := by
-  have: ((- (a + b + 2: Int)) % r) ≡ 2*r - (a + b + 2) [ZMOD r] := by
-    ring_nf
-    calc _
-      _ ≡ -2 + (-a.cast + -b.cast) [ZMOD r] := by apply Int.mod_modEq
-      _ ≡ -2 + (-a.cast + -b.cast) + r [ZMOD r] := by exact Int.ModEq.symm Int.add_modEq_right
-      _ ≡ -2 + (-a.cast + -b.cast) + r + r [ZMOD r] := by exact Int.ModEq.symm Int.add_modEq_right
-      _ ≡ -2 + (-a.cast + -b.cast) + 2* r [ZMOD r] := by ring_nf; rfl
-    ring_nf; rfl
-  have := this.eq
-  simp [Int.emod_emod] at this ⊢
-  simp [this]
-  have: (2*r - (a + b + 2): Int) >= 0 := by omega
-  have: (2*r - (a + b + 2): Int) < r := by omega
-  rw [Int.emod_eq_of_lt]
-  case H1 => omega
-  case H2 => omega
+  -- Big part of the equality
+  have: (((- (a + b + 2: Int)) % (r: Int))) = (2*r - (a + b + 2) ) % r := by
+    zmodify
+    simp
+  rw [this]
+  -- Move equality to Int
   zify
-  rw [Int.toNat_of_nonneg (by omega)]
-  rw [Nat.cast_sub (by omega)]
-  simp
+  rw [Int.toNat_of_nonneg]
+  swap; {
+    apply Int.emod_nonneg
+    omega
+  }
+  -- Show RHS is actually part of mod
+  rw [Int.emod_eq_of_lt]
+  · rw [Nat.cast_sub (by omega)]
+    zify
+  · omega
+  · omega
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec
@@ -171,6 +157,7 @@ private theorem List.foldl_congr{ls ls': List α}
 → ls.foldl upd init = ls'.foldl upd' init'
 := by rintro rfl rfl rfl; rfl
 
+set_option trace.SimpIfs true in
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 1000000 in
 theorem absorb.refinement(r: Nat)(S: BitVec (Spec.b 6))(bs: Array Bool)
@@ -198,7 +185,8 @@ theorem absorb.refinement(r: Nat)(S: BitVec (Spec.b 6))(bs: Array Bool)
     simp [absorb,ListIR.absorb', ListIR.list_keccak_p, ListIR.xor_long.def] at ih
     rw [ih]
     rw [List.foldl_congr]
-    · simp_lists
+    · rw [List.take_of_length_le]
+      simp
     · ext s chunk
       · simp
       simp
@@ -214,7 +202,10 @@ theorem absorb.refinement(r: Nat)(S: BitVec (Spec.b 6))(bs: Array Bool)
       have: S.toList.length = 1600 := by simp [Spec.b, Spec.w]
       if h: i < r then
         simp_lists
-        simp [getElem_eq_getElem!]
+        rw [List.getElem!_zipWith]
+        case a => simp [*]
+        case a => simp [*]; omega
+        simp [getElem_eq_getElem!, *]
       else
         simp_lists
         simp at h
@@ -273,8 +264,7 @@ theorem ref.interesting_part_of_the_proof.case1{r: Nat}{s rest suffix: List Bool
     rw [List.getElem!_take_append_beg]
     case pos.x => assumption
     case pos.x => simp; omega
-    rw [List.getElem!_take]
-    case pos.a => assumption
+    simp_lists
   · congr
     ext i
     · simp [←Nat.add_assoc, len_append]
@@ -763,7 +753,6 @@ theorem simple.sponge_absorb_final.spec
     simp at i3_post
     let* ⟨ suffix_low, suffix_low_post ⟩ ← Std.core.slice.index.Slice.index.slice_index_range_usize_slice_spec
     let* ⟨ x2, x2_val ⟩ ← xor_long_at.spec'
-    · simp [*]; scalar_tac
     let* ⟨ x3, x3_val ⟩ ← keccak_p.spec'
     let* ⟨ old_s2, mk_s3, old_s2_post, mk_s3_post ⟩ ← Std.Array.to_slice_mut.spec'
     let* ⟨ suffix_high, suffix_high_post ⟩ ← Std.core.slice.index.Slice.index_range_from_usize_spec

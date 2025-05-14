@@ -1,6 +1,7 @@
 import Aeneas
 import Shars.BitVec
 import Shars.Definitions.Simple
+import Shars.Verification.Simple.Utils.SimpLikeTactics
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
@@ -23,12 +24,15 @@ attribute [scalar_tac_simps] Nat.cast_add Nat.cast_mul Nat.cast_ofNat Nat.cast_i
 attribute [scalar_tac a.val] Fin.is_le'
 attribute [scalar_tac self] Fin.isLt
 
+@[scalar_tac x % m]
+theorem Nat.over_mod_or_mod_eq(x m: Nat): m ≤ x ∨ x % m = x := by
+  by_cases m ≤ x
+  · left; assumption
+  · right; simp at *; simp [Nat.mod_eq_of_lt, *]
+
 @[scalar_tac_simps] theorem Fin.val_eq_iff_eq{n : ℕ} {a b : Fin n} : a = b ↔ a.val = b.val := @Fin.val_inj n a b |>.symm
 
-@[scalar_tac_simps, simp]
-theorem Fin.val_ofNat{n: Nat}[NeZero n]{x: Nat}
-: (ofNat(x): Fin n).val = x % n
-:= by simp [OfNat.ofNat, Fin.instOfNat]
+attribute [scalar_tac_simps] Fin.val_ofNat
 
 @[scalar_tac x % v]
 theorem Nat.zero_mod_or_mod_lt(x v: Nat): v = 0 ∨ x % v < v := by
@@ -42,48 +46,21 @@ theorem Nat.zero_mod_or_mod_lt(x v: Nat): v = 0 ∨ x % v < v := by
 attribute [scalar_tac_simps] Spec.w Spec.b
 
 @[simp, scalar_tac_simps]
-theorem simple.W.spec
-: simple.W = Spec.w 6
-:= by native_decide
+theorem simple.W.val: simple.W = Spec.w 6 := by native_decide
 
-theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
-: n*y + x < n*m
-:= by
-  have n_pos: n > 0 := by apply Nat.pos_of_ne_zero; intro h; simp [h] at x_lt
-  have m_pos: m > 0 := by apply Nat.pos_of_ne_zero; intro h; simp [h] at y_lt
-  calc n*y + x
-    _ = n * y + x := rfl
-    _ ≤ n * (m-1) + x := by
-      apply Nat.add_le_add_right
-      apply Nat.mul_le_mul_left
-      apply Nat.le_pred_iff_lt m_pos |>.mpr
-      exact y_lt
-    _ ≤ n * (m-1) + (n-1) := by
-      apply Nat.add_le_add_left
-      apply Nat.le_pred_iff_lt n_pos |>.mpr
-      exact x_lt
-    _ < n * m := by
-      simp [Nat.mul_sub, ←Nat.add_sub_assoc n_pos]
-      have: n*m >= n := by
-        conv => arg 2; rw [←Nat.mul_one n]
-        apply Nat.mul_le_mul (Nat.le_refl n) m_pos
-      simp [Nat.sub_add_cancel this]
-      exact And.intro n_pos m_pos
-
-
+/-
+This rule adds the "implication" x < 5 → y < 5 → w * (5 * y + x) ≤ w * 24
+for scalar_tac when it detects that there is a term of the form 5 * ?y + ?x
+in the hypothesis. Useful when reasoning about indices to Keccak's state
+array.
+-/
+-- @[nonlin_scalar_tac 5 * y + x] -- TODO: Probably, this is better
 @[scalar_tac 5 * y + x]
-theorem something_not_named_yet
-: x ≥ 5 ∨ y ≥ 5 ∨ Spec.w 6 * (5 * y + x) ≤ Spec.w 6 * 24
+theorem scalar_tac_specific_lemma_for_sha3_keccak_state_packing(x: Fin 5)(y: Fin 5)
+: Spec.w 6 * (5 * y + x) ≤ Spec.w 6 * 24
 := by
-  if x ≥ 5 then left; assumption
-  else if y ≥ 5 then right; left; assumption
-  else
-    rename_i x_idx y_idx
-    simp at x_idx y_idx
-    right; right
-    apply Nat.mul_le_mul_left (k := Spec.w 6)
-    exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
-
+  apply Nat.mul_le_mul_left (k := Spec.w 6)
+  exact Nat.le_pred_of_lt (Nat.lt_packing_right x.isLt y.isLt)
 
 @[scalar_tac Std.Usize.max]
 theorem Aeneas.Std.Usize.max_bound
@@ -98,11 +75,14 @@ theorem Fin.cast_of_mk{n: Nat}{x: Nat}(x_lt: x < n)
 : Fin.mk x x_lt = @Nat.cast (Fin n) (@Fin.instNatCast n ⟨Nat.ne_zero_of_lt x_lt⟩) x := by
     simp only [Nat.cast, NatCast.natCast, Fin.instNatCast, Fin.ofNat', Nat.mod_eq_of_lt x_lt]
 
+/-
+Allows scalar_tac to reason about instances of `NeZero`. It translates them to pos.
+-/
 @[scalar_tac inst]
 def Nat.pos_of_neZero'{n: Nat}(inst: NeZero n): n > 0 := @Nat.pos_of_neZero n inst
 
 attribute [scalar_tac_simps] Nat.one_le_two_pow
 
 @[scalar_tac Aeneas.Std.UScalarTy.Usize.numBits]
-theorem Std.UScalarTy.Usize_numBits_le: Aeneas.Std.UScalarTy.Usize.numBits ≥ 32 := by
+theorem Aeneas.Std.UScalarTy.Usize_numBits_le: Aeneas.Std.UScalarTy.Usize.numBits ≥ 32 := by
   rcases System.Platform.numBits_eq with h | h <;> simp [h]

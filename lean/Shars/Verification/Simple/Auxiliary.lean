@@ -30,33 +30,39 @@ theorem simple.binxor.spec(a b: Bool)
 := by rw [binxor]; cases a <;> cases b <;> simp
 
 @[progress]
-theorem simple.xor_long_at_loop.spec(a b: Std.Slice Bool)(pos n i: Std.Usize)
+theorem simple.xor_long_at_loop.spec(a b: Std.Slice Bool)(pos n offset: Std.Usize)
 : b.length + pos.val ≤ Std.Usize.max
 → n = Nat.min a.length (b.length + ↑pos)
-→ i ≥ pos
+→ offset ≥ pos
 → ∃ output,/- {{{ -/
-  xor_long_at_loop a b pos n i = .ok output ∧
+  xor_long_at_loop a b pos n offset = .ok output ∧
   output.length = a.length ∧
-  ∀ j <a.length,
-    if i ≤ j ∧ j < n then output[j]! = (a[j]! ^^ b[j-pos.val]!)
-    else output[j]! = a[j]!
+  ∀ j < output.length,
+    output.val[j]! =
+      if offset ≤ j ∧ j < n then
+        (a[j]! ^^ b[j-pos.val]!)
+      else a[j]!
 := by
   intro no_overflow n_def i_ge_pos
   rw [xor_long_at_loop]
   progress* <;> simp [*]
   · intro j j_lt
-    replace res_post_2 := res_post_2 j (by simp [*])
-    simp [*] at res_post_2
-    split_all
-    · simp_lists [*]
-    · scalar_tac
-    · simp only [res_post_2]
-      simp [‹j = i.val + pos›']
+    simp [*]
+    split
+    case isTrue =>
+      simp_ifs
       simp_lists
-    · simp only [res_post_2]
-      simp_lists
-  · scalar_tac
-termination_by n.val - i.val
+    case isFalse =>
+      split
+      case isFalse =>
+        simp_ifs
+        simp_lists
+      case isTrue =>
+        simp_lists
+        -- simp_all
+        simp [‹j = offset.val›']
+  · simp_ifs
+termination_by n.val - offset.val
 decreasing_by scalar_decr_tac/- }}} -/
 
 @[progress]
@@ -78,15 +84,11 @@ theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
   let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.add_spec
   let* ⟨ n, n_post ⟩ ← Std.core.cmp.impls.OrdUsize.min_spec
   let* ⟨ res, res_post_1, res_post_2 ⟩ ← simple.xor_long_at_loop.spec
-  simp_lists [*] at *
+  -- simp_lists [*] at *
+  simp [*]
   intro j j_lt
-  replace res_post_2 := res_post_2 j j_lt
-  split_all
-  · simpa using res_post_2
-  · scalar_tac
-  · scalar_tac
-  · simpa using res_post_2
-
+  simp [*]
+  split <;> simp_ifs
 
 @[simp]
 theorem BitVec.setWidth_eq_cast{n m: Nat}(bv: BitVec n)(h: n = m)
@@ -138,43 +140,17 @@ theorem  simple.StateArray.index.spec
   let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
   simp [i_post] at i1_post
   let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  · simp [*, simple.W.spec]
-    apply le_of_lt
-    calc Spec.w 6 * (5 * ↑y + ↑x)
-     _ ≤ Spec.w 6 * (5 * 5) := by
-          apply Nat.mul_le_mul_left (k := Spec.w 6)
-          exact Nat.le_of_lt (Nat.lt_packing_right x_idx y_idx)
-     _ < 2^32 - 1 := by simp [Spec.w]
-     _ ≤ Std.Usize.max := Std.Usize.max_bound
   let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
-  · simp [*, simple.W.spec]
-    apply le_of_lt
-    calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
-     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by
-          apply Nat.add_le_add_right (k := ↑z)
-          apply Nat.mul_le_mul_left (k := Spec.w 6)
-          exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
-     _ < Spec.w 6 * (5 * 5) := by
-          apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
-     _ < 2^32 - 1 := by simp [Spec.w]
-     _ ≤ Std.Usize.max := Std.Usize.max_bound
-  have: Spec.w 6 * (5 * ↑y + ↑x) + ↑z < 1600 := by
-    simp [Spec.w]
-    calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
-     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by
-          apply Nat.add_le_add_right (k := ↑z)
-          apply Nat.mul_le_mul_left (k := Spec.w 6)
-          exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
-     _ < Spec.w 6 * (5 * 5) := by
-          apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
+  have: Spec.w 6 * (5 * ↑y + ↑x) + ↑z < 1600 := by scalar_tac
   let* ⟨ res, res_post ⟩ ← Aeneas.Std.Array.index_usize_spec
-  · simp [*, W.spec]
-  simp [*, simple.W.spec, Std.Usize.max]
+  simp [*, Std.Usize.max]
   simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex]
   simp [Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt z_idx]
   simp [toSpec, BitVec.getElem_ofBoolListLE]
   simp [getElem_eq_getElem!]
 
+-- set_option trace.ScalarTac true in
+-- set_option trace.Saturate true in
 @[progress]
 theorem simple.StateArray.index_mut.spec
   (self : simple.StateArray)(x y z: Std.Usize)
@@ -190,43 +166,15 @@ theorem simple.StateArray.index_mut.spec
   let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
   simp only [*] at i1_post
   let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  · simp [*, W.spec]
-    -- TODO: Hmm, this should be using transitivity to get <, no?
-    apply le_of_lt
-    calc Spec.w 6 * (5 * y.val + x.val)
-      _ < Spec.w 6 * (5 * 5) := by
-          apply Nat.mul_lt_mul_left (by simp [Spec.w]: 0 < Spec.w 6) |>.mpr
-          exact Nat.lt_packing_right x_idx y_idx
-      _ < 2^32 - 1 := by decide
-      _ ≤ Std.Usize.max := Std.Usize.max_bound
   simp only [*] at i2_post
   let* ⟨ c, c_post ⟩ ← Aeneas.Std.Usize.add_spec
-  · simp [*, W.spec]
-    apply le_of_lt
-    calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
-     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by
-          apply Nat.add_le_add_right (k := ↑z)
-          apply Nat.mul_le_mul_left (k := Spec.w 6)
-          exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
-     _ < Spec.w 6 * (5 * 5) := by
-          apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
-     _ < 2^32 - 1 := by simp [Spec.w]
-     _ ≤ Std.Usize.max := Std.Usize.max_bound
   simp only [*] at c_post
-  have c_idx :↑c < Std.Array.length self := by
-    simp [*, W.spec]
-    calc Spec.w 6 * (5 * ↑y + ↑x) + ↑z
-     _ ≤ Spec.w 6 * (5 * 5 - 1) + ↑z := by
-          apply Nat.add_le_add_right (k := ↑z)
-          apply Nat.mul_le_mul_left (k := Spec.w 6)
-          exact Nat.le_pred_of_lt (Nat.lt_packing_right x_idx y_idx)
-     _ < Spec.w 6 * (5 * 5) := by
-          apply Nat.lt_packing_right z_idx (by decide: 5*5 - 1 < 5 * 5)
+  have c_idx :↑c < Std.Array.length self := by scalar_tac
   let* ⟨ celem, celem_post ⟩ ← Aeneas.Std.Array.index_mut_usize_spec
   simp [-Bool.forall_bool,celem_post]
   simp only [Std.Array.length] at c_idx
   have c_encode: c.val = @Spec.Keccak.StateArray.encodeIndex 6 x.val.cast y.val.cast z.val.cast := by
-    simp [Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt z_idx, c_post, W.spec]
+    simp [Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt, *]
   constructor
   · simp [Spec.Keccak.StateArray.get, ←c_encode, toSpec]; rw [getElem_eq_getElem!]
   · intro b
@@ -277,7 +225,7 @@ attribute [-progress] Aeneas.Std.Usize.sub_spec
 @[progress] theorem Aeneas.Std.Usize.sub_spec' {x y : Aeneas.Std.Usize} (h : y.val ≤ x.val) :
   ∃ z, x - y = Std.Result.ok z ∧ z.val = x.val - y.val := by
   progress as ⟨z, post⟩
-  rw [post, Nat.add_sub_cancel]
+  rw [post]
 
 theorem Aeneas.Std.UScalar.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar ty1)
   (hy : y.val < ty0.numBits)

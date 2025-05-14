@@ -45,9 +45,6 @@ theorem BitVec.cast_right{bv: BitVec n}{bv2: BitVec m}(eq: m = n)
 : bv = bv2.cast eq → bv.cast eq.symm = bv2
 := by apply BitVec.cast_pivot.mpr
 
-@[simp] theorem BitVec.getElem!_cast (h : w = v) (x : BitVec w)(i: Nat) : (x.cast h)[i]! = x[i]! := by
-  subst h; simp
-
 @[simp]
 theorem BitVec.length_toList(bv: BitVec n)
 : bv.toList.length = n

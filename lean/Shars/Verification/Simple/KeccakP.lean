@@ -35,9 +35,10 @@ def Spec.Keccak.P.loop(l: Fin 7)(nᵣ: Nat)(S: StateArray l)(start: Nat) := Id.r
     A := Rnd A iᵣ
   return A
 
-def Spec.Keccak.P.loop.spec(l: Fin 7)(nᵣ: Nat)(S: BitVec (Spec.b l))
+def Spec.Keccak.P.loop.refinement(l: Fin 7)(nᵣ: Nat)(S: BitVec (Spec.b l))
 : P  l nᵣ S = (P.loop l nᵣ (StateArray.ofBitVec S) 0).toBitVec
 := by congr
+
 
 @[progress]
 theorem simple.keccak_p_aux_loop.spec(input: StateArray)(ir: Std.Usize)
@@ -53,12 +54,11 @@ theorem simple.keccak_p_aux_loop.spec(input: StateArray)(ir: Std.Usize)
     let* ⟨ a1, a1_post ⟩ ← round.spec
     let* ⟨ ir1, ir1_post ⟩ ← Std.Usize.add_spec
     let* ⟨ res, res_post ⟩ ← spec
-    rw [res_post, a1_post, ir1_post]
-    simp [Spec.Keccak.P.loop]
-    symm
-    simp [←Nat.add_sub_assoc ir_loop_bound, ←Nat.add_sub_assoc (‹ir.val ≤ 23›')]
-    rw [Nat.add_comm, ←Nat.add_assoc, Nat.add_comm, ←Nat.add_assoc, Nat.add_sub_cancel]
-    rw [SRRange.foldWhile_step (h := by simpa using ir_lt)]
+
+    simp +arith [*, Spec.Keccak.P.loop, SRRange.foldl_range'_eq_foldWhile]
+    conv => rhs; rw [SRRange.foldWhile_step (h := by simpa using ir_lt)]
+    congr
+    scalar_tac
   case isFalse ir_oob =>
     simp [‹ir.val = 24›', Spec.Keccak.P.loop]
 termination_by 24 - ir.val
@@ -80,15 +80,9 @@ theorem simple.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
 := by
   rw [keccak_p, keccak_p_aux]
   progress as ⟨res, res_post⟩
-  cases bv_val: res.toSpec
-  rw [bv_val] at res_post
-  case ofBitVec bv =>
-    simp [StateArray.toSpec] at bv_val
-    rw [bv_val, Spec.Keccak.P]
-    apply Spec.Keccak.StateArray.ofBitVec_inj bv _ |>.mpr
-    rw [res_post]
-    congr
-    -- NOTE: Does `congr` unfold definitions?
+  replace res_post := congrArg (f := Spec.Keccak.StateArray.toBitVec) res_post
+  simp [StateArray.toSpec] at res_post
+  simp [Spec.Keccak.P.loop.refinement, res_post]
 
 @[progress]
 theorem simple.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
@@ -98,9 +92,6 @@ theorem simple.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
 := by
   rw [keccak_p, keccak_p_aux]
   progress as ⟨res, res_post⟩
-  simp [ListIR.list_keccak_p]
-  simp  [StateArray.toSpec] at res_post
-  -- conv at res_post => arg 2; rw [StateArray.toSpec]
-  rw [Spec.Keccak.P.loop.spec, BitVec.setWidth_eq_cast]
-  case h => simp [Spec.b, Spec.w]
-  simp [←res_post]
+  replace res_post := congrArg (f := BitVec.toList ∘ Spec.Keccak.StateArray.toBitVec) res_post
+  simp [StateArray.toSpec] at res_post
+  simp [*, ListIR.list_keccak_p, Spec.Keccak.P.loop.refinement, BitVec.setWidth_eq_cast, Spec.b, Spec.w, res_post]

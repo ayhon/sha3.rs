@@ -1,4 +1,3 @@
-/- import Sha3.Utils -/
 import Aeneas
 import Aeneas.SimpLists.Init
 
@@ -15,7 +14,6 @@ attribute [simp_lists_simps] lt_inf_iff le_inf_iff true_and and_true not_lt not_
 attribute [simp_lists_simps] List.drop_eq_nil_of_le List.forIn_yield_eq_foldl List.foldl_nil
 attribute [simp_lists_simps] List.getElem_finRange List.foldl_cons
 attribute [simp_lists_simps] List.getElem?_set_eq
-
 
 attribute [simp_lists_simps] List.length_append List.take_append_eq_append_take List.take_zipWith List.length_zipWith List.length_take
 attribute [simp_lists_simps] List.take_of_length_le List.length_drop List.drop_eq_nil_of_le List.drop_append_eq_append_drop
@@ -37,3 +35,21 @@ attribute [simp_lists_simps] List.length_map List.length_finRange
 attribute [simp_lists_simps] List.append_left_eq_self List.replicate_eq_nil_iff
 
 attribute [simp_lists_simps] List.take_append_drop
+
+@[zmodify_simps]
+theorem Fin.zmod_eq_iff_val_eq {n} : ∀ {i j : Fin n}, i = j ↔ (i.val: ZMod n) = (j.val: ZMod n) := by
+  intros i j
+  constructor
+  · rintro rfl; rfl
+  · intro eq
+    apply eq_of_val_eq
+    have := (ZMod.natCast_eq_natCast_iff' i.val j.val n).mp eq
+    simpa only [Nat.mod_eq_of_lt, i.isLt, j.isLt] using this
+
+attribute [zmodify_simps] Fin.val_add Fin.val_mul Fin.val_natCast Fin.val_ofNat
+@[zmodify_simps] theorem Fin.val_neg(a: Fin n): (-a).val = (n - a.val) % n := by simp only [Fin.neg_def]
+@[zmodify_simps] theorem Fin.val_sub(a b: Fin n): (a - b).val = (n - b.val + a.val) % n := by simp only [Fin.sub_def]
+@[zmodify_simps] theorem Fin.val_mod(a b: Fin n): (a % b).val = a.val % b.val := by simp only [Fin.mod_def]
+
+
+attribute [zmodify_simps] Fin.val_natCast Aeneas.ReduceZMod.reduceZMod ZMod.natCast_mod
