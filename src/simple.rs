@@ -227,13 +227,13 @@ fn keccak_p_aux(a: &mut StateArray){
 }
 
 
-fn keccak_p(s: &mut [bool; B]) {
+pub fn keccak_p(s: &mut [bool; B]) {
     let mut a = StateArray(*s);
     keccak_p_aux(&mut a);
     *s = a.0;
 }
 
-fn sponge_absorb_initial(bs: &[bool], r: usize, s: &mut [bool; B]) {
+pub fn sponge_absorb_initial(bs: &[bool], r: usize, s: &mut [bool; B]) {
     let n = bs.len() / r;
     let mut i = 0;
     while i < n {
@@ -244,7 +244,7 @@ fn sponge_absorb_initial(bs: &[bool], r: usize, s: &mut [bool; B]) {
     }
 }
 
-fn sponge_absorb_final(s: &mut [bool; B], rest: &[bool], suffix: &[bool], r: usize){
+pub fn sponge_absorb_final(s: &mut [bool; B], rest: &[bool], suffix: &[bool], r: usize){
     // We must have that 
     //     sponge_absorb_final(s, rest, suffix, r) 
     //       = absorb(s, rest ++ suffix ++ padding r (rest.len() + suffix.len()))
@@ -294,7 +294,7 @@ fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
 } // → absorb'
 
 /// Expects `z` to have the proper size (d)
-fn sponge_squeeze(r: usize, z: &mut [bool], s: [bool; B]) {
+pub fn sponge_squeeze(r: usize, z: &mut [bool], s: [bool; B]) {
     let mut s = s;
     let mut i = 0;
     let d = z.len();
@@ -317,13 +317,13 @@ fn sponge(r: usize, bs: &[bool], output: &mut [bool], suffix: &[bool]) {
     sponge_squeeze(r, output, s);
 } // → TODO
 
-const SHA3_SUFFIX: [bool; 2] = [false, true];
+pub const SHA3_SUFFIX: [bool; 2] = [false, true];
 pub fn sha3_224(bs: &[bool]) -> [bool;224] { let mut output = [false;224]; sponge(B - 2*224, &bs, &mut output, &SHA3_SUFFIX); return output }
 pub fn sha3_256(bs: &[bool]) -> [bool;256] { let mut output = [false;256]; sponge(B - 2*256, &bs, &mut output, &SHA3_SUFFIX); return output }
 pub fn sha3_384(bs: &[bool]) -> [bool;384] { let mut output = [false;384]; sponge(B - 2*384, &bs, &mut output, &SHA3_SUFFIX); return output }
 pub fn sha3_512(bs: &[bool]) -> [bool;512] { let mut output = [false;512]; sponge(B - 2*512, &bs, &mut output, &SHA3_SUFFIX); return output }
 
-const SHAKE_SUFFIX: [bool; 4] = [true; 4];
+pub const SHAKE_SUFFIX: [bool; 4] = [true; 4];
 pub fn shake128(bs: &[bool], output: &mut [bool]) { sponge(B - 2*128, &bs, output, &SHAKE_SUFFIX) }
 pub fn shake256(bs: &[bool], output: &mut [bool]) { sponge(B - 2*256, &bs, output, &SHAKE_SUFFIX) }
 
