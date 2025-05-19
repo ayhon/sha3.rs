@@ -243,7 +243,7 @@ decreasing_by simp [ls_def, *]
 
 def List.setWidth[Inhabited α](ls: List α)(n: Nat): List α := ls.take n ++ List.replicate (n - ls.length) default
 
-@[simp]
+@[simp ,scalar_tac_simps]
 theorem List.length_setWidth[Inhabited α](ls: List α)(n: Nat)
 : (ls.setWidth n).length = n
 := by simp [setWidth]; omega

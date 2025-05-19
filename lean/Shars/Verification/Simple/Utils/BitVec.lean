@@ -84,3 +84,42 @@ theorem BitVec.toBitVec_toList(bv: BitVec n)
 := by
   ext i i_idx
   simp [BitVec.toList]
+
+
+theorem BitVec.toList_inj{bv bv2: BitVec n}
+: bv.toList = bv2.toList → bv = bv2
+:= by
+  intro cond
+  ext i i_idx
+  replace cond := List.getElem_of_eq cond (by simp; exact i_idx)
+  simpa [←getElem!_pos, getElem!_toList] using cond
+
+theorem BitVec.getLsbD_eq_getElem! {x : BitVec w} {i : Nat} :
+    x.getLsbD i = x[i]! := by
+  if h: i < w then
+    simp only [getElem!_pos, h]
+    rfl
+  else
+    rw [getElem!_neg]
+    case h => assumption
+    simp [default, BitVec.getLsbD, Nat.testBit]
+    have: x.toNat >>> i = 0 := by
+      apply Nat.shiftRight_eq_zero
+      calc
+        _ < 2^w := by exact x.toFin.isLt
+        _ ≤ 2^i := by
+          apply Nat.pow_le_pow_of_le Nat.one_lt_two
+          simpa using h
+    rw [this]
+
+attribute [local simp] BitVec.getLsbD_eq_getElem! in
+theorem BitVec.toList_setWidth(bv: BitVec n)(m: Nat)
+: (bv.setWidth m).toList = bv.toList.setWidth m
+:= by
+  apply List.ext_getElem!
+  · simp
+  intro i
+  simp
+  assume i < m
+  case otherwise h => simp [getElem!_neg, h]
+  simp [getElem!_pos, *]

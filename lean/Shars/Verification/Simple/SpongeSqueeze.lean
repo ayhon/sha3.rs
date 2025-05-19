@@ -32,7 +32,7 @@ def simple.sponge_squeeze.panic_free(r: Nat)[NeZero r](dst s: List Bool)(offset:
     let nb_left := dst.length - offset
     dst.setSlice! offset (s.take nb_left)
 termination_by dst.length - offset
-decreasing_by simp [List.setSlice!]; scalar_tac
+decreasing_by scalar_decr_tac
 
 def simple.sponge.squeeze.length_panic_free(r: Nat)(dst s: List Bool)(offset: Nat)
   (r_pos: r > 0)
@@ -43,22 +43,15 @@ def simple.sponge.squeeze.length_panic_free(r: Nat)(dst s: List Bool)(offset: Na
 := by
   intro s_big_enough
   unfold simple.sponge_squeeze.panic_free
-  simp only [s_big_enough, reduceIte]
+  simp only [↓reduceIte, s_big_enough]
   split
   case isTrue h =>
     rw [simple.sponge.squeeze.length_panic_free]
-    case r_pos => assumption
-    case r_lt => assumption
-    case a => simp; omega
-    simp [List.setSlice!, h, le_of_lt, s_big_enough, ‹offset ≤ dst.length›']
-    omega
+    all_goals simp [*,le_of_lt]
   case isFalse h =>
-    simp [List.setSlice!, h, le_of_lt, s_big_enough, ←Nat.add_assoc]
-    simp only [Nat.min_def]
-    simp_ifs
-    split <;> simp at * <;> simp [*, Nat.sub_eq_zero_of_le, le_of_lt]
+    simp
 termination_by dst.length - offset
-decreasing_by simp [List.setSlice!]; scalar_tac
+decreasing_by scalar_tac
 
 attribute [local scalar_tac_simps] not_le in
 def ListIR.sponge.squeeze(d: Nat)(r: Nat)[NeZero r](dst s: List Bool): List Bool :=
@@ -81,19 +74,11 @@ theorem ListIR.sponge.length_squeeze(d: Nat)(r: Nat)[NeZero r](dst s: List Bool)
 termination_by d - dst.length
 decreasing_by scalar_decr_tac
 
-#check List.getElem!_setSlice!_prefix
-#check List.getElem!_setSlice!_middle
-#check List.getElem!_setSlice!_suffix
-
-#check List.length_setSlice!
-
-attribute [scalar_tac_simps] List.length_setWidth
-
-theorem List.getElem!_take_eq_ite[Inhabited α](ls: List α)(n i: Nat)
+private theorem List.getElem!_take_eq_ite[Inhabited α](ls: List α)(n i: Nat)
 : (ls.take n)[i]! = if i < n then ls[i]! else default
 := by split <;> simp_lists
 
-theorem List.getElem!_setSlice!_eq_ite[Inhabited α](ls slice: List α)(offset i: Nat)
+private theorem List.getElem!_setSlice!_eq_ite[Inhabited α](ls slice: List α)(offset i: Nat)
 : i < ls.length
 → offset < ls.length
 → (ls.setSlice! offset slice)[i]! =
@@ -103,7 +88,6 @@ theorem List.getElem!_setSlice!_eq_ite[Inhabited α](ls slice: List α)(offset i
 := by
   intro i_idx offset_idx
   split_ifs <;> simp_lists
-
 
 attribute [local simp_lists_simps] List.getElem!_take_eq_ite in
 set_option maxHeartbeats 1000000 in
@@ -115,37 +99,30 @@ theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
 → have : NeZero r := {out := Nat.ne_zero_of_lt r_bnd.left}
   panic_free r dst s offset = ListIR.sponge.squeeze dst.length r (dst.take offset) s
 := by
+  obtain ⟨r_pos, r_lt⟩ := r_bnd
   intro len_s offset_idx
   simp
   unfold panic_free ListIR.sponge.squeeze
-  simp_ifs
-  simp
+  simp [*, le_of_lt]
   split
   case isTrue next_offset_lt =>
-    have: (dst.setSlice! offset (List.take r s)).length = dst.length := by simp
-    have: offset ≠ dst.length := by scalar_tac
     simp_ifs
-    rw [spec r r_bnd]
-    case a => simp
-    case a => simp [*, le_of_lt]
+    rw [spec r]
+    all_goals simp [*, le_of_lt]
     congr 1
     ext i
     · simp [*, le_of_lt]
-    assume i < offset + r
-    case otherwise => simp_lists
+    assume i < offset + r; case otherwise => simp_lists
     simp_lists [List.getElem!_take_eq_ite, List.getElem!_setSlice!_eq_ite]
     simp_ifs
-  case isFalse next_offset_lt =>
+  case isFalse end_of_processing =>
     unfold ListIR.sponge.squeeze
     simp_ifs
-    -- by_cases (List.take offset dst ++ s.setWidth r).length
     split
-    · have: offset = dst.length := by scalar_tac
-      simp [this, List.setSlice!]
+    · simp [‹offset = dst.length›', List.setSlice!]
     · ext i
       · simp [*, List.setSlice!]; scalar_tac
-      assume i < dst.length
-      case otherwise => simp_lists
+      assume i < dst.length; case otherwise => simp_lists
       simp_lists [List.getElem!_take_eq_ite, List.getElem!_setSlice!_eq_ite]
       simp_ifs
 termination_by dst.length - offset
@@ -205,43 +182,6 @@ theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
     simp_lists
 termination_by dst.length - i
 decreasing_by scalar_decr_tac
-
-theorem BitVec.toList_inj{bv bv2: BitVec n}
-: bv.toList = bv2.toList → bv = bv2
-:= by
-  intro cond
-  ext i i_idx
-  replace cond := List.getElem_of_eq cond (by simp; exact i_idx)
-  simpa [getElem_eq_getElem!] using cond
-
-theorem BitVec.getLsbD_eq_getElem! {x : BitVec w} {i : Nat} :
-    x.getLsbD i = x[i]! := by
-  if h: i < w then
-    simp only [getElem!_pos, h]
-    rfl
-  else
-    rw [getElem!_neg]
-    case h => assumption
-    simp [default, BitVec.getLsbD, Nat.testBit]
-    have: x.toNat >>> i = 0 := by
-      apply Nat.shiftRight_eq_zero
-      calc
-        _ < 2^w := by exact x.toFin.isLt
-        _ ≤ 2^i := by
-          apply Nat.pow_le_pow_of_le Nat.one_lt_two
-          simpa using h
-    rw [this]
-
-attribute [local simp] BitVec.getLsbD_eq_getElem! in
-theorem BitVec.toList_setWidth(bv: BitVec n)(m: Nat)
-: (bv.setWidth m).toList = bv.toList.setWidth m
-:= by
-  ext i
-  · simp
-  simp
-  assume i < m
-  case otherwise h => simp [getElem!_neg, h]
-  simp [getElem!_pos, *]
 
 attribute [local simp_lists_simps] List.getElem!_take_eq_ite in
 set_option maxRecDepth 1000000 in
