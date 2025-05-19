@@ -1,6 +1,5 @@
 #![feature(random)]
-pub mod simple;
-pub mod shars;
+pub mod algos;
 
 pub fn get_vec_of_bits(s: &str) -> Vec<bool> {
     let mut res = vec![];
