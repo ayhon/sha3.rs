@@ -1,8 +1,8 @@
 import Mathlib
-import Shars.Verification.Simple.Utils.SimpLikeTactics
-import Shars.Verification.Simple.Utils.Notation
-import Shars.Verification.Simple.Utils.List
-import Shars.Verification.Simple.Refinement
+import Shars.Verification.Utils.SimpLikeTactics
+import Shars.Verification.Utils.Notation
+import Shars.Verification.Utils.List
+import Shars.Verification.Refinement
 import Shars.BitVec
 import Sha3.Spec
 
@@ -123,3 +123,13 @@ theorem BitVec.toList_setWidth(bv: BitVec n)(m: Nat)
   assume i < m
   case otherwise h => simp [getElem!_neg, h]
   simp [getElem!_pos, *]
+
+
+@[simp]
+theorem BitVec.setWidth_eq_cast{n m: Nat}(bv: BitVec n)(h: n = m)
+: bv.setWidth m = bv.cast h
+:= by
+  ext i i_lt
+  simp only [getElem_setWidth, getElem_cast]
+  simp only [GetElem.getElem]
+  exact rfl

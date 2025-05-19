@@ -1,6 +1,6 @@
 import Aeneas
 import Shars.BitVec
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init

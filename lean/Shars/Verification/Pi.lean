@@ -1,14 +1,14 @@
 import Aeneas
 import Shars.BitVec
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Auxiliary
+import Shars.Verification.Utils
+import Shars.Verification.Auxiliary
 
 set_option maxHeartbeats 1000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -17,9 +17,9 @@ attribute [simp] Aeneas.Std.Slice.set
 open Aeneas hiding Std.Array
 open Std.alloc.vec
 
--- #check simple.pi
+-- #check algos.pi
 -- #check Spec.Keccak.StateArray.encodeIndex
--- def simple.pi.panic_free(a: List Bool): List Bool := Id.run do
+-- def algos.pi.panic_free(a: List Bool): List Bool := Id.run do
 --   let mut a := a
 --   for x in List.finRange 5 do
 --     for y in List.finRange 5 do
@@ -29,7 +29,7 @@ open Std.alloc.vec
 
 
 @[progress]
-theorem simple.pi.inner.inner_loop.spec(res input : simple.StateArray) (x y z : Std.Usize)
+theorem algos.pi.inner.inner_loop.spec(res input : algos.StateArray) (x y z : Std.Usize)
 : x.val < 5
 → y.val < 5
 → z.val <= Spec.w 6
@@ -74,7 +74,7 @@ termination_by Spec.w 6 - z.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.pi.inner_loop.spec(input res : simple.StateArray) (x y: Std.Usize)
+theorem algos.pi.inner_loop.spec(input res : algos.StateArray) (x y: Std.Usize)
 : x.val < 5
 → y.val <= 5
 → ∃ output,
@@ -107,9 +107,9 @@ termination_by 5 - y.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.pi_loop.spec(input res : simple.StateArray) (x : Std.Usize)
+theorem algos.pi_loop.spec(input res : algos.StateArray) (x : Std.Usize)
 : ∃ output,
-  simple.pi_loop input res x = .ok output ∧
+  algos.pi_loop input res x = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
     output.toSpec.get x' y' z' =
       if x.val ≤ x' then
@@ -132,12 +132,12 @@ termination_by 5 - x.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.pi.spec(input: simple.StateArray)
+theorem algos.pi.spec(input: algos.StateArray)
 : ∃ output,
   pi input = .ok output ∧
   output.toSpec = Spec.Keccak.π input.toSpec
 := by
-  simp [pi, Spec.Keccak.π, ClonesimpleStateArray.clone]
+  simp [pi, Spec.Keccak.π, ClonealgosStateArray.clone]
   let* ⟨ res, res_post ⟩ ← pi_loop.spec
   ext x' y' z'
   simp [res_post]

@@ -1,18 +1,18 @@
 import Aeneas
 import Shars.BitVec
 import Shars.ArrayExtract
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
 import Init.Data.Array
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Refinement
-import Shars.Verification.Simple.Auxiliary
-import Shars.Verification.Simple.KeccakP
-import Shars.Verification.Simple.ListIR
+import Shars.Verification.Utils
+import Shars.Verification.Refinement
+import Shars.Verification.Auxiliary
+import Shars.Verification.KeccakP
+import Shars.Verification.ListIR
 
 set_option maxHeartbeats 100000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -22,7 +22,7 @@ open Aeneas
 
 -- attribute [scalar_tac_simps] Nat.pos_of_neZero
 
-def simple.sponge_squeeze.panic_free(r: Nat)[NeZero r](dst s: List Bool)(offset: Nat): List Bool :=
+def algos.sponge_squeeze.panic_free(r: Nat)[NeZero r](dst s: List Bool)(offset: Nat): List Bool :=
   assert! s.length ≥ r
   if offset + r < dst.length then
     let dst' := dst.setSlice! offset (s.take r)
@@ -34,19 +34,19 @@ def simple.sponge_squeeze.panic_free(r: Nat)[NeZero r](dst s: List Bool)(offset:
 termination_by dst.length - offset
 decreasing_by scalar_decr_tac
 
-def simple.sponge.squeeze.length_panic_free(r: Nat)(dst s: List Bool)(offset: Nat)
+def algos.sponge.squeeze.length_panic_free(r: Nat)(dst s: List Bool)(offset: Nat)
   (r_pos: r > 0)
   (r_lt: r < 1600)
 : s.length ≥ r
 → have: NeZero r := {out := Nat.ne_zero_of_lt r_pos}
-  (simple.sponge_squeeze.panic_free r dst s offset).length = dst.length
+  (algos.sponge_squeeze.panic_free r dst s offset).length = dst.length
 := by
   intro s_big_enough
-  unfold simple.sponge_squeeze.panic_free
+  unfold algos.sponge_squeeze.panic_free
   simp only [↓reduceIte, s_big_enough]
   split
   case isTrue h =>
-    rw [simple.sponge.squeeze.length_panic_free]
+    rw [algos.sponge.squeeze.length_panic_free]
     all_goals simp [*,le_of_lt]
   case isFalse h =>
     simp
@@ -91,7 +91,7 @@ private theorem List.getElem!_setSlice!_eq_ite[Inhabited α](ls slice: List α)(
 
 attribute [local simp_lists_simps] List.getElem!_take_eq_ite in
 set_option maxHeartbeats 1000000 in
-theorem simple.sponge_squeeze.panic_free.spec(r: Nat)
+theorem algos.sponge_squeeze.panic_free.spec(r: Nat)
   (r_bnd: 0 < r ∧ r < 1600)
   (dst s: List Bool)(offset : Nat)
 : s.length = 1600
@@ -142,21 +142,24 @@ theorem dite_eq_then {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (
 theorem dite_eq_else {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (e : ¬c → α) (h : ¬ c) :
   dite c t e = e h := by simp only [↓reduceDIte, h]
 
+#check Std.Usize.ofNatCore
+
 set_option maxHeartbeats 100000000 in
 set_option maxRecDepth 1000000 in
 -- set_option trace.meta.Tactic.simp true in
-theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
+theorem algos.sponge_squeeze.panic_free.refinement(r i d: Std.Usize)
   (dst: Std.Slice Bool)(s: Aeneas.Std.Array Bool 1600#usize)
 : (r_bnd: 0 < r.val ∧ r.val < 1600)
 → i ≤ dst.length
 → dst.length + r.val < Std.Usize.max
+→ d = Std.Usize.ofNatCore dst.length (by have := dst.property; scalar_tac)
 → let _: NeZero r.val := {out:= Nat.ne_zero_of_lt r_bnd.left}
   ∃ output,
-  sponge_squeeze_loop r dst s i = .ok output ∧
+  sponge_squeeze_loop r dst s i d = .ok output ∧
   output.val = panic_free r.val dst.val s.val i.val
 := by
-  intro r_bnd i_idx no_overflow
-  unfold simple.sponge_squeeze_loop panic_free
+  rintro r_bnd i_idx no_overflow rfl
+  unfold algos.sponge_squeeze_loop panic_free
   let* ⟨ i1, i1_post ⟩ ← Std.Usize.add_spec
   split
   . simp [Std.core.slice.index.Slice.index_mut, Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut, *]
@@ -215,20 +218,21 @@ termination_by d - m
 decreasing_by scalar_decr_tac
 
 
-theorem simple.sponge_squeeze.spec(r i: Std.Usize)
+theorem algos.sponge_squeeze.spec(r: Std.Usize)
   (dst: Std.Slice Bool)(s: Aeneas.Std.Array Bool 1600#usize)
 : (r_bnd: 0 < r.val ∧ r.val < 1600)
-→ i ≤ dst.length
 → dst.length + r.val < Std.Usize.max
 → let _: NeZero r.val := {out:= Nat.ne_zero_of_lt r_bnd.left}
   ∃ output,
-  sponge_squeeze_loop r dst s i = .ok output ∧
-  output.val = ListIR.sponge.squeeze dst.length r (dst.val.take i.val) s.val
+  sponge_squeeze r dst s = .ok output ∧
+  output.val = ListIR.sponge.squeeze dst.length r [] s.val
 := by
   intros
-  progress with simple.sponge_squeeze.panic_free.refinement as ⟨res, res_post⟩
+  rw [sponge_squeeze]
+  progress with algos.sponge_squeeze.panic_free.refinement as ⟨res, res_post⟩
   rw [res_post]
-  rw [simple.sponge_squeeze.panic_free.spec]
+  rw [algos.sponge_squeeze.panic_free.spec]
+  · simp
   · assumption
   · simp
-  · simpa
+  · simp

@@ -1,6 +1,6 @@
 import Aeneas
 import Shars.ArrayExtract
-import Shars.Verification.Simple.Utils.List
+import Shars.Verification.Utils.List
 import Sha3.Utils
 
 @[elab_as_elim, cases_eliminator]

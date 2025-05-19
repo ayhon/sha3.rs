@@ -1,29 +1,29 @@
 import Aeneas
 import Shars.BitVec
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
-import Shars.Verification.Simple.Constants
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Auxiliary
+import Shars.Verification.Constants
+import Shars.Verification.Utils
+import Shars.Verification.Auxiliary
 
 set_option maxHeartbeats 1000000
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec
 
-theorem simple.IOTA_RC_POINTS.spec
+theorem algos.IOTA_RC_POINTS.spec
 : ∀ t < 255, IOTA_RC_POINTS.val[t]! = Spec.Keccak.ι.rc t
 := by native_decide
 
 attribute [scalar_tac_simps] Nat.mod_mod Fin.ofNat'
 
 @[progress]
-theorem simple.iota_rc_point.spec(t: Std.Usize)
+theorem algos.iota_rc_point.spec(t: Std.Usize)
 : ∃ output,
   iota_rc_point t = .ok output ∧
   output = Spec.Keccak.ι.rc t.val
@@ -32,7 +32,7 @@ theorem simple.iota_rc_point.spec(t: Std.Usize)
   progress*
   simp [*, IOTA_RC_POINTS.spec (t.val % 255) (by scalar_tac), Spec.Keccak.ι.rc_mod_eq_rc]
 
-def simple.iota_rc_init_loop.ref(ir: Nat)(rc: BitVec (Spec.w 6))(j: Nat) :=
+def algos.iota_rc_init_loop.ref(ir: Nat)(rc: BitVec (Spec.w 6))(j: Nat) :=
   if j <= 6
   then
     let i := 7 * ir
@@ -46,12 +46,12 @@ def simple.iota_rc_init_loop.ref(ir: Nat)(rc: BitVec (Spec.w 6))(j: Nat) :=
   else rc
 termination_by 7 - j
 
-theorem simple.iota_rc_init_loop.ref_spec(ir : Std.Usize) (input : Aeneas.Std.Array Bool 64#usize)(j: Std.Usize)
+theorem algos.iota_rc_init_loop.ref_spec(ir : Std.Usize) (input : Aeneas.Std.Array Bool 64#usize)(j: Std.Usize)
 : ir.val < 24
 → j.val ≤ 6 + 1
 → ∃ output,
   iota_rc_init_loop ir input j = .ok output ∧
-  output.val.toBitVec.cast (by simp [Spec.w]) = simple.iota_rc_init_loop.ref ir.val (input.val.toBitVec.cast (by simp [Spec.w])) j.val
+  output.val.toBitVec.cast (by simp [Spec.w]) = algos.iota_rc_init_loop.ref ir.val (input.val.toBitVec.cast (by simp [Spec.w])) j.val
 := by
   intro ir_lt j_loop_bound
   rw [iota_rc_init_loop, iota_rc_init_loop.ref]
@@ -89,7 +89,7 @@ theorem simple.iota_rc_init_loop.ref_spec(ir : Std.Usize) (input : Aeneas.Std.Ar
 termination_by 7 - j.val
 decreasing_by scalar_decr_tac
 
-theorem simple.iota_rc_init_loop.ref.foldWhile_spec(iᵣ: Nat)(input: BitVec (Spec.w 6))(j: Nat)
+theorem algos.iota_rc_init_loop.ref.foldWhile_spec(iᵣ: Nat)(input: BitVec (Spec.w 6))(j: Nat)
 : iota_rc_init_loop.ref iᵣ input j = SRRange.foldWhile
     (i    := j)
     (max  := 6 + 1)
@@ -101,7 +101,7 @@ theorem simple.iota_rc_init_loop.ref.foldWhile_spec(iᵣ: Nat)(input: BitVec (Sp
   if h: j < 7 then
     simp only
     simp [h, ‹j ≤ 6›']
-    rw [simple.iota_rc_init_loop.ref.foldWhile_spec]
+    rw [algos.iota_rc_init_loop.ref.foldWhile_spec]
   else simp [h, ‹¬ (j ≤ 6)›']
 
 def Spec.Keccak.ι.RC.loop (iᵣ: Nat)(init: BitVec (w 6))(start: Nat): BitVec (w 6) := Id.run do
@@ -152,7 +152,7 @@ theorem Aeneas.SRRange.foldWhile_eq_foldWhile'{α : Type u}
   · rfl
 termination_by max - i
 
-def simple.iota_rc_init_loop.foldWhile.spec(iᵣ: Nat)(init: BitVec (Spec.w 6))(start: Nat)
+def algos.iota_rc_init_loop.foldWhile.spec(iᵣ: Nat)(init: BitVec (Spec.w 6))(start: Nat)
 : SRRange.foldWhile
     (i    := start)
     (max  := 6 + 1)
@@ -182,27 +182,27 @@ def simple.iota_rc_init_loop.foldWhile.spec(iᵣ: Nat)(init: BitVec (Spec.w 6))(
     rw [SRRange.foldWhile_id (h := start_idx), SRRange.foldWhile_id (h := by simpa using start_idx)]
 
 @[progress]
-theorem simple.iota_rc_init_loop.spec(ir : Std.Usize) (input : Aeneas.Std.Array Bool 64#usize)(i: Std.Usize)
+theorem algos.iota_rc_init_loop.spec(ir : Std.Usize) (input : Aeneas.Std.Array Bool 64#usize)(i: Std.Usize)
 : ir.val < 24
 → i.val ≤ 6 + 1
 → ∃ output,
-  simple.iota_rc_init_loop ir input i = .ok output ∧
+  algos.iota_rc_init_loop ir input i = .ok output ∧
   output.val.toBitVec.cast (by simp [Spec.w]) = Spec.Keccak.ι.RC.loop ir.val (input.val.toBitVec.cast (by simp [Spec.w])) i.val
 := by
   intro ir_lt i_loop_bound
   let* ⟨ output, output_post⟩ ← iota_rc_init_loop.ref_spec
   rw [
     output_post,
-    simple.iota_rc_init_loop.ref.foldWhile_spec,
-    simple.iota_rc_init_loop.foldWhile.spec,
+    algos.iota_rc_init_loop.ref.foldWhile_spec,
+    algos.iota_rc_init_loop.foldWhile.spec,
   ]
 
 set_option maxRecDepth 1000000 in
 @[progress]
-theorem simple.iota_rc_init.spec(ir: Std.Usize)
+theorem algos.iota_rc_init.spec(ir: Std.Usize)
 : ir.val < 24
 → ∃ output,
-  simple.iota_rc_init ir (Std.Array.repeat 64#usize false) = .ok output ∧
+  algos.iota_rc_init ir (Std.Array.repeat 64#usize false) = .ok output ∧
   output.val.toBitVec.cast (by simp [Spec.w]) = (Spec.Keccak.ι.RC ir.val : BitVec (Spec.w 6))
 := by
   intro ir_lt
@@ -212,9 +212,9 @@ theorem simple.iota_rc_init.spec(ir: Std.Usize)
   rfl
 
 @[progress]
-theorem simple.iota_a_loop.spec(res : StateArray) (a : StateArray) (rc : Aeneas.Std.Array Bool 64#usize)(z: Std.Usize)
+theorem algos.iota_a_loop.spec(res : StateArray) (a : StateArray) (rc : Aeneas.Std.Array Bool 64#usize)(z: Std.Usize)
 : ∃ output,
-  simple.iota_a_loop res a rc z = .ok output ∧
+  algos.iota_a_loop res a rc z = .ok output ∧
   ∀ (x y: Fin 5)(z': Fin (Spec.w 6)),
   output.toSpec.get x y z' =
     if x = 0 ∧ y = 0 ∧ z.val ≤ z'.val then
@@ -222,7 +222,7 @@ theorem simple.iota_a_loop.spec(res : StateArray) (a : StateArray) (rc : Aeneas.
     else
       res.toSpec.get x y z'
 := by
-  rw [simple.iota_a_loop]
+  rw [algos.iota_a_loop]
   split
   case isTrue =>
     let* ⟨ b, b_post ⟩ ← StateArray.index.spec
@@ -270,14 +270,14 @@ termination_by (Spec.w 6 + 1) - z.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.iota.spec(ir: Std.Usize)(input: StateArray)
+theorem algos.iota.spec(ir: Std.Usize)(input: StateArray)
 : ir.val < 24
 → ∃ output,
   iota ir input = .ok output ∧
   output.toSpec = Spec.Keccak.ι (iᵣ:= ir.val) input.toSpec
 := by
   intro ir_lt
-  simp [iota, iota_a, ClonesimpleStateArray.clone]
+  simp [iota, iota_a, ClonealgosStateArray.clone]
   let* ⟨rc, rc_post⟩ ← iota_rc_init.spec
   let* ⟨res, res_post⟩ ← iota_a_loop.spec
   ext x y z

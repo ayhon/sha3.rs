@@ -1,14 +1,14 @@
 import Aeneas
 import Shars.BitVec
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Auxiliary
+import Shars.Verification.Utils
+import Shars.Verification.Auxiliary
 
 set_option maxHeartbeats 1000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -27,7 +27,7 @@ theorem Fin.natCast_mod(x n: Nat)[NeZero n]: ((x % n : Nat) : Fin n) = (x : Fin 
   simp only [Nat.cast, NatCast.natCast, Fin.ofNat', Nat.mod_mod]
 
 @[progress]
-theorem simple.chi.inner.inner_loop.spec(res a: StateArray)(x y z: Std.Usize)
+theorem algos.chi.inner.inner_loop.spec(res a: StateArray)(x y z: Std.Usize)
 : x.val < 5
 → y.val < 5
 → z.val <= Spec.w 6
@@ -93,7 +93,7 @@ decreasing_by
 /-   exact lt_add_one (Spec.w 6) -/
 
 @[progress]
-theorem simple.chi.inner_loop.spec(res a: StateArray)(x y : Std.Usize)
+theorem algos.chi.inner_loop.spec(res a: StateArray)(x y : Std.Usize)
 : x.val < 5
 → y.val <= 5
 → ∃ output,
@@ -129,7 +129,7 @@ termination_by 5 - y.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.chi_loop.spec(res a: StateArray)(x: Std.Usize)
+theorem algos.chi_loop.spec(res a: StateArray)(x: Std.Usize)
 : x.val <= 5
 → ∃ output,
   chi_loop a res x = .ok output ∧
@@ -166,12 +166,12 @@ termination_by 5 - x.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.chi.spec(input: StateArray)
+theorem algos.chi.spec(input: StateArray)
 : ∃ output,
   chi input = .ok output ∧
   output.toSpec = Spec.Keccak.χ input.toSpec
 := by
-  simp [chi, ClonesimpleStateArray.clone]
+  simp [chi, ClonealgosStateArray.clone]
   progress as ⟨output, output_post⟩
   ext x' y' z'
   simp [output_post, Spec.Keccak.χ]

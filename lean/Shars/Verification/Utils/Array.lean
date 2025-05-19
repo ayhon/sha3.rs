@@ -1,7 +1,7 @@
 import Aeneas
 import Shars.ArrayExtract
-import Shars.Verification.Simple.Utils.Notation
-import Shars.Verification.Simple.Utils.Extract
+import Shars.Verification.Utils.Notation
+import Shars.Verification.Utils.Extract
 
 
 set_option maxHeartbeats 100000

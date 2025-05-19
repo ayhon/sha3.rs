@@ -1,13 +1,13 @@
 import Aeneas
 import Sha3.Spec
 import Shars.BitVec
-import Shars.Definitions.Simple
-import Shars.Verification.Simple.Theta
-import Shars.Verification.Simple.Rho
-import Shars.Verification.Simple.Pi
-import Shars.Verification.Simple.Chi
-import Shars.Verification.Simple.Iota
-import Shars.Verification.Simple.ListIR
+import Shars.Definitions.Algos
+import Shars.Verification.Theta
+import Shars.Verification.Rho
+import Shars.Verification.Pi
+import Shars.Verification.Chi
+import Shars.Verification.Iota
+import Shars.Verification.ListIR
 
 set_option maxHeartbeats 10000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -18,7 +18,7 @@ open Std.alloc.vec
 
 
 @[progress]
-theorem simple.round.spec(ir: Std.Usize)(input: StateArray)
+theorem algos.round.spec(ir: Std.Usize)(input: StateArray)
 : ir.val < 24
 → ∃ output,
   round input ir = .ok output ∧
@@ -41,7 +41,7 @@ def Spec.Keccak.P.loop.refinement(l: Fin 7)(nᵣ: Nat)(S: BitVec (Spec.b l))
 
 
 @[progress]
-theorem simple.keccak_p_aux_loop.spec(input: StateArray)(ir: Std.Usize)
+theorem algos.keccak_p_aux_loop.spec(input: StateArray)(ir: Std.Usize)
 : ir.val ≤ 24
 → ∃ output,
   keccak_p_aux_loop input ir = .ok output ∧
@@ -73,7 +73,7 @@ theorem Spec.Keccak.StateArray.ofBitVec_toBitVec(S: StateArray l)
 := by simp
 
 @[progress]
-theorem simple.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
+theorem algos.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
 : ∃ output,
   keccak_p input = .ok output ∧
   output.val.toBitVec.cast (by simp [Spec.b, Spec.w]) = Spec.Keccak.P 6 24 (input.val.toBitVec.cast (by simp [Spec.b, Spec.w]))
@@ -85,7 +85,7 @@ theorem simple.keccak_p.spec(input: Aeneas.Std.Array Bool 1600#usize)
   simp [Spec.Keccak.P.loop.refinement, res_post]
 
 @[progress]
-theorem simple.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
+theorem algos.keccak_p.spec'(input: Aeneas.Std.Array Bool 1600#usize)
 : ∃ output,
   keccak_p input = .ok output ∧
   output.val = ListIR.list_keccak_p input.val

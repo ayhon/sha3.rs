@@ -1,5 +1,5 @@
 import Aeneas
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 
 
@@ -11,7 +11,7 @@ abbrev Vector.toBitVec(self: Vector Bool n): BitVec n := self.toList.toBitVec.ca
 /- def Aeneas.Std.Slice.toBitVec(self: Aeneas.Std.Slice Bool): BitVec self.length := -/
 /-   (BitVec.ofBoolListLE self.val).cast (by simp) -/
 
-def simple.StateArray.toSpec(self: simple.StateArray): Spec.Keccak.StateArray 6 :=
+def algos.StateArray.toSpec(self: algos.StateArray): Spec.Keccak.StateArray 6 :=
   Spec.Keccak.StateArray.ofBitVec <| self.val.toBitVec.cast (by simp [Spec.w, Spec.b])
 
 /- abbrev Aeneas.Std.Array.toArray{size: Usize}(self: Aeneas.Std.Array α size): _root_.Array α := Array.mk self.val -/

@@ -20,19 +20,22 @@ aeneas(){
     rm "$1.llbc"
 }
 
+extract(){
+    charon $1
+    aeneas $1
+}
+
 prog="$0"
 cmd="$1"; shift
 case $cmd in
 
-  "simple")
-      charon "simple"
-      aeneas "simple"
-      mv Simple.lean "$DEFINITIONS_DIR/"
+  "algos")
+      extract "algos"
+      mv Algos.lean "$DEFINITIONS_DIR/"
     ;;
 
   "custom")
-      charon $1
-      aeneas $1
+      extract $1
     ;;
 
   *)
@@ -40,5 +43,6 @@ case $cmd in
       read && [ -n "$REPLY" ] && less $prog
       exit 1
     ;;
+
 esac
 

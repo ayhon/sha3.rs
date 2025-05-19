@@ -1,14 +1,14 @@
 import Aeneas
 import Shars.BitVec
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Auxiliary
+import Shars.Verification.Utils
+import Shars.Verification.Auxiliary
 
 set_option maxHeartbeats 1000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -23,7 +23,7 @@ def Spec.Keccak.ρ.sequence := Vector.range 24 |>.map sequence_point
 
 
 @[progress]
-theorem simple.rho_offset.spec (t : Std.Usize)
+theorem algos.rho_offset.spec (t : Std.Usize)
 : t.val < 24
 → ∃ output,
   rho_offset t = .ok output ∧
@@ -64,7 +64,7 @@ theorem Spec.Keccak.ρ.loop.spec(input: Spec.Keccak.StateArray 6)
 --   rfl
 
 @[progress]
-theorem simple.rho.inner_loop.spec(input res : StateArray) (t x y z : Std.Usize)
+theorem algos.rho.inner_loop.spec(input res : StateArray) (t x y z : Std.Usize)
 : t.val < 24
 → x.val < 5
 → y.val < 5
@@ -98,8 +98,8 @@ termination_by Spec.w 6 - z.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.rho_loop.spec(input: simple.StateArray)
-(x y : Std.Usize) (res: simple.StateArray) (t: Std.Usize)
+theorem algos.rho_loop.spec(input: algos.StateArray)
+(x y : Std.Usize) (res: algos.StateArray) (t: Std.Usize)
 : t.val <= 24
 → x.val < 5
 → y.val < 5
@@ -129,11 +129,11 @@ termination_by 24 - t.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.rho.spec(input: simple.StateArray)
+theorem algos.rho.spec(input: algos.StateArray)
 : ∃ output,
-  simple.rho input = .ok output ∧ output.toSpec = Spec.Keccak.ρ input.toSpec
+  algos.rho input = .ok output ∧ output.toSpec = Spec.Keccak.ρ input.toSpec
 := by
   /- rw [Spec.Keccak.ρ.loop] -/
-  simp [rho, ClonesimpleStateArray.clone]
+  simp [rho, ClonealgosStateArray.clone]
   progress as ⟨res, res_post⟩
   simp [res_post, Spec.Keccak.ρ.loop.spec]

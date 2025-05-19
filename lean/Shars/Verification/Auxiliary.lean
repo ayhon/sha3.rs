@@ -1,14 +1,14 @@
 import Aeneas
 import Shars.BitVec
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Refinement
+import Shars.Verification.Utils
+import Shars.Verification.Refinement
 
 set_option maxHeartbeats 1000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -25,12 +25,12 @@ theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
   simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult]
 
 @[progress]
-theorem simple.binxor.spec(a b: Bool)
+theorem algos.binxor.spec(a b: Bool)
 : ∃ c, binxor a b = .ok c ∧ c = (a ^^ b)
 := by rw [binxor]; cases a <;> cases b <;> simp
 
 @[progress]
-theorem simple.xor_long_at_loop.spec(a b: Std.Slice Bool)(pos n offset: Std.Usize)
+theorem algos.xor_long_at_loop.spec(a b: Std.Slice Bool)(pos n offset: Std.Usize)
 : b.length + pos.val ≤ Std.Usize.max
 → n = Nat.min a.length (b.length + ↑pos)
 → offset ≥ pos
@@ -66,7 +66,7 @@ termination_by n.val - offset.val
 decreasing_by scalar_decr_tac/- }}} -/
 
 @[progress]
-theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
+theorem algos.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
 : b.length + pos.val ≤ Std.Usize.max
 → ∃ output,
   xor_long_at a b pos = .ok output ∧
@@ -83,24 +83,15 @@ theorem simple.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
 
   let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.add_spec
   let* ⟨ n, n_post ⟩ ← Std.core.cmp.impls.OrdUsize.min_spec
-  let* ⟨ res, res_post_1, res_post_2 ⟩ ← simple.xor_long_at_loop.spec
+  let* ⟨ res, res_post_1, res_post_2 ⟩ ← algos.xor_long_at_loop.spec
   -- simp_lists [*] at *
   simp [*]
   intro j j_lt
   simp [*]
   split <;> simp_ifs
 
-@[simp]
-theorem BitVec.setWidth_eq_cast{n m: Nat}(bv: BitVec n)(h: n = m)
-: bv.setWidth m = bv.cast h
-:= by
-  ext i i_lt
-  simp only [getElem_setWidth, getElem_cast]
-  simp only [GetElem.getElem]
-  exact rfl
-
 @[progress]
-theorem simple.xor_long.spec(a b: Std.Slice Bool)
+theorem algos.xor_long.spec(a b: Std.Slice Bool)
 : ∃ c,
   xor_long a b = .ok c ∧
   c.length = a.length ∧
@@ -127,7 +118,7 @@ theorem simple.xor_long.spec(a b: Std.Slice Bool)
   · simp [getElem?_neg, *]
 
 @[progress]
-theorem  simple.StateArray.index.spec
+theorem  algos.StateArray.index.spec
   (self : StateArray)(x y z: Std.Usize)
 (x_idx: x.val < 5)
 (y_idx: y.val < 5)
@@ -152,8 +143,8 @@ theorem  simple.StateArray.index.spec
 -- set_option trace.ScalarTac true in
 -- set_option trace.Saturate true in
 @[progress]
-theorem simple.StateArray.index_mut.spec
-  (self : simple.StateArray)(x y z: Std.Usize)
+theorem algos.StateArray.index_mut.spec
+  (self : algos.StateArray)(x y z: Std.Usize)
 (x_idx: x.val < 5)
 (y_idx: y.val < 5)
 (z_idx: z.val < Spec.w 6)

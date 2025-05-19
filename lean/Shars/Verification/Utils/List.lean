@@ -1,8 +1,8 @@
 import Aeneas
 import Init.Data.Vector.Lemmas
 import Mathlib
-import Shars.Verification.Simple.Utils.SimpLikeTactics
-import Shars.Verification.Simple.Refinement
+import Shars.Verification.Utils.SimpLikeTactics
+import Shars.Verification.Refinement
 import Shars.BitVec
 
 set_option maxHeartbeats 100000

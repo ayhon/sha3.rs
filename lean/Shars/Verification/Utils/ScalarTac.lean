@@ -1,7 +1,7 @@
 import Aeneas
 import Shars.BitVec
-import Shars.Definitions.Simple
-import Shars.Verification.Simple.Utils.SimpLikeTactics
+import Shars.Definitions.Algos
+import Shars.Verification.Utils.SimpLikeTactics
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
@@ -46,7 +46,7 @@ theorem Nat.zero_mod_or_mod_lt(x v: Nat): v = 0 ∨ x % v < v := by
 attribute [scalar_tac_simps] Spec.w Spec.b
 
 @[simp, scalar_tac_simps]
-theorem simple.W.val: simple.W = Spec.w 6 := by native_decide
+theorem algos.W.val: algos.W = Spec.w 6 := by native_decide
 
 /-
 This rule adds the "implication" x < 5 → y < 5 → w * (5 * y + x) ≤ w * 24

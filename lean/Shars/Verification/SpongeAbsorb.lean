@@ -1,18 +1,18 @@
 import Aeneas
 import Shars.BitVec
 import Shars.ArrayExtract
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
 import Init.Data.Array
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Refinement
-import Shars.Verification.Simple.Auxiliary
-import Shars.Verification.Simple.KeccakP
-import Shars.Verification.Simple.ListIR
+import Shars.Verification.Utils
+import Shars.Verification.Refinement
+import Shars.Verification.Auxiliary
+import Shars.Verification.KeccakP
+import Shars.Verification.ListIR
 
 set_option maxHeartbeats 100000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -90,7 +90,7 @@ def absorb{r: Nat}(S: BitVec (Spec.b 6))(Ps: Array (Vector Bool r)) := Id.run do
     S := absorb.upd S P
   return S
 
-def simple.sponge_absorb_final.panic_free
+def algos.sponge_absorb_final.panic_free
   (keccak_p: List Bool → List Bool)
   (r: Nat)
   (s rest suffix: List Bool)
@@ -395,7 +395,7 @@ theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool
 : preconditions r s rest suffix
 → let f := ListIR.list_keccak_p
   let padding := (Spec.«pad10*1» r (rest.length + suffix.length)).toList
-  simple.sponge_absorb_final.panic_free f r s rest suffix =
+  algos.sponge_absorb_final.panic_free f r s rest suffix =
     ListIR.absorb' f s (
       (rest ++ suffix ++ padding).chunks_exact r
     )
@@ -420,7 +420,7 @@ theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool
   if      cond1: (rest ++ suffix).length ≥ r then
     rw [case1 cond1 precond]
     simp at cond1
-    simp [ListIR.absorb', simple.sponge_absorb_final.panic_free, *, ListIR.xor_long]
+    simp [ListIR.absorb', algos.sponge_absorb_final.panic_free, *, ListIR.xor_long]
 
     generalize leftover_val: (rest.length + suffix.length - r) = leftover
     rw [ListIR.xor_long_at_twice_separate]
@@ -488,7 +488,7 @@ theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool
   else if cond2: (rest ++ suffix).length = r - 1 then
     rw [case2 cond2 precond]
     replace cond2 := ‹r = (rest ++ suffix).length + 1›'
-    simp [ListIR.absorb', simple.sponge_absorb_final.panic_free, *, ListIR.xor_long]
+    simp [ListIR.absorb', algos.sponge_absorb_final.panic_free, *, ListIR.xor_long]
 
     rw [ListIR.xor_long_at_twice_separate]
     case compatible_offset => scalar_tac
@@ -505,7 +505,7 @@ theorem ref.interesting_part_of_the_proof.proof(r: Nat)(s rest suffix: List Bool
   else if cond3: (rest ++ suffix).length ≤ r - 2 then
     rw [case3 cond3 precond]
     simp at cond3
-    simp [ListIR.absorb', simple.sponge_absorb_final.panic_free, *, ListIR.xor_long]
+    simp [ListIR.absorb', algos.sponge_absorb_final.panic_free, *, ListIR.xor_long]
     simp_ifs
 
     rw [ListIR.xor_long_at_twice_separate]
@@ -550,7 +550,7 @@ theorem Aeneas.Std.Array.to_slice_mut.spec{α : Type u} {n : Usize} (a : Array �
 attribute [simp] Std.Slice
 set_option maxHeartbeats 1000000 in
 @[progress]
-theorem simple.sponge_absorb_initial_loop.spec
+theorem algos.sponge_absorb_initial_loop.spec
   (bs : Std.Slice Bool) (r : Std.Usize) (s : Aeneas.Std.Array Bool 1600#usize) (n i : Std.Usize)
 : n.val = bs.length / r.val
 → (r_pos: r.val > 0)
@@ -633,7 +633,7 @@ theorem Array.extract_start_stop(arr: Array α)
 := by subst start_default; subst stop_default; simp only [extract_size]
 
 @[progress]
-theorem simple.sponge_absorb_initial.spec
+theorem algos.sponge_absorb_initial.spec
   (bs : Std.Slice Bool) (r : Std.Usize) (s : Aeneas.Std.Array Bool 1600#usize)
 (r_pos: r.val > 0)
 : r.val < 1600
@@ -646,7 +646,7 @@ theorem simple.sponge_absorb_initial.spec
   intro r_lt s_zero
   rw [sponge_absorb_initial]
   let* ⟨ n, n_post ⟩ ← Std.Usize.div_spec
-  let* ⟨ res, res_post ⟩ ← simple.sponge_absorb_initial_loop.spec
+  let* ⟨ res, res_post ⟩ ← algos.sponge_absorb_initial_loop.spec
   simp [*, Array.extract_eq_self_of_le]
 
   replace res_post := congrArg (f := BitVec.toList) res_post
@@ -696,7 +696,7 @@ theorem Aeneas.Std.core.slice.index.Slice.index_range_from_usize_spec(T: Type)
 
 
 @[progress]
-theorem simple.xor_long_at.spec'(a b: Std.Slice Bool)(offset: Std.Usize)
+theorem algos.xor_long_at.spec'(a b: Std.Slice Bool)(offset: Std.Usize)
 : b.length + offset.val ≤ Std.Usize.max
 → ∃ c,
   xor_long_at a b offset = .ok c ∧
@@ -714,7 +714,7 @@ theorem simple.xor_long_at.spec'(a b: Std.Slice Bool)(offset: Std.Usize)
   simp [i_idx]
 
 @[progress]
-theorem simple.xor_long.spec'(a b: Std.Slice Bool)
+theorem algos.xor_long.spec'(a b: Std.Slice Bool)
 : ∃ c,
   xor_long a b = .ok c ∧
   c.val = ListIR.xor_long a.val b.val
@@ -727,7 +727,7 @@ theorem simple.xor_long.spec'(a b: Std.Slice Bool)
 /- set_option pp.coercions false in -/
 set_option maxHeartbeats 1000000 in
 @[progress]
-theorem simple.sponge_absorb_final.spec
+theorem algos.sponge_absorb_final.spec
   (rest suffix : Std.Slice Bool) (r : Std.Usize) (s : Aeneas.Std.Array Bool _)
 : r.val ≥ 6
 → rest.length < r
@@ -892,7 +892,7 @@ theorem List.chunks_exact_split{α: Type}(bs: List α)(r: Nat)(i: Nat)
 
 /- @[progress] -/
 set_option maxRecDepth 1000000 in
-theorem simple.sponge_absorb.spec_list
+theorem algos.sponge_absorb.spec_list
   (bs : Std.Slice Bool) (r : Std.Usize) [NeZero r.val](input : Aeneas.Std.Array Bool 1600#usize)
   (suffix : Std.Slice Bool)
 : r.val ≥ 6

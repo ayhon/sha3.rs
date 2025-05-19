@@ -1,14 +1,14 @@
 import Aeneas
 import Shars.BitVec
-import Shars.Definitions.Simple
+import Shars.Definitions.Algos
 import Sha3.Spec
 /- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Auxiliary
+import Shars.Verification.Utils
+import Shars.Verification.Auxiliary
 
 set_option maxHeartbeats 1000000
 attribute [-simp] List.getElem!_eq_getElem?_getD
@@ -19,14 +19,14 @@ open Std.alloc.vec
 
 
 @[progress]
-theorem simple.theta.theta_c.spec(input : simple.StateArray)(x z: Std.Usize)
+theorem algos.theta.theta_c.spec(input : algos.StateArray)(x z: Std.Usize)
 (x_idx: x.val < 5)
 (z_idx: z.val < Spec.w 6)
 : ∃ output, theta.c input x z = .ok output ∧ output = Spec.Keccak.θ.C input.toSpec x z
 := by rw [theta.c]; progress*; simp [*, Spec.Keccak.θ.C]
 
 @[progress]
-theorem simple.theta.theta_d.spec(input : simple.StateArray)(x z: Std.Usize)
+theorem algos.theta.theta_d.spec(input : algos.StateArray)(x z: Std.Usize)
 (x_idx: x.val < 5)
 (z_idx: z.val < Spec.w 6)
 : ∃ output, theta.d input x z = .ok output ∧ output = Spec.Keccak.θ.D input.toSpec x z
@@ -40,7 +40,7 @@ theorem simple.theta.theta_d.spec(input : simple.StateArray)(x z: Std.Usize)
   rfl
 
 @[progress]
-theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: Std.Usize)
+theorem algos.theta.inner.inner_loop.spec(input a: algos.StateArray)(x y z: Std.Usize)
 (x_idx: x.val < 5)
 (y_idx: y.val < 5)
 (z_loop_bnd: z.val <= Spec.w 6)
@@ -55,10 +55,10 @@ theorem simple.theta.inner.inner_loop.spec(input a: simple.StateArray)(x y z: St
   split
   case isTrue z_idx =>
     simp at z_idx
-    let* ⟨ acc_elem, acc_elem_post ⟩ ← simple.StateArray.index.spec
-    let* ⟨ aux, aux_post ⟩ ← simple.theta.theta_d.spec
-    let* ⟨ res_elem, res_elem_post ⟩ ← simple.binxor.spec
-    let* ⟨ old_val, mk_new, old_val.post, mk_new.post ⟩ ← simple.StateArray.index_mut.spec
+    let* ⟨ acc_elem, acc_elem_post ⟩ ← algos.StateArray.index.spec
+    let* ⟨ aux, aux_post ⟩ ← algos.theta.theta_d.spec
+    let* ⟨ res_elem, res_elem_post ⟩ ← algos.binxor.spec
+    let* ⟨ old_val, mk_new, old_val.post, mk_new.post ⟩ ← algos.StateArray.index_mut.spec
     let* ⟨ z_succ, z_succ_post ⟩ ← Aeneas.Std.Usize.add_spec
     let* ⟨ res, res_post ⟩ ← spec
 
@@ -84,7 +84,7 @@ decreasing_by scalar_decr_tac
 
 
 @[progress]
-theorem simple.theta.inner_loop.spec(input a: simple.StateArray)(x y: Std.Usize)
+theorem algos.theta.inner_loop.spec(input a: algos.StateArray)(x y: Std.Usize)
 (x_idx: x.val < 5)
 (y_loop_bnd: y.val <= 5)
 : ∃ output, theta.inner_loop input a x y = .ok output ∧
@@ -114,7 +114,7 @@ decreasing_by
   scalar_decr_tac
 
 @[progress]
-theorem simple.theta_loop.spec(input a: simple.StateArray)(x: Std.Usize)
+theorem algos.theta_loop.spec(input a: algos.StateArray)(x: Std.Usize)
 (x_loop_bnd: x.val <= 5)
 : ∃ output, theta_loop a input x = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
@@ -140,10 +140,10 @@ termination_by 5+1 - x.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem simple.theta.spec(input: simple.StateArray)
+theorem algos.theta.spec(input: algos.StateArray)
 : ∃ output, theta input = .ok output ∧ output.toSpec = Spec.Keccak.θ input.toSpec
 := by
-  rw [theta, Spec.Keccak.θ, DefaultsimpleStateArray.default]
-  let* ⟨ res, res_post ⟩ ← simple.theta_loop.spec
+  rw [theta, Spec.Keccak.θ, DefaultalgosStateArray.default]
+  let* ⟨ res, res_post ⟩ ← algos.theta_loop.spec
   ext x y z
   simp [res_post x y z, Spec.Keccak.StateArray.get_ofFn]

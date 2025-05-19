@@ -1,9 +1,9 @@
 import Sha3.Spec
 import Aeneas.ScalarTac
 import Aeneas.SimpLists
-import Shars.Verification.Simple.Refinement
-import Shars.Verification.Simple.Utils
-import Shars.Verification.Simple.Utils.SimpLikeTactics
+import Shars.Verification.Refinement
+import Shars.Verification.Utils
+import Shars.Verification.Utils.SimpLikeTactics
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
