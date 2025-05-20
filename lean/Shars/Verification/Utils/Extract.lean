@@ -1,5 +1,4 @@
 import Aeneas
-import Shars.ArrayExtract
 import Shars.Verification.Utils.List
 import Sha3.Utils
 

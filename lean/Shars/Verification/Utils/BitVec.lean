@@ -1,10 +1,8 @@
 import Mathlib
-import Shars.Verification.Utils.SimpLikeTactics
+import Shars.BitVec
 import Shars.Verification.Utils.Notation
 import Shars.Verification.Utils.List
-import Shars.Verification.Refinement
-import Shars.BitVec
-import Sha3.Spec
+import Sha3.Utils
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
@@ -79,12 +77,11 @@ theorem BitVec.toList_cast(bv: BitVec n)(h: n = m)
 : (bv.cast h).toList = bv.toList
 := by subst h; simp [toList]
 
-theorem BitVec.toBitVec_toList(bv: BitVec n)
-: bv.toList.toBitVec = bv.cast (by simp)
-:= by
-  ext i i_idx
-  simp [BitVec.toList]
-
+/- theorem BitVec.toBitVec_toList(bv: BitVec n) -/
+/- : bv.toList.toBitVec = bv.cast (by simp) -/
+/- := by -/
+/-   ext i i_idx -/
+/-   simp [BitVec.toList] -/
 
 theorem BitVec.toList_inj{bv bv2: BitVec n}
 : bv.toList = bv2.toList → bv = bv2

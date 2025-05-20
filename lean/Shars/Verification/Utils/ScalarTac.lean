@@ -1,13 +1,11 @@
 import Aeneas
-import Shars.BitVec
+/- import Shars.BitVec -/
 import Shars.Definitions.Algos
 import Shars.Verification.Utils.SimpLikeTactics
-import Sha3.Spec
-/- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
 import Sha3.Facts
-import Init.Data.Vector.Lemmas
-import Init.Data.Nat.Basic
+/- import Init.Data.Vector.Lemmas -/
+/- import Init.Data.Nat.Basic -/
 
 open Aeneas hiding Std.Array in
 @[simp, scalar_tac_simps]

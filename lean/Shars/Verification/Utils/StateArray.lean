@@ -23,7 +23,8 @@ theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
     simp [Spec.Keccak.StateArray.decode_encode c] at this
     assumption
   simp
-  apply BitVec.ext (point_eq := fun i h => bv_point_eq ⟨i, h⟩)
+  ext i i_idx
+  exact bv_point_eq ⟨i, i_idx⟩
 
 @[simp]
 theorem Spec.Keccak.StateArray.get_ofFn{f: Fin 5 × Fin 5 × Fin (w l) → Spec.Bit}(x y: Fin 5)(z: Fin (w l))
@@ -37,7 +38,7 @@ theorem Bool.toNat_mod2_self(b: Bool)
 theorem Spec.Keccak.StateArray.get_set(a: Spec.Keccak.StateArray l)(x x' y y': Fin 5)(z z': Fin (w l))
 : (a.set x' y' z' val).get x y z = if x' = x ∧ y' = y ∧ z' = z then val else a.get x y z
 := by
-  simp [get, set, BitVec.getElem_set]
+  simp [get, set, Vector.getElem_set]
   split
   case isTrue h =>
     replace h := encode_inj x x' y y' z z' |>.mp <| Fin.eq_of_val_eq h.symm

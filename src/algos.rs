@@ -1,89 +1,187 @@
 #![allow(dead_code)]
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-const L:  usize = 6;
-const W:  usize = 1<<L;
-const B:  usize = 5*5*W;
-const NR: usize = 24;
+type Lane = u64;
 
-fn binxor(a: bool, b: bool) -> bool {
-    (a && !b) || (b && !a)
-}
-
-fn xor_long_at(s: &mut [bool], other: &[bool], pos: usize){
-    // TODO: Remove once fixed in Aeneas
-    let n = (s.len()).min(other.len() + pos);
-    let mut i = pos;
-    while i < n {
-        s[i] = binxor(s[i], other[i-pos]);
-        i += 1;
-    }
-}
-fn xor_long(s: &mut [bool], other: &[bool]){
-    xor_long_at(s, other, 0);
-}
-
-struct StateArray([bool; B]);
+#[derive(Clone, Copy)]
+struct StateArray([Lane; 25]);
 
 impl Default for StateArray {
-    fn default() -> Self {
-        Self([false; B])
-    }
+    fn default() -> Self { StateArray([0; 25]) }
 }
 
-impl Clone for StateArray {
-    fn clone(&self) -> Self {
-        Self(self.0)
+impl Deref for StateArray {
+    type Target = [Lane; 25];
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl DerefMut for StateArray {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+impl Index<(usize,usize)> for StateArray {
+    type Output = Lane;
+
+    fn index(&self, (x,y): (usize, usize)) -> &Self::Output {
+        &self.0[5*y + x]
     }
+    /*
+    index self (x,y) = .ok z /\
+    z.toList = IR.get self.toBits x y
+
+where
+    Std.UScalar.toBitList: Std.Scalar ty → List Bool
+
+    Std.U64.toBitList: Std.U64 → List Bool
+
+    algos.StateArray.toBits: Array U64 25 → List Bool
+    algos.StateArray.toBits self := arr.val.map (·.toBitList) |>.flatten
+
+    @[simp]
+    IR.get: List Bool → Nat → Nat → Vector Bool 64
+    IR.get self x y := .ofFn (fun z = self[encodeIndex x y z])
+
+also
+    (Spec.Keccak.StateArray.get self x y z) = (ListIR.get self.toVector x y)[z]
+
+    U64.numBits = Spec.w 6
+    (Std.UScalar.toBitList u).length = ty.numBits
+    (Std.U64.toBitList u).length = Spec.w 6
+    (algos.StateArray.toBits self).length = Spec.b 6
+    */
+}
+
+impl IndexMut<(usize,usize)> for StateArray {
+    fn index_mut(&mut self, (x,y): (usize,usize)) -> &mut Self::Output {
+        &mut self.0[5*y + x]
+    }
+    /*
+    index_mut self (x,y) = .ok (old, mk) /\
+    old.toList = IR.get self x y /\
+    forall u, (mk u) = ListIR.set self x y u.toBitList
+
+where
+    @[simp]
+    IR.set (self: List Bool) (x y: Usize) (u: List 64) := self.replace_slice (5 * x + y) u
+
+    */
 }
 
 impl StateArray {
-    fn index(&self, index: (usize, usize, usize)) -> &bool {
-        let (x,y,z) = index;
-        &self.0[W*(5*(y as usize) + x as usize) + z]
+    fn xor_bytes_at(dst: &mut Lane, src: &[u8], pos: usize) {
+        let mut buf = dst.to_le_bytes();
+        let mut i = 0;
+        while pos + i < 8 && i < src.len() {
+            buf[pos + i] ^= src[i];
+            i += 1;
+        }
+        *dst = u64::from_le_bytes(buf);
+    }
+    /*
+    xor_bytes_at dst src pos = .ok output /\
+    output.toBitList = IR.xor_at dst.toBitList pos.val (src.toBits)
+
+where
+    IR.xor_at dst pos src := dst.replace_slice pos.val (dst.drop pos.val |>.zipWith (· ^^ ·) src)
+
+    Std.Aeneas.Slice.toBits: Slice (UScalar ty) → List Bool
+    Std.Aeneas.Slice.toBits self := arr.val.map (·.toBitList) |>.flatten
+
+also 
+    (Std.Aeneas.Slice.toBits self).length = self.length * ty.numBits
+    */
+
+    pub fn xor_at(&mut self, other: &[u8], pos: usize){
+        let mut block_idx = pos / 8;
+        let mut offset = pos % 8;
+        let mut i = 0;
+        while block_idx < self.len() && i < other.len() {
+            Self::xor_bytes_at(&mut self.0[block_idx], &other[i..], offset);
+            block_idx += 1;
+            i += 8 - offset;
+            offset = 0;
+        }
+    }
+    /*
+    xor_at self other pos := .ok output /\
+    output.toBits = IR.xor_at self.toBits pos.val other.toBits
+    */
+
+    pub fn xor(&mut self, other: &[u8]) {
+        self.xor_at(other, 0);
     }
 
-    fn index_mut(&mut self, index: (usize, usize, usize)) -> &mut bool {
-        let (x,y,z) = index;
-        &mut self.0[W*(5*(y as usize) + x as usize) + z]
+    pub fn copy_to(&self, dst: &mut [u8]) {
+        let mut i = 0;
+        while i < self.len()  && 8*i < dst.len() {
+            if 8*i + 8 < dst.len() {
+                dst[8*i..8*(i + 1)].copy_from_slice(&self.0[i].to_le_bytes()[0..]);
+            } else {
+                let nb_left = dst.len() - 8*i;
+                dst[8*i..].copy_from_slice(&self.0[i].to_le_bytes()[0..nb_left]);
+            }
+            i += 1;
+        }
     }
+    /*
+    copy_to src dst := .ok output /\
+    output.toBits = dst.toBits.replace_slice src.toBits 
+    */
 }
 
-fn theta(a: &StateArray) -> StateArray {
-    fn c(a: &StateArray, x: usize, z: usize) -> bool {
-        binxor(
-            *a.index((x,0,z)),
-            binxor(
-                *a.index((x,1,z)),
-                binxor(
-                    *a.index((x,2,z)),
-                    binxor(
-                        *a.index((x,3,z)),
-                        *a.index((x,4,z)),
-                    )
-                )
-            )
-        )
+// const W: usize = (Lane::BITS as usize)
+const W: usize = 64;
+
+fn theta(a: StateArray) -> StateArray {
+    fn c(a: &StateArray, x: usize) -> Lane {
+        a[(x,0)] ^ a[(x,1)] ^ a[(x,2)] ^ a[(x,3)] ^ a[(x,4)]
     }
-    fn d(a: &StateArray, x: usize, z: usize) -> bool {
+    fn d(a: &StateArray, x: usize) -> Lane {
         let x1 = (x + 4) % 5;
         let x2 = (x + 1) % 5;
-        let z2 = (z + (W-1)) % W;
-        binxor(c(a,x1,z), c(a, x2, z2))
+        c(a,x1) ^ c(a,x2).rotate_left(1)
     }
     let mut res = StateArray::default();
     let mut x = 0;
     while x < 5 {
-        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize){
-            
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize) {
             let mut y = 0;
             while y < 5 {
-                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize, y: usize){
-                    let mut z = 0;
-                    while z < W {
-                        *res.index_mut((x,y,z)) = binxor(*a.index((x,y,z)), d(a, x, z));
-                        z += 1;
-                    }
-                } inner(res, &a, x, y);
+                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize, y: usize) {
+                    res[(x,y)] = a[(x,y)] ^ d(a, x);
+                } inner(res, a, x, y);
+                y += 1;
+            }
+        } inner (&mut res, &a, x);
+        x += 1;
+    }
+    return res;
+}
+
+fn rho(a: StateArray) -> StateArray {
+    fn offset(t: u32) -> u32 {
+        ((t+1) * (t+2) / 2) % 64
+    }
+    let (mut x, mut y) = (1, 0);
+    let mut res = a; // Since (0,0) is never touched.
+    let mut t = 0;
+    while t < 24 {
+        res[(x,y)] = a[(x,y)].rotate_left(offset(t));
+        (x, y) = (y, (2*x + 3*y) % 5);
+        t += 1;
+    }
+    return res;
+}
+
+fn pi(a: StateArray) -> StateArray {
+    let mut res = a;
+    let mut x = 0;
+    while x < 5 {
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize) {
+            let mut y = 0;
+            while y < 5 {
+                let x2 = (x + 3*y) % 5;
+                let y2 = x;
+                res[(x,y)] = a[(x2,y2)];
                 y += 1;
             }
         } inner(&mut res, &a, x);
@@ -92,554 +190,425 @@ fn theta(a: &StateArray) -> StateArray {
     return res;
 }
 
-fn rho_offset(t: usize) -> usize {
-    ((t + 1) * (t + 2) / 2) % W
-}
-fn rho(a: &StateArray) -> StateArray {
-    let (mut x, mut y) = (1,0);
-    let mut res = a.clone();
-    let mut t = 0;
-    while t < 24 {
-        #[inline] fn inner(res: &mut StateArray, a: &StateArray, t: usize, x: usize, y: usize) {
-            let mut z = 0;
-            while z < W {
-                let z2 = (z + (W - rho_offset(t))) % W;
-                *res.index_mut((x,y,z)) = *a.index((x,y,z2));
-                 z  += 1;
-            }
-        } inner(&mut res, a, t, x, y);
-        (x,y) = (y, (2*x + 3*y) % 5);
-        t  += 1;
-    }
-    return res
-}
-
-fn pi(a: &StateArray) -> StateArray {
-    let mut res = a.clone();
+fn chi(a: StateArray) -> StateArray {
+    let mut res = a;
     let mut x = 0;
     while x < 5 {
-        #[inline] fn inner(res: &mut StateArray, a:&StateArray, x: usize){
+        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize) {
             let mut y = 0;
             while y < 5 {
-                #[inline] fn inner(res: &mut StateArray, a:&StateArray, x: usize, y: usize){
-                    let mut z = 0;
-                    while z < W {
-                        let x2 = (x + 3*y) % 5;
-                        let y2 = x;
-                        *res.index_mut((x,y,z)) = *a.index((x2,y2,z));
-                        z += 1;
-                    }
-                } inner(res, a, x, y);
+                let x1 = (x + 1) % 5;
+                let x2 = (x + 2) % 5;
+                res[(x,y)] = a[(x,y)] ^ ( (a[(x1,y)] ^ u64::MAX) & a[(x2,y)] );
                 y += 1;
-            }
-        } inner(&mut res, a, x);
+            } 
+        } inner(&mut res, &a, x);
         x += 1;
     }
     return res;
 }
 
-fn chi(a: &StateArray) -> StateArray {
-    let mut res = a.clone();
-    let mut x = 0;
-    while x < 5 {
-        #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize){
-            let mut y = 0;
-            while y < 5 {
-                #[inline] fn inner(res: &mut StateArray, a: &StateArray, x: usize, y: usize){
-                    let mut z = 0;
-                    while z < W {
-                        let x1 = (x+1)%5;
-                        let x2 = (x+2)%5;
-                        *res.index_mut((x,y,z)) = binxor(*a.index((x,y,z)),
-                            binxor(*a.index((x1,y,z)), true) && *a.index((x2,y,z)));
-                        z += 1;
-                    }
-                } inner(res, a, x, y);
-                y += 1;
-            }
-        } inner(&mut res, a, x);
-        x += 1;
-    }
-    return res;
-}
+const IOTA_RC: [u64; 24] = [0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000, 0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009, 0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a, 0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003, 0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a, 0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008];
 
-// const IOTA_RC_POINTS: [u64; 4] = [0x018d17fe09e5ab0e, 0x46cdf47b76a752a4, 0xc59cc786e87afbb0, 0xacad2037c9c0258e];
-const IOTA_RC_POINTS: [bool; 255] = [true, false, false, false, false, false, false, false, true, false, true, true, false, false, false, true, true, true,
- true, false, true, false, false, false, false, true, true, true, true, true, true, true, true, false, false, true,
- false, false, false, false, true, false, true, false, false, true, true, true, true, true, false, true, false, true,
- false, true, false, true, true, true, false, false, false, false, false, true, true, false, false, false, true, false,
- true, false, true, true, false, false, true, true, false, false, true, false, true, true, true, true, true, true,
- false, true, true, true, true, false, false, true, true, false, true, true, true, false, true, true, true, false,
- false, true, false, true, false, true, false, false, true, false, true, false, false, false, true, false, false, true,
- false, true, true, false, true, false, false, false, true, true, false, false, true, true, true, false, false, true,
- true, true, true, false, false, false, true, true, false, true, true, false, false, false, false, true, false, false,
- false, true, false, true, true, true, false, true, false, true, true, true, true, false, true, true, false, true, true,
- true, true, true, false, false, false, false, true, true, false, true, false, false, true, true, false, true, false,
- true, true, false, true, true, false, true, false, true, false, false, false, false, false, true, false, false, true,
- true, true, false, true, true, false, false, true, false, false, true, false, false, true, true, false, false, false,
- false, false, false, true, true, true, false, true, false, false, true, false, false, false, true, true, true, false,
- false, false];
-
-fn iota_rc_point(t: usize) -> bool {
-    let t = t % 255;
-    // ((IOTA_RC_POINTS[t / 64] >> (t % 4)) & 1) == 1
-    IOTA_RC_POINTS[t]
-}
-
-fn iota_rc_init(ir: usize, rc: &mut [bool; W]) {
-    let mut j = 0;
-    while j <= L {
-        rc[(1<<j) - 1] = iota_rc_point(j + 7*ir);
-        j += 1;
-    }
-}
-
-fn iota_a(res: &mut StateArray, a: &StateArray, rc: &[bool; W]){
-    let mut z = 0;
-    while z < W {
-        *res.index_mut((0,0,z)) = binxor(*a.index((0,0,z)),rc[z]);
-        z += 1;
-    }
-}
-
-fn iota(ir: usize, a: &StateArray) -> StateArray {
-    let mut rc = [false; W];
-    iota_rc_init(ir, &mut rc);
-    let mut res = a.clone();
-    iota_a(&mut res, a, &rc);
+fn iota(ir: usize, a: StateArray) -> StateArray {
+    let mut res = a;
+    res[(0,0)] = a[(0,0)] ^ IOTA_RC[ir];
     return res;
 }
 
 fn round(a: &mut StateArray, ir: usize) {
-    *a = theta(a);
-    *a = rho(a);
-    *a = pi(a);
-    *a = chi(a);
-    *a = iota(ir, a);
+    let a1 = *a;
+    let a1 = theta(a1);
+    let a1 = rho(a1);
+    let a1 = pi(a1);
+    let a1 = chi(a1);
+    *a = iota(ir, a1);
 }
 
-fn keccak_p_aux(a: &mut StateArray){
+fn keccak_p(s: &mut StateArray) {
     let mut ir = 0;
     while ir < 24 {
-        round(a, ir);
+        round(s, ir);
         ir += 1;
     }
 }
 
-
-pub fn keccak_p(s: &mut [bool; B]) {
-    let mut a = StateArray(*s);
-    keccak_p_aux(&mut a);
-    *s = a.0;
-}
-
-pub fn sponge_absorb_initial(bs: &[bool], r: usize, s: &mut [bool; B]) {
-    let n = bs.len() / r;
+fn sponge_absorb_initial(bs: &[u8], r: usize, s: &mut StateArray) {
+    let n = bs.len() / r ;
     let mut i = 0;
     while i < n {
         let chunk = &bs[r*i..r*(i+1)];
-        xor_long(s, chunk);
+        s.xor(chunk);
         keccak_p(s);
         i += 1;
     }
 }
 
-pub fn sponge_absorb_final(s: &mut [bool; B], rest: &[bool], suffix: &[bool], r: usize){
-    // We must have that 
-    //     sponge_absorb_final(s, rest, suffix, r) 
-    //       = absorb(s, rest ++ suffix ++ padding r (rest.len() + suffix.len()))
-    // where 
-    //     absorb(s, bs) 
-    //       = bs.chunks_exact(r)
-    //           .reduce(|chunk, acc| keccak_p(chunk ^^ acc), s)
-    // We can assume that rest.len() < r and that suffix.len() is much smaller than r
-    //
-    // Therefore, we have that r can point to any of the X's below
-    //     [ --- rest --- ][ suffix ][10---  padding  ---01]
-    //                       XXXXXXX][XXXXXXXXXXXXXXXXXXXXXX
-    xor_long(s, rest);
-    let nb_left = rest.len() + suffix.len();
-    if nb_left >= r {
-        // [ --- rest --- ][ suffix ][10 --- padding --- 01]
-        //                   XXXXXXX][X
-        xor_long_at(s, &suffix[0..r - rest.len()], rest.len());
-        keccak_p(s);
-        xor_long(s, &suffix[r - rest.len()..]);
-        xor_long_at(s, &[true], nb_left - r);
-        xor_long_at(s, &[true], r - 1);
-    } else {
-        // [ --- rest --- ][ suffix ][10 --- padding --- 01]
-        //                             XXXXXXXXXXXXXXXXXXXXX
-        xor_long_at(s, suffix, rest.len());
-        xor_long_at(s, &[true], nb_left);
-        if nb_left + 1 < r {
-        // [ --- rest --- ][ suffix ][10 --- padding --- 01]
-        //                              XXXXXXXXXXXXXXXXXXXX
-            xor_long_at(s, &[true], r - 1);
-        } else {
-        // [ --- rest --- ][ suffix ][10 --- padding --- 01]
-        //                             X
-            keccak_p(s);
-            xor_long_at(s, &[true], r - 1);
-        }
-    }
+fn sponge_absorb_final(s: &mut StateArray, rest: &[u8], extra: u8, r: usize){
+    /* Since things are now byte aligned, we have that rest is given in terms
+    *  of multiples of 8, and therefore both the suffix and the padding fit in
+    *  one extra byte.
+    *  It will be 01 ++ 100000 for SHA3 plus 00000001 at the end
+    *  It will be 1111 ++ 1000 for SHAKE plus 00000001 at the end
+    *  It will be 11 ++ 100000 for RawSHAKE plus 00000001 at the end
+    *  Taking into account the endianness.
+    * */
+    s.xor(rest);
+    s.xor_at(&[extra], rest.len());
+    s.xor_at(&[0x80], r - 1);
     keccak_p(s);
 }
 
-fn sponge_absorb(bs: &[bool], r: usize, s: &mut [bool; B], suffix: &[bool]) {
-    sponge_absorb_initial(bs, r, s); // → absorb
+fn sponge_absorb(bs: &[u8], r: usize, s: &mut StateArray, extra: u8) {
+    sponge_absorb_initial(bs, r, s);
     let n = bs.len() / r;
     let rest = &bs[r*n..];
-    sponge_absorb_final(s, rest, suffix, r); // → panic_free → absorb'
-} // → absorb'
+    sponge_absorb_final(s, rest, extra, r);
+}
 
-/// Expects `z` to have the proper size (d)
-pub fn sponge_squeeze(r: usize, z: &mut [bool], s: [bool; B]) {
+fn sponge_squeeze(r: usize, z: &mut [u8], s: StateArray) {
     let mut s = s;
     let mut i = 0;
     let d = z.len();
     loop {
         if i + r < d {
-            z[i..i+r].copy_from_slice(&s[0..r]);
+            s.copy_to(&mut z[i..i+r]);
             keccak_p(&mut s);
             i += r;
         } else {
-            let nb_left = d - i;
-            z[i..].copy_from_slice(&s[0..nb_left]);
+            s.copy_to(&mut z[i..]);
             return;
         }
     }
-} // → sequeeze' TODO 
+}
 
-fn sponge(r: usize, bs: &[bool], output: &mut [bool], suffix: &[bool]) {
-    let mut s = [false; B];
-    sponge_absorb(bs, r, &mut s, suffix);
+fn sponge(r: usize, bs: &[u8], output: &mut [u8], extra: u8) {
+    let mut s = StateArray::default();
+    sponge_absorb(bs, r, &mut s, extra);
     sponge_squeeze(r, output, s);
-} // → TODO
+}
 
-pub const SHA3_SUFFIX: [bool; 2] = [false, true];
-pub fn sha3_224(bs: &[bool]) -> [bool;224] { let mut output = [false;224]; sponge(B - 2*224, &bs, &mut output, &SHA3_SUFFIX); return output }
-pub fn sha3_256(bs: &[bool]) -> [bool;256] { let mut output = [false;256]; sponge(B - 2*256, &bs, &mut output, &SHA3_SUFFIX); return output }
-pub fn sha3_384(bs: &[bool]) -> [bool;384] { let mut output = [false;384]; sponge(B - 2*384, &bs, &mut output, &SHA3_SUFFIX); return output }
-pub fn sha3_512(bs: &[bool]) -> [bool;512] { let mut output = [false;512]; sponge(B - 2*512, &bs, &mut output, &SHA3_SUFFIX); return output }
+const SHA3_EXTRA: u8  = 0b00000110;
+pub fn sha3_224(bs: &[u8]) -> [u8;28] { let mut output = [0;28]; sponge(144, &bs, &mut output, SHA3_EXTRA); return output }
+pub fn sha3_256(bs: &[u8]) -> [u8;32] { let mut output = [0;32]; sponge(136, &bs, &mut output, SHA3_EXTRA); return output }
+pub fn sha3_384(bs: &[u8]) -> [u8;48] { let mut output = [0;48]; sponge(104, &bs, &mut output, SHA3_EXTRA); return output }
+pub fn sha3_512(bs: &[u8]) -> [u8;64] { let mut output = [0;64]; sponge(72, &bs, &mut output, SHA3_EXTRA); return output }
 
-pub const SHAKE_SUFFIX: [bool; 4] = [true; 4];
-pub fn shake128(bs: &[bool], output: &mut [bool]) { sponge(B - 2*128, &bs, output, &SHAKE_SUFFIX) }
-pub fn shake256(bs: &[bool], output: &mut [bool]) { sponge(B - 2*256, &bs, output, &SHAKE_SUFFIX) }
-
+const SHAKE_EXTRA: u8 = 0b00011111;
+pub fn shake128(bs: &[u8], output: &mut [u8]) { sponge(168, &bs, output, SHAKE_EXTRA) }
+pub fn shake256(bs: &[u8], output: &mut [u8]) { sponge(136, &bs, output, SHAKE_EXTRA) }
 
 #[cfg(test)]
 mod tests {
+    use std::random::random;
+
     use super::*;
+    use crate::simple;
 
-    #[derive(Debug)]
-    enum Sha3Type {
-        Hash224,
-        Hash256,
-        Hash384,
-        Hash512,
-        XOF128(usize),
-        XOF256(usize)
-    }
-
-    struct Sha3Test(Sha3Type, String, String);
-    impl Sha3Test  {
-        fn new(typ: Sha3Type, input: &str, expected: &str) -> Self {
-            Self(typ, input.into(), expected.into())
+    fn compress_u64(a: &[bool]) -> Vec<u64> {
+        let width = 64;
+        let mut res = Vec::with_capacity(a.len() / width);
+        for lane_bits in a.chunks_exact(width) {
+            let mut lane: u64 = 0;
+            for (i, bit) in lane_bits.iter().enumerate() {
+                lane = lane | (u64::from(*bit) << i);
+            }
+            res.push(lane);
         }
+        return res;
     }
-
-    fn do_test_sha3(test: &Sha3Test) {
-        let Sha3Test(typ, input, expected) = test;
-        let buff = crate::get_vec_of_bits(&input);
-        let actual = match typ {
-            Sha3Type::Hash224 => sha3_224(&buff).to_vec(),
-            Sha3Type::Hash256 => sha3_256(&buff).to_vec(),
-            Sha3Type::Hash384 => sha3_384(&buff).to_vec(),
-            Sha3Type::Hash512 => sha3_512(&buff).to_vec(),
-            Sha3Type::XOF128(d) => {
-                let mut output = vec![false; *d];
-                shake128(&buff, &mut output);
-                output
+    fn compress_u8(a: &[bool]) -> Vec<u8> {
+        let mut res = Vec::with_capacity(a.len() / 8);
+        for byte_bits in a.chunks_exact(8) {
+            let mut lane: u8 = 0;
+            for (i, bit) in byte_bits.iter().enumerate() {
+                lane = lane | (u8::from(*bit) << i);
             }
-            Sha3Type::XOF256(d) => {
-                let mut output = vec![false; *d];
-                shake256(&buff, &mut output);
-                output
-            }
-        };
-        let actual = crate::hex_of_vec_of_bits(&actual);
-        assert_eq!(&actual, expected, "Failed on {input} for {typ:?}");
+            res.push(lane);
+        }
+        return res;
     }
-
-    #[test] fn theta_works(){
-        let buff = StateArray([false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]);
-        // let expected = [false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, true, false, false, true, true, false, true, false, false, false, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
+    fn decompress_u64(a: &[u64]) -> Vec<bool> {
+        let width = 64;
+        let mut res = Vec::with_capacity(a.len() * width);
+        for byte in a {
+            for i in 0..width {
+                let bit = (byte >> i) % 2 == 1;
+                res.push(bit);
+            }
+        }
+        return res;
+    }
+    fn decompress_u8(a: &[u8]) -> Vec<bool> {
+        let width = 8;
+        let mut res = Vec::with_capacity(a.len() * width);
+        for byte in a {
+            for i in 0..width {
+                let bit = (byte >> i) % 2 == 1;
+                res.push(bit);
+            }
+        }
+        return res;
+    }
+    #[test] fn theta_works() {
+        let buf: [u64; 25] = [1851876684, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "4c65616e000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc00000000";
-        let actual = crate::hex_of_vec_of_bits(&theta(&buff).0);
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&theta(StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
 
-    #[test] fn rho_works(){
-        let buff = StateArray([true, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, true, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, true, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, true, true, true, false, false, true, true, false, true, true, true, false, true, true, true, false, true, true, true, false, false, false, false, true, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, true, true, true, true, false, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, false, true, false, false, false, false, false, true, false, false, true, false, false, false, false, true, false, true, true, false, false, false, false, true, false, false, false, true, false, false, false, true, false, true, false, true, false, false, false, true, false, false, true, true, false, false, false, true, false, true, true, true, false, false, false, true, false, false, false, false, true, false, false, true, false, true, false, false, true, false, false, true, false, false, true, false, true, false, false, true, false, true, true, false, true, false, false, true, false, false, false, true, true, false, false, true, false, true, false, true, true, false, false, true, false, false, true, true, true, false, false, true, false, true, true, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, false, false, true, false, true, false, false, true, false, false, true, false, true, false, true, true, false, false, true, false, true, false, false, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false, false, true, true, false, true, false, true, false, true, true, true, false, true, false, true, false, false, false, false, true, true, false, true, false, true, false, false, true, true, false, true, false, false, true, false, true, true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]);
+    #[test] fn rho_works() {
+        let buf: [u64; 25] = [7523094288207667809, 8101815670912281193, 8680537053616894577, 3833745473465776761, 4918848065919006518, 5497569448741520965, 6076290831446134349, 99339780707925, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "6162636465666768d2d4d6d8dadcdee09cdc1c5d9ddd1d5e33435393a7071323121a22b2b9c1c90994a4b4c4546474840415253545d5e4f44095d5155696160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&rho(&buff).0);
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&rho(StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
 
-    #[test] fn pi_works(){
-        let buff = StateArray([true, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, true, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, true, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, true, true, true, false, false, true, true, false, true, true, true, false, true, true, true, false, true, true, true, false, false, false, false, true, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, true, true, true, true, false, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, false, true, false, false, false, false, false, true, false, false, true, false, false, false, false, true, false, true, true, false, false, false, false, true, false, false, false, true, false, false, false, true, false, true, false, true, false, false, false, true, false, false, true, true, false, false, false, true, false, true, true, true, false, false, false, true, false, false, false, false, true, false, false, true, false, true, false, false, true, false, false, true, false, false, true, false, true, false, false, true, false, true, true, false, true, false, false, true, false, false, false, true, true, false, false, true, false, true, false, true, true, false, false, true, false, false, true, true, true, false, false, true, false, true, true, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, false, false, true, false, true, false, false, true, false, false, true, false, true, false, true, true, false, false, true, false, true, false, false, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false, false, true, true, false, true, false, true, false, true, true, true, false, true, false, true, false, false, false, false, true, true, false, true, false, true, false, false, true, true, false, true, false, false, true, false, true, true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]);
+    #[test] fn pi_works() {
+        let buf: [u64; 25] = [7523094288207667809, 8101815670912281193, 8680537053616894577, 3833745473465776761, 4918848065919006518, 5497569448741520965, 6076290831446134349, 99339780707925, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "61626364656667684d4e4f5051525354000000000000000000000000000000000000000000000000797a3031323334350000000000000000000000000000000000000000000000000000000000000000696a6b6c6d6e6f7055565758595a0000000000000000000000000000000000000000000000000000363738394142434445464748494a4b4c00000000000000000000000000000000000000000000000071727374757677780000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&pi(&buff).0);
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&pi(StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
-
-    #[test] fn chi_works(){
-        let buff = StateArray([true, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, true, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, true, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, true, true, true, false, false, true, true, false, true, true, true, false, true, true, true, false, true, true, true, false, false, false, false, true, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, true, true, true, true, false, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, false, true, false, false, false, false, false, true, false, false, true, false, false, false, false, true, false, true, true, false, false, false, false, true, false, false, false, true, false, false, false, true, false, true, false, true, false, false, false, true, false, false, true, true, false, false, false, true, false, true, true, true, false, false, false, true, false, false, false, false, true, false, false, true, false, true, false, false, true, false, false, true, false, false, true, false, true, false, false, true, false, true, true, false, true, false, false, true, false, false, false, true, true, false, false, true, false, true, false, true, true, false, false, true, false, false, true, true, true, false, false, true, false, true, true, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, false, false, true, false, true, false, false, true, false, false, true, false, true, false, true, true, false, false, true, false, true, false, false, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false, false, true, true, false, true, false, true, false, true, true, true, false, true, false, true, false, false, false, false, true, true, false, true, false, true, false, false, true, true, false, true, false, false, true, false, true, true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]);
+    #[test] fn chi_works() {
+        let buf: [u64; 25] = [7523094288207667809, 8101815670912281193, 8680537053616894577, 3833745473465776761, 4918848065919006518, 5497569448741520965, 6076290831446134349, 99339780707925, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "717273747576776061626b6d6f6f6f7577777b7c34363438383a73751617101d3e3f3031494a4b545556574041424b4c4d4e4f505152535455565758595a000045464748494a4b4c0808081010101010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&chi(&buff).0);
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&chi(StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
 
     #[test] fn iota_rc_init_works(){
-        let mut rc = [false; W];
-        iota_rc_init(1, &mut rc);
-        let actual = crate::hex_of_vec_of_bits(&rc);
+        let rc = IOTA_RC[1];
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&[rc]));
         let expected = "8280000000000000";
-        assert_eq!(actual, expected);
+        assert_eq!(actual, expected, "Quite bad");
+
+        // let rc = iota_init_rc(1);
+        // let actual = crate::hex_of_vec_of_bits(&decompress_u64(&[rc]));
+        // let expected = "8280000000000000";
+        // assert_eq!(actual, expected);
     }
 
-    #[test] fn iota_works(){
-        let buff = StateArray([true, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, true, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, true, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, true, true, true, false, false, true, true, false, true, true, true, false, true, true, true, false, true, true, true, false, false, false, false, true, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, true, true, true, true, false, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, false, true, false, false, false, false, false, true, false, false, true, false, false, false, false, true, false, true, true, false, false, false, false, true, false, false, false, true, false, false, false, true, false, true, false, true, false, false, false, true, false, false, true, true, false, false, false, true, false, true, true, true, false, false, false, true, false, false, false, false, true, false, false, true, false, true, false, false, true, false, false, true, false, false, true, false, true, false, false, true, false, true, true, false, true, false, false, true, false, false, false, true, true, false, false, true, false, true, false, true, true, false, false, true, false, false, true, true, true, false, false, true, false, true, true, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, false, false, true, false, true, false, false, true, false, false, true, false, true, false, true, true, false, false, true, false, true, false, false, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false, false, true, true, false, true, false, true, false, true, true, true, false, true, false, true, false, false, false, false, true, true, false, true, false, true, false, false, true, true, false, true, false, false, true, false, true, true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]);
+    #[test] fn iota_works() {
+        let buf = [7523094288207667809, 8101815670912281193, 8680537053616894577, 3833745473465776761, 4918848065919006518, 5497569448741520965, 6076290831446134349, 99339780707925, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "e3e2636465666768696a6b6c6d6e6f707172737475767778797a303132333435363738394142434445464748494a4b4c4d4e4f505152535455565758595a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&iota(1, &buff).0);
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(1, StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
 
-        let buff = StateArray([true, false, false, false, false, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, false, false, true, true, true, false, true, true, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, true, true, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, true, false, false, true, false, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, true, false, false, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]);
+        let buf = [7450753080332940129, 7667492055134201444, 7812454975315535975, 8390880619439421297, 8464925009632326245, 8028076975085418868, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "eaf3646673646667646667686667686a67686a6b686a6b6c71776572776572746572747972747975747975697975696f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&iota(4, &buff).0);
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(4, StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
 
-        let buff = StateArray([true, true, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, false, false, false, true, true, false, false, true, true, true, false, true, true, false, true, false, true, true, false, true, true, false, true, true, false, true, false, true, true, false, false, true, false, true, false, true, true, false, false, false, false, true, false, true, true, false, true, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, true, true, false, false, false, true, true, false, false, false, false, true, true, true, true, false, true, true, false, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, true, true, false, true, true, false, true, false, true, true, false, true, true, false, true, true, false, true, false, true, true, false, true, false, false, true, false, true, true, false, true, false, false, true, true, true, false, false, false, false, false, true, true, true, false, false, true, false, true, false, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]);
+        let buf = [7885348258236753271, 8320509671759178347, 7740964729211089509, 1966618985, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "7fe572e676626eed6b6a68677663787365727467686e6d6b6939387500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let actual = crate::hex_of_vec_of_bits(&iota(23, &buff).0);
+        let actual = crate::hex_of_vec_of_bits(&decompress_u64(&iota(23, StateArray(buf)).0[..]));
         assert_eq!(actual, expected);
     }
 
-    // #[test] fn pad10_1_works(){
-    //     let (x,m) = (14, 100);
-    //     let expected = vec![true, false, false, false, false, false, false, false, false, false, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=100 and x=14");
-    //     let (x,m) = (80, 25);
-    //     let expected = vec![true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=25 and x=80");
-    //     let (x,m) = (100, 36);
-    //     let expected = vec![true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=36 and x=100");
-    //     let (x,m) = (21, 11);
-    //     let expected = vec![true, false, false, false, false, false, false, false, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=11 and x=21");
-    //     let (x,m) = (85, 81);
-    //     let expected = vec![true, false, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=81 and x=85");
-    //     let (x,m) = (54, 30);
-    //     let expected = vec![true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=30 and x=54");
-    //     let (x,m) = (51, 10);
-    //     let expected = vec![true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=10 and x=51");
-    //     let (x,m) = (11, 85);
-    //     let expected = vec![true, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=85 and x=11");
-    //     let (x,m) = (12, 93);
-    //     let expected = vec![true, false, true];
-    //     let actual = pad10_1(x,m);
-    //     assert_eq!(actual, expected, "Failed with m=93 and x=12");
-    //     let (x,m) = (56, 53);
-    //     let expected = vec![true, false, true];
-        // let actual = pad10_1(x,m);
-        // assert_eq!(actual, expected, "Failed with m=53 and x=56");
-    // }
-    //
-    #[test] fn keccak_p_works(){
-        let input = [true, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, true, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, true, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, true, true, true, false, false, true, true, false, true, true, true, false, true, true, true, false, true, true, true, false, false, false, false, true, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, true, true, true, true, false, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, false, true, false, false, false, false, false, true, false, false, true, false, false, false, false, true, false, true, true, false, false, false, false, true, false, false, false, true, false, false, false, true, false, true, false, true, false, false, false, true, false, false, true, true, false, false, false, true, false, true, true, true, false, false, false, true, false, false, false, false, true, false, false, true, false, true, false, false, true, false, false, true, false, false, true, false, true, false, false, true, false, true, true, false, true, false, false, true, false, false, false, true, true, false, false, true, false, true, false, true, true, false, false, true, false, false, true, true, true, false, false, true, false, true, true, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, false, false, true, false, true, false, false, true, false, false, true, false, true, false, true, true, false, false, true, false, true, false, false, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false, false, true, true, false, true, false, true, false, true, true, true, false, true, false, true, false, false, false, false, true, true, false, true, false, true, false, false, true, true, false, true, false, false, true, false, true, true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
-        let expected = "7f1d3cb723e71c3796facd80750e940140b660fbb39e319c8facfab18cb11c7b647dba9d95ed0d19b049bfb580078f8e226fc02e1f3349767f6e21052bd7c83184982816cf72e4814d55539546cdd49e77d7d7634e79bb0e39d37dc6dbdce59260cc75046010333948c455c784dfada7f86a4a9b1c1918aa0c3de04e70dccd7c29cffa21babc4d1533387b06b14a8b581c1d451e281ba4a4da5acf54e62731226d2d22cb7222d6dffbddf3ff0db2e3b234f601584f17c5547bae05a573f6724398e6df670b231a01";
-        let mut actual = input;
-        keccak_p(&mut actual);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected);
+    #[test] fn keccak_p_works() {
+        for _attempt in 0..100 {
+            let min_state_len = 0;
+            let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
+
+            let bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
+            let mut state_bits = [false; 1600];
+            state_bits[..state_len*64].copy_from_slice(&bits);
+            let mut state = StateArray::default();
+            state.0[..].copy_from_slice(&compress_u64(&state_bits)[..]);
+
+            simple::keccak_p(&mut state_bits);
+            let expected = crate::hex_of_vec_of_bits(&state_bits);
+
+            keccak_p(&mut state);
+            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..]));
+            
+            assert_eq!(actual, expected);
+        }
     }
 
-    #[test] fn sponge_absorb_works(){
-        let mut actual = [false; B];
-        let input = [false, true];
-        let r = 887;
-        let expected = "1f02d16c290a40d5eb8f708b8a04de66315913658544543137137822c71ec9d12e3499f2c0486e39126759c61e8979c4cec10365223a3cb3205dd5b8865acdf848fac7a39c991f12bbe7a1fae54a1dd109fec526869b4611ffba7111c605a97cee27b929ebb3ebe43beb4ddf9c90007df48cda768ffee6a10280dd6f665a418e3a99ffe02aa488ef50a864bcc6e61d9f5274c54f9e0bd9b71cb8dc4f2f783625450dd18045cfbec76d9f9bb6270afd92c0fec4931a0d93b6c357e666382557f0b2aeb9de1892c5a0";
-        sponge_absorb(&input, r, &mut actual, &[]);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected, "Failed for r={r}");
+    #[test] fn xor_long_at_works() {
+        for _attempt in 0..100 {
+            let min_state_len = 0;
+            dbg!(&min_state_len);
+            let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
+            dbg!(&state_len);
+            let bytes_len = state_len * 8 - (random::<usize>() % (8*state_len).max(1));
+            dbg!(&bytes_len);
+            let offset = random::<usize>() % (8*state_len + 1 - bytes_len);
+            dbg!(&offset);
 
-        // length 24
-        actual = [false; B];
-        let input = vec![true, false, false, false, false, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, false, true, true, false];
-        let r = 27;
-        let expected = "47ebff610893456f8afd0b978ed752204e3f136aa35ab6f029a8f40871235bb5c762af823c56952f0558b4661ba32de6239a6be0ee857699aa32e4be220cd9d7ebe7e0e74dbd0954e235d96b0b980844c78bd93de779fd216b9e03a9104b5a7adf5542307d494e3abeff2608a786fb1abe8f18396f0e2eddfd2410d4eb28b1eef73f3665f2dd64302fbfed4f8e097ebc3659f4b2c8430a122d21ed2649739341b5a21d0de22911e81325063a9d55cc3c5dd55317d7512dc239e9ac94f444e85243682445632dfda9";
-        sponge_absorb(&input, r, &mut actual, &[]);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected, "Failed with r = 27 and input.size = 24");
+            let mut state_bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
+            let mut state = StateArray::default();
+            state.0[..state_len].copy_from_slice(&compress_u64(&state_bits)[..]);
 
-        actual = [false; B];
-        let r = 26;
-        let expected = "e3910b049fa1fd790c172f4073ff44075cc2f89a6d8a57bd1b96844cfc01fbb409a83a22c01d4d1396cae3de9e6f9adaf8786beb40ba4e877f70ab52282edd6e7af1d90fa593105ebdbcaa1b2d4fa54698b713742b68f5b554a87953ffa4cd8c8181fb29cb3379e50f0937ed704b480eeb26d7e1ec5dadcadfef017064c47bd0ee9323fc925289d4e71f68297dc4ed4cb0a43ac257bb83a211e130b1e62eff25e7b432db138b31f33ec5ba55531d0556e534ee16655bfec8a836446c200feacb5ac6755f0a6fed6b";
-        sponge_absorb(&input, r, &mut actual, &[]);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected, "Failed with r = 26 and input.size = 24");
+            let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
+            let data = compress_u8(&data_bits);
 
-        actual = [false; B];
-        let r = 25;
-        let expected = "380b5b964d0a67f655e3a1e5dde63c043cf08b349195b79fbac87d719d29aca0311fa782385c2b0ecbe58b03bbe6f1d9e5013d72ec25134c69551fec147d6d9d57a3fba2c7668ac17d9f749aff6228b434f793728943bc39606f843aa8a53ba9d086af97ccb727439ee0e03a6b3142c327349db1bbeef759fddc41d87de1716bae029d10dda3dc46a3ef59b2e815a96cfd99100b08e1205ddd65ed57b121ad6345bd3ba9e2769902cc681cd9017715f2890dd3ad34b909de6855ceff0d2d6ccd23c360d73bc6eadd";
-        sponge_absorb(&input, r, &mut actual, &[]);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected, "Failed with r = 25 and input.size = 24");
+            state.xor_at(&data, offset);
+            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..state_len]));
 
-        actual = [false; B];
-        let r = 24;
-        let expected = "b1bf89728d22b2115123bb0a9e1e096dc74e3ecbdba84f5109583d9b83066af7db171030d7e1a1612b102f12f631fc126d0155653b4275a269f3fa2bbe5436d89e3fed9589a4078ae572b7776e3d8857e73a73003e4f13b315544c2becac0469135d6aa3bb83f71e2575ad913d24c87aa2c4960237f74a8c542f53dc3da98676a53d9c93eba5d8405a0df407b460f588d0179b7ecbb00fc3363534716464c56b4a0c597464c0afac371c66f6da188620a4dd0c21ae56e2ddb4ec5761c9a346db5e4056d816803fc3";
-        sponge_absorb(&input, r, &mut actual, &[]);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected, "Failed with r = 24 and input.size = 24");
+            for (i, bit) in data_bits.iter().enumerate() {
+                if 8*offset + i < state_bits.len() {
+                    state_bits[8*offset + i] ^= bit;
+                } else { break }
+            }
+            let expected = crate::hex_of_vec_of_bits(&state_bits[..64*state_len]);
 
+            assert_eq!(actual, expected)
+        }
+    }
+
+    #[test] fn sponge_absorb_initial_works() {
+        for _attempt in 0..100 {
+            let min_state_len = 0;
+            let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
+            let bytes_len = state_len * 8 - (random::<usize>() % (8*state_len).max(1));
+            let r = (random::<usize>() % (25*8 - 1) + 1) * 8;
+
+            let bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
+            let mut state_bits = [false; 1600];
+            state_bits[..state_len*64].copy_from_slice(&bits);
+            let mut state: StateArray = Default::default();
+            state.0[..].copy_from_slice(&compress_u64(&state_bits)[..]);
+
+            let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
+            let data = compress_u8(&data_bits);
+
+            simple::sponge_absorb_initial(&data_bits, r, &mut state_bits);
+            let expected = crate::hex_of_vec_of_bits(&state_bits[..64*state_len]);
+
+            sponge_absorb_initial(&data, r/8, &mut state);
+            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..state_len]));
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test] fn sponge_absorb_final_works() {
+        for _attempt in 0..100 {
+            let min_state_len = 0;
+            let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
+            let r = (random::<usize>() % (25*8 - 1) + 1) * 8;
+            let bytes_len = random::<usize>() % (r/8);
+            // let bytes_len = random::<usize>() % (r / 8);
+
+            let bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
+            let mut state_bits = [false; 1600];
+            state_bits[..state_len*64].copy_from_slice(&bits);
+            let mut state: StateArray = Default::default();
+            state.0[..].copy_from_slice(&compress_u64(&state_bits)[..]);
+
+            let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
+            let data = compress_u8(&data_bits);
+
+            simple::sponge_absorb_final(&mut state_bits, &data_bits, &simple::SHA3_SUFFIX, r);
+            let expected = crate::hex_of_vec_of_bits(&state_bits[..]);
+
+            sponge_absorb_final(&mut state, &data, SHA3_EXTRA, r/8);
+            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..]));
+
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test] fn sponge_squeeze_works(){
-        let mut actual;
+        for _attempt in 0..100 {
+            let min_state_len = 0;
+            dbg!(&min_state_len);
+            // let state_len = 1;
+            let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
+            dbg!(&state_len);
+            let r = (random::<usize>() % (25*8 - 1) + 1) * 8;
+            dbg!(&r);
+            let bytes_len = random::<usize>() % (r/8);
+            dbg!(&bytes_len);
+            let d = (random::<usize>() % 40) + 20;
 
-        let input = [true, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, true, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, true, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, true, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, true, true, true, false, false, true, true, false, true, true, true, false, true, true, true, false, true, true, true, false, false, false, false, true, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, true, true, true, true, false, false, false, false, false, true, true, false, false, true, false, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, false, true, true, true, false, true, true, false, false, false, false, false, true, true, true, false, false, true, false, false, true, true, true, false, false, true, false, false, false, false, false, true, false, false, true, false, false, false, false, true, false, true, true, false, false, false, false, true, false, false, false, true, false, false, false, true, false, true, false, true, false, false, false, true, false, false, true, true, false, false, false, true, false, true, true, true, false, false, false, true, false, false, false, false, true, false, false, true, false, true, false, false, true, false, false, true, false, false, true, false, true, false, false, true, false, true, true, false, true, false, false, true, false, false, false, true, true, false, false, true, false, true, false, true, true, false, false, true, false, false, true, true, true, false, false, true, false, true, true, true, true, false, false, true, false, false, false, false, false, true, false, true, false, true, false, false, false, true, false, true, false, false, true, false, false, true, false, true, false, true, true, false, false, true, false, true, false, false, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false, false, true, true, false, true, false, true, false, true, true, true, false, true, false, true, false, false, false, false, true, true, false, true, false, true, false, false, true, true, false, true, false, false, true, false, true, true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
-        let r = 239;
-        let d = 128;
-        let expected = "6162636465666768696a6b6c6d6e6f70";
-        actual = vec![false;d];
-        sponge_squeeze(r, &mut actual, input);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected);
+            let bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
+            let mut state_bits = [false; 1600];
+            state_bits[..state_len*64].copy_from_slice(&bits);
+            let mut state: StateArray = Default::default();
+            state.0[..].copy_from_slice(&compress_u64(&state_bits)[..]);
+            dbg!(crate::hex_of_vec_of_bits(&state_bits));
 
-        // 6173646673646667646667686667686a67686a6b686a6b6c71776572776572746572747972747975747975697975696f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-        let input = [true, false, false, false, false, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, false, false, true, true, true, false, true, true, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, true, true, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, true, false, false, true, false, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, true, false, false, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
-        let r = 18;
-        let d = 160;
-        let expected = "6173c86bd9fcc901c89c7130754132a08dd1043b";
-        actual = vec![false;d];
-        sponge_squeeze(r, &mut actual, input);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected);
+            let mut dst = vec![0u8; d];
+            sponge_squeeze(r/8, &mut dst[..], state);
+            let actual = crate::hex_of_vec_of_bits(&decompress_u8(&dst));
+
+            let mut dst = vec![false; d*8];
+            simple::sponge_squeeze(r, &mut dst, state_bits);
+            let expected = crate::hex_of_vec_of_bits(&dst);
+
+            assert_eq!(actual, expected);
+        }
     }
-    #[test] #[ignore] fn sponge_squeeze_a_lot(){
-        let mut actual;
-        // 6173646673646667646667686667686a67686a6b686a6b6c71776572776572746572747972747975747975697975696f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-        let input = [true, false, false, false, false, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, false, false, true, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, true, false, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, true, false, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, false, true, false, true, true, false, false, true, false, true, false, true, true, false, true, true, false, true, false, true, true, false, false, false, true, true, false, true, true, false, true, false, false, false, true, true, true, false, true, true, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, true, true, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, false, true, false, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, false, false, true, false, true, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, true, false, false, true, false, true, true, false, true, false, false, true, true, true, true, false, true, false, true, false, true, true, true, false, true, false, false, true, false, true, true, false, true, true, true, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
-        let r = 9;
-        let d = 648;
-        let expected = "61e5353fc09929491b042ddb0d3f6da076f3265ba943e12bec5275bd7b02e7f27c6799fde919e15aafcf20b33d9c6bea597a879147431d1d9c065107092f8c0f524c86bc48f3562c3b3afda97e79af3ee6";
-        actual = vec![false;d];
-        sponge_squeeze(r, &mut actual, input);
-        assert_eq!(crate::hex_of_vec_of_bits(&actual), expected);
-    }
-
-    #[test] fn test_sponge_absorb_final(){
-        let mut s;
-
-        s = [false; B];
-        let r = 1152;
-        let rest = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
-        let suffix = [false, true];
-        let expected = "b6b709fdb9852b8c7439a33595d42dba2940f44c10c3ce09f8b6a87af209db89daffcea975f8352f9bd6325f9d4cd3111feede3badb5174df95354877b88588be59ca22d7574911bf7bc672b551a708f21e45368344284a25a029aadd5a4147f9969fbbf696d6d012dfc3497395d1a1760b1f36dcec89d11f44060053d0227ade7bce68259eca470d26d793d6163b275a68e24eb60d85eeeb59e63e287344dc9690cb061531709f7120c259f8be2e95376749534f9a639cc63cd63e0ebe7a30a375a0caad987dde5";
-        sponge_absorb_final(&mut s, &rest, &suffix, r);
-        assert_eq!(crate::hex_of_vec_of_bits(&s), expected);
-
-        s = [false; B];
-        let r = 1152; // sha3_224
-        let rest = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
-        let suffix = [false, true]; // SHA3
-        let expected = "db524913af2f464b79baa476df9f004cfed48d7ba34049921c5a8c33b8adc21a702312ba5e99be8e14121cea5c764ad870db1363a0d6147f3de5ca6b58c9a2dcf2450ab3bd277574d56a9a7f8758b7b9997830439e54c958431d94bfa8f54f9756a19e893fb65b3d3e16f5b7436ccea7de368d1260dbe671016e31c14c87fd9bc6f64b27f77fd1dd15858e579cce4aa0e4f6cf0be9ef449126b2eaddfd047ecdc3387c4e0f793367c612b790de96cb66aaaa87728a8607159741ae2073d8efacf527b71601d54199";
-        sponge_absorb_final(&mut s, &rest, &suffix, r);
-        assert_eq!(crate::hex_of_vec_of_bits(&s), expected, "Failed on {}", rest.len());
-
-        s = [false; B];
-        let r = 10;
-        let rest = [false, true, false, true, false, true, false, true, false];
-        let suffix = [true, true];
-        let expected = "57ac0fb3ecde6741529420e631a88085e533640bb2870a815f037ec11a15710264ed64127d849137b635559635d77362a9e26ba5cf0e7273c9a40bae60343ac8f2fff83491fe0449cf723e2b908115cab4e930a644cd140c7cf48bcdfe84ec171d57b65797f2099c33b659f4a0b044416088f4e351e014aa5254ba983f00f8f533724a5c06bee22cc0a42bd4ed12a50eb118f5beb3712e1f49b8424c7aec728f77e21d9ee70f7b15800020f27f91d4508e8c3845ff98a24d94a691658ad774a185b5ff5899f71f89";
-        sponge_absorb_final(&mut s, &rest, &suffix, r);
-        assert_eq!(crate::hex_of_vec_of_bits(&s), expected, "Failed on {}", rest.len());
-
-        s = [false; B];
-        let r = 10;
-        let rest = [true, false, true, false, true, false, true, false];
-        let suffix = [true, true];
-        let expected = "3c18f46579e237b602b42ca9eefdad9782afc6e54b3c553a1de3fd24818599375167f4ab7d63aa1cdc1424614b4f612dd738bed76041754129c09d6e8df06b590960d2511fcef0686faf7a98b5f850257a1002bc760dea8bd77d653b1689efc25c112f2e8a6904158745b2d4c5df48336158680fad96f4b08333fee312c0b5a52a685f98e7cad5c67b2d51d8731d30d659ea0d4154b062e130ec095057574d74237018aa1713e2812071374e3146b51a742ac70eceb7c069c5e5d697dec587d560f50ab03963bf8e";
-        sponge_absorb_final(&mut s, &rest, &suffix, r);
-        assert_eq!(crate::hex_of_vec_of_bits(&s), expected, "Failed on {}", rest.len());
-    }
-
-    #[test] fn sha3_works(){
-        let test_vectors = [
-            ( "abc", [
-                "e642824c3f8cf24ad09234ee7d3c766fc9a3a5168d0c94ad73b46fdf",
-                "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532",
-                "ec01498288516fc926459f58e2c6ad8df9b473cb0fc08c2596da7cf0e49be4b298d88cea927ac7f539f1edf228376d25",
-                "b751850b1a57168a5693cd924b6b096e08f621827444f70d884f5d0240d2712e10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0" 
-            ]),
-            ( "", [ 
-                "6b4e03423667dbb73b6e15454f0eb1abd4597f9a1b078e3f5b5a6bc7",
-                "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
-                "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac3713831264adb47fb6bd1e058d5f004",
-                "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26"
-            ]),
-            ( "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", [
-                "8a24108b154ada21c9fd5574494479ba5c7e7ab76ef264ead0fcce33",
-                "41c0dba2a9d6240849100376a8235e2c82e1b9998a999e21db32dd97496d3376",
-                "991c665755eb3a4b6bbdfb75c78a492e8c56a22c5c4d7e429bfdbc32b9d4ad5aa04a1f076e62fea19eef51acd0657c22",
-                "04a371e84ecfb5b8b77cb48610fca8182dd457ce6f326a0fd3d7ec2f1e91636dee691fbe0c985302ba1b0d8dc78c086346b533b49c030d99a27daf1139d6e75e",
-            ]),
-            ( "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu", [
-                "543e6868e1666c1a643630df77367ae5a62a85070a51c14cbf665cbc",
-                "916f6061fe879741ca6469b43971dfdb28b1a32dc36cb3254e812be27aad1d18",
-                "79407d3b5916b59c3e30b09822974791c313fb9ecc849e406f23592d04f625dc8c709b98b43b3852b337216179aa7fc7",
-                "afebb2ef542e6579c50cad06d2e578f9f8dd6881d7dc824d26360feebf18a4fa73e3261122948efcfd492e74e82e2189ed0fb440d187f382270cb455f21dd185"
-            ])
-        ].into_iter()
-            .flat_map(|(msg, expecteds)| {
-                [
-                    Sha3Test::new(Sha3Type::Hash224, msg, expecteds[0]),
-                    Sha3Test::new(Sha3Type::Hash256, msg, expecteds[1]),
-                    Sha3Test::new(Sha3Type::Hash384, msg, expecteds[2]),
-                    Sha3Test::new(Sha3Type::Hash512, msg, expecteds[3]),
-                ]
-            })
-            .collect::<Vec<_>>();
-        let extra_tests = [
-            Sha3Test::new(
-                Sha3Type::Hash224,
-                "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                "14794203f0c6785317af4d506dfa22ea936de0d842d5b0f0ed4af091",
-            ),
-            Sha3Test::new(
-                Sha3Type::Hash224,
-                "Lean",
-                "482d469b6e88d94ceaf577482108ae1d596de08e9b8056399b985def",
-            ),
-            Sha3Test::new(
-                Sha3Type::Hash224,
-                "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                "14794203f0c6785317af4d506dfa22ea936de0d842d5b0f0ed4af091"
-            ),
+    #[test] fn sha3_works() {
+        let mgs = [
+            "abc",
+            "",
+            "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+            "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu",
+            "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "Lean",
         ];
+        for msg in mgs {
+            let bits = crate::get_vec_of_bits(msg);
+            let expected = crate::hex_of_vec_of_bits(&simple::sha3_224(&bits));
+            let actual = crate::hex_of_vec_of_bits(&decompress_u8(&sha3_224(&compress_u8(&bits))));
+            assert_eq!(actual, expected, "Failed at 224");
+        }
+        for msg in mgs {
+            let bits = crate::get_vec_of_bits(msg);
+            let expected = crate::hex_of_vec_of_bits(&simple::sha3_256(&bits));
+            let actual = crate::hex_of_vec_of_bits(&decompress_u8(&sha3_256(&compress_u8(&bits))));
+            assert_eq!(actual, expected, "Failed at 256");
+        }
+        for msg in mgs {
+            let bits = crate::get_vec_of_bits(msg);
+            let expected = crate::hex_of_vec_of_bits(&simple::sha3_384(&bits));
+            let actual = crate::hex_of_vec_of_bits(&decompress_u8(&sha3_384(&compress_u8(&bits))));
+            assert_eq!(actual, expected, "Failed at 384");
+        }
+        for msg in mgs {
+            let bits = crate::get_vec_of_bits(msg);
+            let expected = crate::hex_of_vec_of_bits(&simple::sha3_512(&bits));
+            let actual = crate::hex_of_vec_of_bits(&decompress_u8(&sha3_512(&compress_u8(&bits))));
+            assert_eq!(actual, expected, "Failed at 512");
+        }
+    }
+    #[test] fn shake_works() {
+        let mgs = [
+            "abc",
+            "",
+            "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+            "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu",
+            "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "Lean",
+        ];
+        for msg in mgs {
+            let d = 20;
+            let mut dst_bits = vec![false; d*8];
+            let bits = crate::get_vec_of_bits(msg);
+            simple::shake128(&bits, &mut dst_bits);
+            let expected = crate::hex_of_vec_of_bits(&dst_bits);
 
-        let tests = test_vectors.iter()
-            .chain(extra_tests.iter());
+            let mut dst = vec![0u8; d];
+            shake128(&compress_u8(&bits), &mut dst);
+            let actual = crate::hex_of_vec_of_bits(&decompress_u8(&dst));
+            assert_eq!(actual, expected);
+        }
+        for msg in mgs {
+            let d = 20;
+            let mut dst_bits = vec![false; d*8];
+            let bits = crate::get_vec_of_bits(msg);
+            simple::shake256(&bits, &mut dst_bits);
+            let expected = crate::hex_of_vec_of_bits(&dst_bits);
 
-        for test in tests {
-            do_test_sha3(test);
+            let mut dst = vec![0u8; d];
+            shake256(&compress_u8(&bits), &mut dst);
+            let actual = crate::hex_of_vec_of_bits(&decompress_u8(&dst));
+            assert_eq!(actual, expected);
         }
     }
 }
