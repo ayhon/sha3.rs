@@ -1,9 +1,6 @@
-import Aeneas
-import Init.Data.Vector.Lemmas
+import Aeneas.ScalarTac
 import Mathlib
 import Shars.Verification.Utils.SimpLikeTactics
-import Shars.Verification.Refinement
-import Shars.BitVec
 
 set_option maxHeartbeats 100000
 set_option maxRecDepth 10000000
@@ -357,12 +354,94 @@ theorem List.setWidth_of_length_eq[Inhabited α](ls: List α)(n: Nat)
 : ls.length = n → ls.setWidth n = ls
 := by rintro rfl; simp [setWidth]
 
-@[simp]
-theorem List.toList_toBitVec(ls: List Bool)
-: ls.toBitVec.toList = ls
+/- @[simp] -/
+/- theorem List.toList_toBitVec(ls: List Bool) -/
+/- : ls.toBitVec.toList = ls -/
+/- := by -/
+/-   simp [toBitVec, BitVec.toList, finRange] -/
+/-   apply List.ext_getElem -/
+/-   · simp [toBitVec, BitVec.toList] -/
+/-   intros -/
+/-   simp -/
+
+theorem List.length_flatten_of_uniform{n: Nat}{ls: List (List Bool)}
+: (∀ xs ∈ ls, xs.length = n)
+→ ls.flatten.length = n * ls.length
 := by
-  simp [toBitVec, BitVec.toList, finRange]
-  apply List.ext_getElem
-  · simp [toBitVec, BitVec.toList]
-  intros
-  simp
+  intro uniform
+  induction ls
+  case nil => simp
+  case cons hd tl ih =>
+    simp [-length_flatten]
+    rw [ih, uniform hd]
+    · simp [Nat.mul_add, Nat.add_comm]
+    · simp
+    · intros; simp [*]
+
+def List.matrix_idx(ls: List (List α))(i: Nat)(acc: Nat := 0): Nat × Nat :=
+  match ls with
+  | [] => (acc, i)
+  | hd :: tl => 
+    if i < hd.length then
+      (acc, i)
+    else
+      List.matrix_idx tl (i - hd.length) (acc + 1)
+
+theorem List.acc_le_matrix_idx_1(ls: List (List α))(i acc: Nat)
+: acc ≤ (ls.matrix_idx i acc).1 
+:= by
+  unfold List.matrix_idx
+  match ls with
+  | [] => simp
+  | hd :: tl =>
+    if i < hd.length then
+      simp [*]
+    else
+      simp [*]
+      have := List.acc_le_matrix_idx_1 tl (i - hd.length) (acc + 1)
+      omega
+
+theorem List.getElem!_flatten (ls: List (List Bool))(i: Nat)(acc: Nat)
+: let (x,y) := ls.matrix_idx i acc
+  ls.flatten[i]! = (ls[x - acc]!)[y]!
+:= by
+  simp only
+  match ls with
+  | [] => simp [default]
+  | hd :: tl =>
+    simp
+    if i < hd.length then
+      simp [List.matrix_idx, *]
+    else
+      simp [List.matrix_idx, *]
+      simp_lists
+      rw [List.getElem!_flatten tl (acc := acc + 1)]
+      conv => enter [2, 1, 2, 2]; rw [show acc = (acc + 1) - 1 from rfl]
+      conv => enter [2, 1, 2]; rw [tsub_tsub_eq_add_tsub_of_le (Nat.le_add_left 1 acc)]
+      rw [Nat.sub_add_comm]
+      simp
+      simp [List.acc_le_matrix_idx_1]
+
+/- attribute [-simp] List.length_flatten in -/
+/- theorem List.matrix_idx_of_uniform(ls: List (List Bool)) -/
+/- : (∀ xs ∈ ls, xs.length = n) -/
+/- → n > 0 -/
+/- → i < ls.flatten.length -/
+/- → ls.matrix_idx i acc = (acc + i / n, i % n) -/
+/- := by -/
+/-   intro uniform n_pos i_idx -/
+/-   simp [List.length_flatten_of_uniform uniform] at i_idx -/
+/-   match ls with -/
+/-   | [] => simp at i_idx -/
+/-   | hd :: tl => -/
+/-     simp [Nat.mul_add] at i_idx -/
+/-     if h: i < hd.length then -/
+/-       rw [uniform] at h; case a => simp -/
+/-       simp [*, matrix_idx, Nat.div_eq_of_lt, Nat.mod_eq_of_lt] -/
+/-     else -/
+/-       rw [uniform] at h; case a => simp -/
+/-       simp [*, matrix_idx] -/
+/-       have ih := List.matrix_idx_of_uniform (n := n) (i := i - n) (ls := tl) (acc := acc + 1) -/
+/-       sorry -/
+/-       rw [ih] -/
+/-       · simp [Nat.sub_div] -/
