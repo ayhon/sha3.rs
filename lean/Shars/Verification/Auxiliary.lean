@@ -24,161 +24,40 @@ theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
   ∃ z, Std.toResult (Std.core.cmp.impls.OrdUsize.min x y) = .ok z ∧ z = Std.core.cmp.impls.OrdUsize.min x y := by
   simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult]
 
-@[progress]
-theorem algos.binxor.spec(a b: Bool)
-: ∃ c, binxor a b = .ok c ∧ c = (a ^^ b)
-:= by rw [binxor]; cases a <;> cases b <;> simp
+/- @[simp] -/
+/- theorem U64.numBits_eq_w -/
+/- : Std.UScalarTy.U64.numBits = Spec.w 6 -/
+/- := by simp [Spec.w] -/
 
+attribute [local simp] Std.Array.length
+attribute [-simp] List.ofFn_succ in 
 @[progress]
-theorem algos.xor_long_at_loop.spec(a b: Std.Slice Bool)(pos n offset: Std.Usize)
-: b.length + pos.val ≤ Std.Usize.max
-→ n = Nat.min a.length (b.length + ↑pos)
-→ offset ≥ pos
-→ ∃ output,/- {{{ -/
-  xor_long_at_loop a b pos n offset = .ok output ∧
-  output.length = a.length ∧
-  ∀ j < output.length,
-    output.val[j]! =
-      if offset ≤ j ∧ j < n then
-        (a[j]! ^^ b[j-pos.val]!)
-      else a[j]!
-:= by
-  intro no_overflow n_def i_ge_pos
-  rw [xor_long_at_loop]
-  progress* <;> simp [*]
-  · intro j j_lt
-    simp [*]
-    split
-    case isTrue =>
-      simp_ifs
-      simp_lists
-    case isFalse =>
-      split
-      case isFalse =>
-        simp_ifs
-        simp_lists
-      case isTrue =>
-        simp_lists
-        -- simp_all
-        simp [‹j = offset.val›']
-  · simp_ifs
-termination_by n.val - offset.val
-decreasing_by scalar_decr_tac/- }}} -/
-
-@[progress]
-theorem algos.xor_long_at.spec(a b: Std.Slice Bool)(pos: Std.Usize)
-: b.length + pos.val ≤ Std.Usize.max
+theorem algos.IndexalgosStateArrayPairUsizeUsizeU64.index.spec(input: algos.StateArray)(x y: Std.Usize)
+: 5 * y.val + x.val < 25
 → ∃ output,
-  xor_long_at a b pos = .ok output ∧
-  output.length = a.length ∧
-  ∀ j < output.length,
-      output.val[j]! =
-      if pos.val ≤ j ∧ j < pos.val + b.length then
-         (a.val[j]! ^^ b.val[j-pos.val]!)
-      else
-          a.val[j]!
-:= by/- {{{ -/
-  intro no_overflowa
-  rw [xor_long_at]
-
-  let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.add_spec
-  let* ⟨ n, n_post ⟩ ← Std.core.cmp.impls.OrdUsize.min_spec
-  let* ⟨ res, res_post_1, res_post_2 ⟩ ← algos.xor_long_at_loop.spec
-  -- simp_lists [*] at *
-  simp [*]
-  intro j j_lt
-  simp [*]
-  split <;> simp_ifs
-
-@[progress]
-theorem algos.xor_long.spec(a b: Std.Slice Bool)
-: ∃ c,
-  xor_long a b = .ok c ∧
-  c.length = a.length ∧
-  c.val.toBitVec = (a.val.toBitVec ^^^ b.val.toBitVec.setWidth a.length).setWidth c.length
-  /- c = a.val.zipWith xor b ++ a.val.drop b.length -/
-:= by/- {{{ -/
-  rw [xor_long]
-  progress*
-
-  simp [*, BitVec.ofNatLT]
-
-  ext j j_idx_res
-  replace res_bit := res_post_2 j j_idx_res
-  -- NOTE: Replace [·]! with [·] so I can use theorems such as
-  --        · `getElem_cast`
-  --        · `getElem_xor`
-  --        · `getElem_setWidth`
-  simp only [Std.Slice.getElem!_Nat_eq] at res_bit
-  have j_idx_a: j < a.length := by simpa [*] using j_idx_res
-  simp only [getElem!_pos, *] at res_bit
-  simp [*]; clear res_bit
-  split_all
-  · simp [getElem!_pos, getElem?_pos, *]
-  · simp [getElem?_neg, *]
-
-@[progress]
-theorem  algos.StateArray.index.spec
-  (self : StateArray)(x y z: Std.Usize)
-(x_idx: x.val < 5)
-(y_idx: y.val < 5)
-(z_idx: z.val < Spec.w 6)
-: ∃ output, self.index (x,y,z) = .ok output ∧
-    output = self.toSpec.get x.val y.val z.val
-:= by
+  index input (x,y) = .ok output ∧
+  output = input.val[5 * y.val + x.val]!
+:= by 
+  intro no_overflow
   rw [index]
-  let* ⟨ i, i_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
-  simp [i_post] at i1_post
-  let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  let* ⟨ i3, i3_post ⟩ ← Aeneas.Std.Usize.add_spec
-  have: Spec.w 6 * (5 * ↑y + ↑x) + ↑z < 1600 := by scalar_tac
-  let* ⟨ res, res_post ⟩ ← Aeneas.Std.Array.index_usize_spec
-  simp [*, Std.Usize.max]
-  simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex]
-  simp [Nat.mod_eq_of_lt x_idx, Nat.mod_eq_of_lt y_idx, Nat.mod_eq_of_lt z_idx]
-  simp [toSpec, BitVec.getElem_ofBoolListLE]
-  simp [getElem_eq_getElem!]
+  progress*
+  simp [*]
 
--- set_option trace.ScalarTac true in
--- set_option trace.Saturate true in
-@[progress]
-theorem algos.StateArray.index_mut.spec
-  (self : algos.StateArray)(x y z: Std.Usize)
-(x_idx: x.val < 5)
-(y_idx: y.val < 5)
-(z_idx: z.val < Spec.w 6)
-: ∃ val upd, self.index_mut (x,y,z) = .ok (val, upd) ∧
-    val = self.toSpec.get x.val y.val z.val ∧
-    ∀ b, (upd b).toSpec = self.toSpec.set x.val y.val z.val b
-:= by
+theorem algos.IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut.spec(input: algos.StateArray)(x y: Std.Usize)
+: 5 * y.val + x.val < 25
+→ ∃ old mk,
+  index_mut input (x,y) = .ok (old, mk) ∧
+  old = input.val[5 * y.val + x.val]! ∧
+  ∀ u, (mk u).val = input.val.set (5 * y.val + x.val) u
+:= by 
+  intros
   rw [index_mut]
-  let* ⟨ i, i_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  let* ⟨ i1, i1_post ⟩ ← Aeneas.Std.Usize.add_spec
-  simp only [*] at i1_post
-  let* ⟨ i2, i2_post ⟩ ← Aeneas.Std.Usize.mul_spec
-  simp only [*] at i2_post
-  let* ⟨ c, c_post ⟩ ← Aeneas.Std.Usize.add_spec
-  simp only [*] at c_post
-  have c_idx :↑c < Std.Array.length self := by scalar_tac
-  let* ⟨ celem, celem_post ⟩ ← Aeneas.Std.Array.index_mut_usize_spec
-  simp [-Bool.forall_bool,celem_post]
-  simp only [Std.Array.length] at c_idx
-  have c_encode: c.val = @Spec.Keccak.StateArray.encodeIndex 6 x.val.cast y.val.cast z.val.cast := by
-    simp [Spec.Keccak.StateArray.encodeIndex, Nat.mod_eq_of_lt, *]
-  constructor
-  · simp [Spec.Keccak.StateArray.get, ←c_encode, toSpec]; rw [getElem_eq_getElem!]
-  · intro b
-    ext i j k
-    simp [Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.set, ←c_encode]
-    simp [toSpec, Spec.Keccak.StateArray.set, Std.Array.set]
-    simp [BitVec.getElem_set]
-    split
-    case isTrue h =>
-      simp [←h, c_encode]
-    case isFalse h =>
-      rw [←c_encode] at h
-      simp [List.getElem_set_ne h]
+  progress*
+  simp [*]
+
+attribute [progress] algos.IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut.spec
+
+-------------------------------------
 
 @[progress]
 theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index.spec(input: Slice α)(r: ops.range.Range Usize)
@@ -231,7 +110,6 @@ theorem Aeneas.Std.UScalar.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar 
   apply Nat.mod_eq_of_lt
   apply Nat.pow_lt_pow_of_lt Nat.one_lt_two ‹y.val < ty0.numBits›
 
-/- theorem Aeneas.Std.Usize.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar ty1) (size : Nat) -/
 @[progress] theorem Aeneas.Std.Usize.one_ShiftLeft_spec (y : UScalar ty1) (hy : y.val < UScalarTy.Usize.numBits)
 : ∃ (z : Usize),
   1#usize <<< y = .ok z ∧
