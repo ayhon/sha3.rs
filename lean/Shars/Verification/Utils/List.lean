@@ -455,11 +455,11 @@ theorem List.uniform_zero{ls: List (List α)}
 /- example(a b: Nat): a ≥ b → a % b = (a - b) % b := by exact fun a_1 => Nat.mod_eq_sub_mod a_1 -/
 
 /- set_option diagnostics true in -/
-theorem List.getElem!_flatten_of_uniform (ls: List (List Bool))(i: Nat)(n: Nat)
+theorem List.getElem!_flatten_of_uniform {ls: List (List Bool)}{n: Nat}
 : ls.uniform n
-→ ls.flatten[i]! = (ls[i / n]!)[i % n]!
+→ ∀ i, ls.flatten[i]! = (ls[i / n]!)[i % n]!
 := by
-  intro uniform
+  intro uniform i
 
   by_cases n_pos: n > 0; case neg => 
     simp at n_pos

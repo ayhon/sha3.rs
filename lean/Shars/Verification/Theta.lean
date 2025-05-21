@@ -9,21 +9,48 @@ import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
 import Shars.Verification.Utils
 import Shars.Verification.Auxiliary
+import Shars.Verification.Refinement
 
 set_option maxHeartbeats 1000000
-attribute [-simp] List.getElem!_eq_getElem?_getD
-attribute [simp] Aeneas.Std.Slice.set
+attribute [-simp] List.getElem!_eq_getElem?_getD List.ofFn_succ
+attribute [simp] Aeneas.Std.Slice.set Aeneas.Std.toResult
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec
 
 
+def IR.theta.C(state: List Bool)(x: Nat)(z: Nat): Bool := 
+  let encode y := Spec.w 6 * (5 * y + x) + z
+  state[encode 0]! ^^ (state[encode 1]! ^^ (state[encode 2]! ^^ (state[encode 3]! ^^ state[encode 4]!)))
+
+@[simp] theorem BitVec.getElem!_xor(b1 b2: BitVec n)(i: Nat)
+: (b1 ^^^ b2)[i]! = (b1[i]! ^^ b2[i]!)
+:= by
+  assume i < n; case otherwise h => simp [h, getElem!_neg]
+  simp only [getElem!_pos, getElem_xor, *]
+
 @[progress]
-theorem algos.theta.theta_c.spec(input : algos.StateArray)(x z: Std.Usize)
+theorem algos.theta.theta_c.spec(input : algos.StateArray)(x : Std.Usize)
 (x_idx: x.val < 5)
-(z_idx: z.val < Spec.w 6)
-: ∃ output, theta.c input x z = .ok output ∧ output = Spec.Keccak.θ.C input.toSpec x z
-:= by rw [theta.c]; progress*; simp [*, Spec.Keccak.θ.C]
+: ∃ output, theta.c input x = .ok output ∧ 
+  ∀ z < 64, output.toBits[z]! = IR.theta.C input.toBits x z
+:= by 
+  simp [theta.c]
+  progress*
+  rw [Std.Array.toBits, List.toBits]
+  have: input.val.map (·.toBits) |>.uniform 64 := by
+    intro z z_in
+    simp at z_in
+    obtain ⟨z', z'_in, z'_z⟩ := z_in
+    rw [←z'_z]
+    simp
+  intro z z_idx
+  simp [Std.UScalar.toBits, Std.Array.toBits, List.toBits, ←getElem!_pos, z_idx, List.getElem!_ofFn]
+  simp only [HXor.hXor, Std.UScalar.xor, Xor.xor, Std.U64.bv]
+  simp? [*, IR.theta.C]
+  rw [List.getElem!_flatten]
+  simp? [*, IR.theta.C, Std.UScalar.toBits, Std.Array.toBits, List.toBits, -Bool.bne_assoc]
+  simp_lists
 
 @[progress]
 theorem algos.theta.theta_d.spec(input : algos.StateArray)(x z: Std.Usize)
