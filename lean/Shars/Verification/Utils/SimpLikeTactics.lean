@@ -58,7 +58,7 @@ attribute [zmodify_simps] Fin.val_natCast Aeneas.ReduceZMod.reduceZMod ZMod.natC
 attribute [simp_lists_simps] List.flatten_cons -- List.flatten_nil List.flatten_concat List.flatten_append
 
 @[scalar_tac_simps]
-private theorem Nat.div_sub_self(a b: Nat)
+theorem Nat.div_sub_self(a b: Nat)
 :(a - b) / b = a / b - 1 := by
   by_cases b > 0
   case neg h => simp at h; subst h; simp
@@ -72,7 +72,7 @@ private theorem Nat.div_sub_self(a b: Nat)
     simp [Nat.div_eq_of_lt h, Nat.sub_eq_zero_of_le (le_of_lt h)]
 
 @[scalar_tac_simps]
-private theorem Nat.sub_div_mult_left(a b: Nat)
+theorem Nat.div_sub_mult_left(a b: Nat)
 :(a - b*i) / b = a / b - i := by
   by_cases b > 0
   case neg h => simp at h; subst h; simp
@@ -81,5 +81,5 @@ private theorem Nat.sub_div_mult_left(a b: Nat)
     case zero => simp
     case succ i' =>
       simp [Nat.mul_add, Nat.sub_add_eq, Nat.div_sub_self]
-      rw [Nat.sub_div_mult_left]
+      rw [Nat.div_sub_mult_left]
 
