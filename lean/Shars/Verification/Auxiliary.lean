@@ -57,6 +57,19 @@ theorem algos.IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut.spec(input: alg
 
 attribute [progress] algos.IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut.spec
 
+theorem BitVec.getElem!_rotateLeft(bv: BitVec n)(w: Nat)(i: Nat)
+  (i_idx: i < n)
+: (bv.rotateLeft w)[i]! = bv[(i + n - w % n) % n]!
+:= by
+  by_cases n_pos: n > 0; case neg => simp at n_pos; simp [n_pos] at i_idx
+  simp [getElem!_pos, i_idx, Nat.mod_lt, n_pos]
+  split
+  all_goals (
+    congr
+    zmodify [CharP.cast_eq_zero]
+    ring
+  )
+
 -------------------------------------
 
 @[progress]

@@ -14,14 +14,32 @@ import Shars.Verification.Refinement
 set_option maxHeartbeats 1000000
 attribute [-simp] List.getElem!_eq_getElem?_getD List.ofFn_succ
 attribute [simp] Aeneas.Std.Slice.set Aeneas.Std.toResult
+attribute [local simp] Aeneas.Std.UScalarTy.U64_numBits_eq
+attribute [ext (iff := false)] List.ext_getElem!
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec
 
 
+@[simp] abbrev IR.encodeIndex(x y z: Nat): Nat := Spec.w 6 * (5 * y + x) + z
+theorem IR.encodeIndex_z(x y z: Nat)
+  (z_lt: z < 64)
+: IR.encodeIndex x y z % 64 = z
+:= by simp [IR.encodeIndex, z_lt, Nat.mod_eq_of_lt, Spec.w, *]
+
+theorem IR.encodeIndex_xy(x y z: Nat)
+  (z_lt: z < 64)
+: IR.encodeIndex x y z / 64 = 5 * y + x
+:= by simp [IR.encodeIndex, Nat.mul_add_div, Spec.w, *]
+
 def IR.theta.C(state: List Bool)(x: Nat)(z: Nat): Bool := 
-  let encode y := Spec.w 6 * (5 * y + x) + z
+  let encode y := encodeIndex x y z
   state[encode 0]! ^^ (state[encode 1]! ^^ (state[encode 2]! ^^ (state[encode 3]! ^^ state[encode 4]!)))
+
+theorem IR.theta.C.refinement(state: Spec.Keccak.StateArray 6)(x: Fin 5)(z: Fin (Spec.w 6))
+: Spec.Keccak.θ.C state x z = IR.theta.C state.toVector.toList x.val z.val
+:= by
+  simp [Spec.Keccak.θ.C, Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex, IR.theta.C, ←getElem!_pos]
 
 @[simp] theorem BitVec.getElem!_xor(b1 b2: BitVec n)(i: Nat)
 : (b1 ^^^ b2)[i]! = (b1[i]! ^^ b2[i]!)
@@ -29,111 +47,141 @@ def IR.theta.C(state: List Bool)(x: Nat)(z: Nat): Bool :=
   assume i < n; case otherwise h => simp [h, getElem!_neg]
   simp only [getElem!_pos, getElem_xor, *]
 
+@[simp]
+theorem Aeneas.Std.UScalar.bv_xor(u1 u2: UScalar ty): (u1 ^^^ u2).bv = u1.bv ^^^ u2.bv := by
+  simp only [HXor.hXor, Aeneas.Std.UScalar.xor]
+
 @[progress]
-theorem algos.theta.theta_c.spec(input : algos.StateArray)(x : Std.Usize)
+theorem algos.theta.c.spec(input : algos.StateArray)(x : Std.Usize)
 (x_idx: x.val < 5)
 : ∃ output, theta.c input x = .ok output ∧ 
   ∀ z < 64, output.toBits[z]! = IR.theta.C input.toBits x z
 := by 
   simp [theta.c]
   progress*
-  rw [Std.Array.toBits, List.toBits]
-  have: input.val.map (·.toBits) |>.uniform 64 := by
-    intro z z_in
-    simp at z_in
-    obtain ⟨z', z'_in, z'_z⟩ := z_in
-    rw [←z'_z]
-    simp
   intro z z_idx
-  simp [Std.UScalar.toBits, Std.Array.toBits, List.toBits, ←getElem!_pos, z_idx, List.getElem!_ofFn]
-  simp only [HXor.hXor, Std.UScalar.xor, Xor.xor, Std.U64.bv]
-  simp? [*, IR.theta.C]
-  rw [List.getElem!_flatten]
-  simp? [*, IR.theta.C, Std.UScalar.toBits, Std.Array.toBits, List.toBits, -Bool.bne_assoc]
-  simp_lists
+  simp [IR.theta.C, Std.Array.toBits, List.getElem!_toBits, Spec.w, Nat.mul_add_div, Nat.div_eq_of_lt, Nat.mod_eq_of_lt, *]
+
+
+def IR.theta.D(state: List Bool)(x: Nat)(z: Nat): Bool :=
+  IR.theta.C state ((x + 4) % 5) z ^^ IR.theta.C state ((x + 1) % 5) ((z + Spec.w 6 - 1) % Spec.w 6)
+
+theorem IR.theta.D.refinement(state: Spec.Keccak.StateArray 6)(x: Fin 5)(z: Fin (Spec.w 6))
+: Spec.Keccak.θ.D state x z = IR.theta.D state.toVector.toList x.val z.val
+:= by simp +arith [Spec.Keccak.θ.D, IR.theta.C.refinement, IR.theta.D, Fin.val_sub, Fin.val_add, Spec.w]
 
 @[progress]
-theorem algos.theta.theta_d.spec(input : algos.StateArray)(x z: Std.Usize)
+theorem algos.theta.d.spec(input : algos.StateArray)(x: Std.Usize)
 (x_idx: x.val < 5)
-(z_idx: z.val < Spec.w 6)
-: ∃ output, theta.d input x z = .ok output ∧ output = Spec.Keccak.θ.D input.toSpec x z
+: ∃ output,
+    theta.d input x = .ok output ∧ 
+    ∀ z < 64, output.toBits[z]! = IR.theta.D input.toBits x z
 := by
   rw [theta.d]
   progress*
-  simp [*, Spec.Keccak.θ.D, Spec.w]
-
-  congr 2
-  all_goals zmodify; try ring_nf
+  intro z z_idx
+  simp at *
+  simp [*, Spec.Keccak.θ.D, Spec.w, IR.theta.D, Std.core.num.U64.rotate_left]
+  simp only [Std.UScalar.rotate_left, Std.U64.bv, z_idx,
+      Std.U32.ofNat, Std.UScalar.ofNat, Std.UScalar.ofNatCore,
+      Std.UScalar.val, BitVec.toNat, BitVec.getElem!_rotateLeft]
+  rw [BitVec.getElem!_rotateLeft _ _ _ z_idx, i3_post, x2_post, i1_post, Std.UScalar.val, BitVec.toNat]
+  case a => simp [Nat.mod_lt]
   rfl
 
+/- @[progress] -/
+/- theorem algos.theta.inner.inner_loop.spec(input a: algos.StateArray)(x y z: Std.Usize) -/
+/- (x_idx: x.val < 5) -/
+/- (y_idx: y.val < 5) -/
+/- (z_loop_bnd: z.val <= Spec.w 6) -/
+/- : ∃ output, theta.inner.inner_loop input a x y z = .ok output ∧ -/
+/-   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), -/
+/-   output.toSpec.get x' y' z' = -/
+/-     if x = x' ∧ y = y' ∧ z.val ≤ z'.val then -/
+/-         a.toSpec.get x y z'  ^^ Spec.Keccak.θ.D a.toSpec x z' -/
+/-       else input.toSpec.get x' y' z' -/
+/- := by -/
+/-   rw [theta.inner.inner_loop] -/
+/-   split -/
+/-   case isTrue z_idx => -/
+/-     simp at z_idx -/
+/-     let* ⟨ acc_elem, acc_elem_post ⟩ ← algos.StateArray.index.spec -/
+/-     let* ⟨ aux, aux_post ⟩ ← algos.theta.theta_d.spec -/
+/-     let* ⟨ res_elem, res_elem_post ⟩ ← algos.binxor.spec -/
+/-     let* ⟨ old_val, mk_new, old_val.post, mk_new.post ⟩ ← algos.StateArray.index_mut.spec -/
+/-     let* ⟨ z_succ, z_succ_post ⟩ ← Aeneas.Std.Usize.add_spec -/
+/-     let* ⟨ res, res_post ⟩ ← spec -/
+
+/-     intro x' y' j -/
+/-     simp [*, Spec.Keccak.StateArray.get_set, Fin.ext_iff, Nat.mod_eq_of_lt] -/
+/-     split -/
+/-     case isTrue prev_case => simp_ifs -/
+/-     case isFalse curr_case => -/
+/-       split -/
+/-       case isFalse unprocessed => -/
+/-         simp_ifs -/
+/-       case isTrue new_case => -/
+/-         simp_ifs -/
+/-         simp [*] -/
+/-         -- done -/
+/-   case isFalse z_oob => -/
+/-     simp -/
+/-     try simp_ifs -- TODO: Doesn't work from here, nor just after the split. -/
+/-     intro x' y' z' -/
+/-     simp_ifs -/
+/- termination_by (Spec.w 6) - z.val -/
+/- decreasing_by scalar_decr_tac -/
+
+attribute [-simp_lists_simps] List.getElem!_set
+@[simp_lists_simps]
+theorem List.getElem!_set_pos[Inhabited α](ls: List α)(v: α)(i j: Nat)
+: i = j ∧ i < ls.length → (ls.set i v)[j]! = v
+:= by rintro ⟨rfl,h⟩; apply List.getElem!_set _ _ _ h
+
+@[simp_lists_simps]
+theorem List.getElem!_set_neg[Inhabited α](ls: List α)(v: α)(i j: Nat)
+: i ≠ j ∨ i ≥ ls.length → (ls.set i v)[j]! = ls[j]!
+:= by 
+  rintro (h1 | h2)
+  · apply List.getElem!_set_ne ls i j v
+    simp [Nat.not_eq, ne_eq, lt_or_lt_iff_ne, h1]
+  · simp [h2, List.set_eq_of_length_le]
+
 @[progress]
-theorem algos.theta.inner.inner_loop.spec(input a: algos.StateArray)(x y z: Std.Usize)
-(x_idx: x.val < 5)
-(y_idx: y.val < 5)
-(z_loop_bnd: z.val <= Spec.w 6)
-: ∃ output, theta.inner.inner_loop input a x y z = .ok output ∧
-  ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-  output.toSpec.get x' y' z' =
-    if x = x' ∧ y = y' ∧ z.val ≤ z'.val then
-        a.toSpec.get x y z'  ^^ Spec.Keccak.θ.D a.toSpec x z'
-      else input.toSpec.get x' y' z'
-:= by
-  rw [theta.inner.inner_loop]
-  split
-  case isTrue z_idx =>
-    simp at z_idx
-    let* ⟨ acc_elem, acc_elem_post ⟩ ← algos.StateArray.index.spec
-    let* ⟨ aux, aux_post ⟩ ← algos.theta.theta_d.spec
-    let* ⟨ res_elem, res_elem_post ⟩ ← algos.binxor.spec
-    let* ⟨ old_val, mk_new, old_val.post, mk_new.post ⟩ ← algos.StateArray.index_mut.spec
-    let* ⟨ z_succ, z_succ_post ⟩ ← Aeneas.Std.Usize.add_spec
-    let* ⟨ res, res_post ⟩ ← spec
-
-    intro x' y' j
-    simp [*, Spec.Keccak.StateArray.get_set, Fin.ext_iff, Nat.mod_eq_of_lt]
-    split
-    case isTrue prev_case => simp_ifs
-    case isFalse curr_case =>
-      split
-      case isFalse unprocessed =>
-        simp_ifs
-      case isTrue new_case =>
-        simp_ifs
-        simp [*]
-        -- done
-  case isFalse z_oob =>
-    simp
-    try simp_ifs -- TODO: Doesn't work from here, nor just after the split.
-    intro x' y' z'
-    simp_ifs
-termination_by (Spec.w 6) - z.val
-decreasing_by scalar_decr_tac
-
-
-@[progress]
-theorem algos.theta.inner_loop.spec(input a: algos.StateArray)(x y: Std.Usize)
-(x_idx: x.val < 5)
+theorem algos.theta.inner_loop.spec(input a: algos.StateArray)(x1 y: Std.Usize)
+(x_idx: x1.val < 5)
 (y_loop_bnd: y.val <= 5)
-: ∃ output, theta.inner_loop input a x y = .ok output ∧
+: ∃ output, theta.inner_loop input a x1 y = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-  output.toSpec.get x' y' z' =
-    if x = x' ∧ y.val ≤ y'.val then
-      a.toSpec.get x y' z'  ^^ Spec.Keccak.θ.D a.toSpec x z'
-    else input.toSpec.get x' y' z'
+  let idx := IR.encodeIndex x' y' z'
+  output.toBits[idx]! =
+    if x1 = x' ∧ y.val ≤ y'.val then
+      a.toBits[idx]!  ^^ IR.theta.D a.toBits x' z'
+    else input.toBits[idx]!
 := by
   rw [inner_loop, inner.inner]
+  simp [-IR.encodeIndex]
   progress*
-  · simp at ‹y.val < 5›
-    intro x' y' z'
-    simp [*, Fin.ext_iff, Nat.mod_eq_of_lt]
+  · intro x' y' z'
+    have z_idx: z'.val < 64 := z'.isLt
+    simp only [Std.Array.toBits] at *
+    simp only [*, Fin.ext_iff, Nat.mod_eq_of_lt, List.getElem!_toBits]
+    simp [IR.encodeIndex_z, IR.encodeIndex_xy, z_idx]
+    simp [*, Nat.mod_eq_of_lt, List.getElem!_toBits, List.getElem!_set]
+    /- simp [*, Fin.ext_iff, Nat.mod_eq_of_lt, List.getElem!_toBits, Std.U64.bv] -/
     split
     case isTrue prev_case => simp_ifs
     case isFalse curr_case =>
-      split
-      case isFalse unprocessed => simp_ifs
-      case isTrue new_processed =>
+      /- rw [List.getElem!_set] -/
+      if h: x1.val = x'.val ∧ y.val = y'.val then
+        /- simp [h] -/
+        simp at *
+        simp_lists
         simp_ifs
         simp [*]
+      else
+        simp_lists
+        simp_ifs
   · simp_ifs; simp[*]
 termination_by (5 +1) - y.val
 decreasing_by
@@ -141,15 +189,16 @@ decreasing_by
   scalar_decr_tac
 
 @[progress]
-theorem algos.theta_loop.spec(input a: algos.StateArray)(x: Std.Usize)
+theorem algos.theta_loop.spec(a input: algos.StateArray)(x: Std.Usize)
 (x_loop_bnd: x.val <= 5)
 : ∃ output, theta_loop a input x = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-    output.toSpec.get x' y' z' =
+    let idx := IR.encodeIndex x' y' z'
+    output.toBits[idx]! =
       if x.val ≤ x'.val then
-        a.toSpec.get x' y' z'  ^^ Spec.Keccak.θ.D a.toSpec x' z'
+        a.toBits[idx]!  ^^ IR.theta.D a.toBits x' z'
       else
-        input.toSpec.get x' y' z'
+        input.toBits[idx]!
 := by
   rw [theta_loop, theta.inner]
   progress*
@@ -161,16 +210,35 @@ theorem algos.theta_loop.spec(input a: algos.StateArray)(x: Std.Usize)
     case isFalse curr_case =>
       split
       case isFalse unprocessed => simp_ifs
-      case isTrue new_processed => simp_ifs; simp [*]
+      case isTrue new_processed => simp_ifs
   · simp_ifs; simp
 termination_by 5+1 - x.val
 decreasing_by scalar_decr_tac
 
+
+
+/- set_option trace.Progress true in -/
 @[progress]
 theorem algos.theta.spec(input: algos.StateArray)
-: ∃ output, theta input = .ok output ∧ output.toSpec = Spec.Keccak.θ input.toSpec
+: ∃ output, theta input = .ok output ∧ output.toBits = (Spec.Keccak.θ (l := 6) ⟨⟨input.toBits⟩, by simp [Spec.b, Spec.w] ⟩).toVector.toList
 := by
-  rw [theta, Spec.Keccak.θ, DefaultalgosStateArray.default]
-  let* ⟨ res, res_post ⟩ ← algos.theta_loop.spec
-  ext x y z
-  simp [res_post x y z, Spec.Keccak.StateArray.get_ofFn]
+  /- rw [theta, Spec.Keccak.θ, DefaultalgosStateArray.default] -/
+  simp [theta, Spec.Keccak.θ, DefaultalgosStateArray.default, Spec.Keccak.StateArray.get,
+    Spec.Keccak.StateArray.encodeIndex, IR.theta.D.refinement]
+  have ⟨res, step, res_post⟩:= algos.theta_loop.spec input (Std.Array.repeat 25#usize 0#u64) 0#usize (by simp)
+  simp [step]
+  ext idx
+  · simp [Spec.b, Spec.w]
+  by_cases idx_lt: idx < Spec.b 6; case neg => 
+    simp [Spec.b, Spec.w] at idx_lt
+    simp [getElem!_neg, Spec.Keccak.StateArray.ofFn, Spec.Keccak.StateArray.decodeIndex, Spec.b, Spec.w,  *]
+  let xyz := Spec.Keccak.StateArray.decodeIndex ⟨idx, idx_lt⟩
+  have: idx = Spec.Keccak.StateArray.encodeIndex xyz.1 xyz.2.1 xyz.2.2 := by
+    have := Spec.Keccak.StateArray.decode_encode ⟨idx, idx_lt⟩
+    simp at this
+    simp [xyz, this]
+  conv => lhs; simp [this, res_post, Spec.Keccak.StateArray.encodeIndex]
+  simp [Spec.Keccak.StateArray.ofFn, this]
+  rw [List.getElem!_ofFn]
+  simp [Spec.Keccak.StateArray.encode_decode, ←getElem!_pos]
+  simp
