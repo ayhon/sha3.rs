@@ -53,3 +53,8 @@ attribute [zmodify_simps] Fin.val_add Fin.val_mul Fin.val_natCast Fin.val_ofNat
 
 
 attribute [zmodify_simps] Fin.val_natCast Aeneas.ReduceZMod.reduceZMod ZMod.natCast_mod
+
+
+attribute [simp_lists_simps] List.flatten_cons -- List.flatten_nil List.flatten_concat List.flatten_append
+
+
