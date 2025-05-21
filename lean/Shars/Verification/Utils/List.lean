@@ -56,9 +56,6 @@ theorem List.zipWith_append_truncate_left{α : Type u} (f:  β → α → γ) (x
   conv in (occs := *) List.zipWith f _ _ => all_goals rw [List.zipWith_comm]
   apply List.zipWith_append_truncate_right (hyp := hyp)
 
-#check List.take_zipWith
-
-/- #check List.zipWith_nil -/
 /- attribute [simp_lists_simps] List.take_zipWith in -/
 /- @[simp_lists_simps] -/
 /- theorem List.zipWith_append_right{α : Type u} (f: α → β → γ) (x : List α)(y z: List β) -/
@@ -246,32 +243,6 @@ theorem List.length_setWidth[Inhabited α](ls: List α)(n: Nat)
 := by simp [setWidth]; omega
 
 @[scalar_tac_simps]
-private theorem Nat.sub_div_self(a b: Nat)
-:(a - b) / b = a / b - 1 := by
-  by_cases b > 0
-  case neg h => simp at h; subst h; simp
-  by_cases a >= b
-  case pos h =>
-    have: a = (a - b) + b := (Nat.sub_eq_iff_eq_add h).mp rfl
-    rw [this, Nat.add_sub_cancel, Nat.add_div_right, Nat.add_sub_cancel]
-    assumption
-  case neg h =>
-    simp at h
-    simp [Nat.div_eq_of_lt h, Nat.sub_eq_zero_of_le (le_of_lt h)]
-
-@[scalar_tac_simps]
-private theorem Nat.sub_div_mult_left(a b: Nat)
-:(a - b*i) / b = a / b - i := by
-  by_cases b > 0
-  case neg h => simp at h; subst h; simp
-  case pos =>
-    cases i
-    case zero => simp
-    case succ i' =>
-      simp [Nat.mul_add, Nat.sub_add_eq, Nat.sub_div_self]
-      rw [Nat.sub_div_mult_left]
-
-@[scalar_tac_simps]
 theorem List.getElem!_chunks_exact(ls: List α)(r: Nat)
 : ∀ i < (ls.chunks_exact r).length, (ls.chunks_exact r)[i]! = ls.extract (r*i) (r*(i+1))
 := by
@@ -293,7 +264,7 @@ theorem List.getElem!_chunks_exact(ls: List α)(r: Nat)
     case zero => simp [h]
     case succ i' =>
       simp at i_idx ⊢
-      have :=  List.getElem!_chunks_exact (ls.drop r) r i' (by simp [Nat.sub_div_self]; omega)
+      have :=  List.getElem!_chunks_exact (ls.drop r) r i' (by simp [Nat.div_sub_self]; omega)
       rw [this]
       ext j : 1
       simp [List.extract]
@@ -364,11 +335,17 @@ theorem List.setWidth_of_length_eq[Inhabited α](ls: List α)(n: Nat)
 /-   intros -/
 /-   simp -/
 
+@[simp] abbrev List.uniform(n: Nat)(ls: List (List α)) := ∀ xs ∈ ls, xs.length = n
+
+@[simp] theorem List.uniform_cons(n: Nat)(hd: List α)(tl: List (List α))
+: (hd :: tl).uniform n ↔ (hd.length = n) ∧ tl.uniform n
+:= by simp [List.uniform]
+
 theorem List.length_flatten_of_uniform{n: Nat}{ls: List (List Bool)}
-: (∀ xs ∈ ls, xs.length = n)
+: ls.uniform n
 → ls.flatten.length = n * ls.length
 := by
-  intro uniform
+  intro uniform; unfold List.uniform at *
   induction ls
   case nil => simp
   case cons hd tl ih =>
@@ -401,7 +378,7 @@ theorem List.acc_le_matrix_idx_1(ls: List (List α))(i acc: Nat)
       have := List.acc_le_matrix_idx_1 tl (i - hd.length) (acc + 1)
       omega
 
-theorem List.getElem!_flatten (ls: List (List Bool))(i: Nat)(acc: Nat)
+theorem List.getElem!_flatten (ls: List (List Bool))(i: Nat)(acc: Nat := 0)
 : let (x,y) := ls.matrix_idx i acc
   ls.flatten[i]! = (ls[x - acc]!)[y]!
 := by
@@ -422,26 +399,103 @@ theorem List.getElem!_flatten (ls: List (List Bool))(i: Nat)(acc: Nat)
       simp
       simp [List.acc_le_matrix_idx_1]
 
-/- attribute [-simp] List.length_flatten in -/
-/- theorem List.matrix_idx_of_uniform(ls: List (List Bool)) -/
-/- : (∀ xs ∈ ls, xs.length = n) -/
-/- → n > 0 -/
-/- → i < ls.flatten.length -/
-/- → ls.matrix_idx i acc = (acc + i / n, i % n) -/
-/- := by -/
-/-   intro uniform n_pos i_idx -/
-/-   simp [List.length_flatten_of_uniform uniform] at i_idx -/
-/-   match ls with -/
-/-   | [] => simp at i_idx -/
-/-   | hd :: tl => -/
-/-     simp [Nat.mul_add] at i_idx -/
-/-     if h: i < hd.length then -/
-/-       rw [uniform] at h; case a => simp -/
-/-       simp [*, matrix_idx, Nat.div_eq_of_lt, Nat.mod_eq_of_lt] -/
-/-     else -/
-/-       rw [uniform] at h; case a => simp -/
-/-       simp [*, matrix_idx] -/
-/-       have ih := List.matrix_idx_of_uniform (n := n) (i := i - n) (ls := tl) (acc := acc + 1) -/
-/-       sorry -/
-/-       rw [ih] -/
-/-       · simp [Nat.sub_div] -/
+attribute [-simp] List.length_flatten in
+theorem List.matrix_idx_of_uniform{ls: List (List Bool)}
+  (uniform : ls.uniform n)
+  (acc: Nat := 0)
+: n > 0
+→ ∀ i < ls.flatten.length,
+  ls.matrix_idx i acc = (acc + i / n, i % n)
+:= by
+  intro n_pos i i_idx
+  simp [List.length_flatten_of_uniform uniform] at i_idx
+  match ls with
+  | [] => simp at i_idx
+  | hd :: tl =>
+    simp [Nat.mul_add] at i_idx uniform
+    replace ⟨len_hd, uniform_tl⟩ := uniform
+    if h: i < hd.length then
+      rw [len_hd] at h
+      simp [*, matrix_idx, Nat.div_eq_of_lt, Nat.mod_eq_of_lt]
+    else
+      rw [len_hd] at h
+      simp [*, matrix_idx]
+      have ih := List.matrix_idx_of_uniform (n := n) (i := i - n) (ls := tl) (acc := acc + 1)
+      rw [ih]
+      · simp +arith [Nat.div_sub_self]
+        constructor
+        · rw [Nat.sub_add_cancel]
+          cases h2: i / n
+          case zero => simp [*] at h2; simp [h2] at n_pos
+          case succ => simp
+        · conv => rhs; rw [Nat.mod_eq_sub_mod (h := by simpa using h)]
+      · exact uniform_tl
+      · exact n_pos
+      · rw [List.length_flatten_of_uniform uniform_tl]
+        omega
+
+theorem List.uniform_zero{ls: List (List α)}
+: ls.uniform 0 → ls = replicate ls.length []
+:= by
+  intro uniform
+  simp at *
+  match ls with
+  | [] => simp
+  | hd :: tl => 
+    simp at *
+    obtain ⟨len_hd, uniform_tl⟩ := uniform
+    simp [len_hd]
+    apply List.uniform_zero
+    intro x x_in
+    rw [uniform_tl x x_in]
+    simp
+
+/- example(a b: Nat): a < b → a % b = a := by exact? -/
+/- example(a b: Nat): a < b → a / b = 0 := by exact? -/
+/- example(a b: Nat): a ≥ b → a % b = (a - b) % b := by exact fun a_1 => Nat.mod_eq_sub_mod a_1 -/
+
+/- set_option diagnostics true in -/
+theorem List.getElem!_flatten_of_uniform (ls: List (List Bool))(i: Nat)(n: Nat)
+: ls.uniform n
+→ ls.flatten[i]! = (ls[i / n]!)[i % n]!
+:= by
+  intro uniform
+
+  by_cases n_pos: n > 0; case neg => 
+    simp at n_pos
+    simp only [n_pos] at *
+    replace uniform := List.uniform_zero uniform
+    rw [uniform, Nat.mod_zero, Nat.div_zero]
+    cases ls.length <;> simp [default]
+
+  by_cases i_idx: i < ls.flatten.length
+  case neg => 
+    rw [getElem!_neg]; case h => assumption
+    simp [List.length_flatten_of_uniform uniform] at i_idx
+    rw [Nat.mul_comm] at i_idx
+    have := Nat.le_div_iff_mul_le n_pos |>.mpr i_idx
+    simp [this, Nat.div_eq_of_lt, Nat.mod_eq_of_lt, default]
+
+  simp [List.length_flatten_of_uniform uniform] at i_idx
+  rw [Nat.mul_comm] at i_idx
+  have := Nat.div_lt_of_lt_mul i_idx
+
+  match ls with
+  | [] => simp [default]
+  | hd :: tl =>
+    simp at uniform
+    obtain ⟨len_hd, uniform_tl⟩ := uniform
+    if i = 0 then
+      simp_lists
+      simp [*]
+    else
+      rename_i i_pos
+      if h: i < n then
+        simp_lists
+        simp [Nat.mod_eq_of_lt, Nat.div_eq_of_lt, h]
+      else 
+        simp at h
+        simp_lists
+        simp [len_hd, Nat.mod_eq_sub_mod, h, Nat.div_eq_sub_div, n_pos]
+        apply List.getElem!_flatten_of_uniform
+        exact uniform_tl
