@@ -226,9 +226,10 @@ theorem algos.theta.spec(input: algos.StateArray)
   simp [theta, Spec.Keccak.θ, DefaultalgosStateArray.default, Spec.Keccak.StateArray.get,
     Spec.Keccak.StateArray.encodeIndex, IR.theta.D.refinement]
   have ⟨res, step, res_post⟩:= algos.theta_loop.spec input (Std.Array.repeat 25#usize 0#u64) 0#usize (by simp)
-  simp [step]
+  simp [step, Spec.Keccak.StateArray.ofFn]
   ext idx
-  · simp [Spec.b, Spec.w]
+  · simp +decide
+
   by_cases idx_lt: idx < Spec.b 6; case neg => 
     simp [Spec.b, Spec.w] at idx_lt
     simp [getElem!_neg, Spec.Keccak.StateArray.ofFn, Spec.Keccak.StateArray.decodeIndex, Spec.b, Spec.w,  *]
@@ -237,8 +238,9 @@ theorem algos.theta.spec(input: algos.StateArray)
     have := Spec.Keccak.StateArray.decode_encode ⟨idx, idx_lt⟩
     simp at this
     simp [xyz, this]
-  conv => lhs; simp [this, res_post, Spec.Keccak.StateArray.encodeIndex]
-  simp [Spec.Keccak.StateArray.ofFn, this]
-  rw [List.getElem!_ofFn]
-  simp [Spec.Keccak.StateArray.encode_decode, ←getElem!_pos]
-  simp
+  rw [this]
+
+  simp at res_post; 
+  conv => lhs; simp only [Spec.Keccak.StateArray.encodeIndex, res_post]
+
+  simp [List.getElem!_ofFn, Spec.Keccak.StateArray.encode_decode, ←getElem!_pos]
