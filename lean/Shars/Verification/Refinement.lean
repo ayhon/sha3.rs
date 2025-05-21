@@ -30,8 +30,26 @@ def List.length_toBits(ls: List (Aeneas.Std.UScalar ty))
 theorem List.getElem!_toBits(ls: List (Aeneas.Std.UScalar ty))(i: Nat)
 : ls.toBits[i]! = ls[i / ty.numBits]!.toBits[i % ty.numBits]!
 := by
-  simp [toBits, -getElem!_eq_getElem?_getD]
-  sorry
+  simp only [toBits]
+  have uniform : ls.map (·.toBits) |>.uniform ty.numBits := by
+    intro x x_in; simp at x_in
+    obtain ⟨a, a_in, a_x⟩ := x_in
+    simp [←a_x]
+  have numBits_pos: ty.numBits > 0 := by cases ty <;> simp
+  by_cases i_idx: i < ls.toBits.length; case neg => 
+    rw [getElem!_neg]; case h => simpa only [toBits]
+    rw [List.length_toBits] at i_idx
+    simp at i_idx
+    have: ls.length ≤ i / ty.numBits := by 
+      exact Nat.le_div_iff_mul_le numBits_pos |>.mpr i_idx
+    conv => rhs; arg 1; rw [getElem!_neg (h := by simpa using this)]
+    cases ty <;> simp [-getElem!_eq_getElem?_getD, default]
+  have: i / ty.numBits < ls.length := by
+    rw [List.length_toBits, Nat.mul_comm] at i_idx
+    exact Nat.div_lt_of_lt_mul i_idx
+
+  rw [List.getElem!_flatten_of_uniform uniform]
+  simp [-getElem!_eq_getElem?_getD, *]
 
 def Aeneas.Std.Array.toBits(arr: Aeneas.Std.Array (Aeneas.Std.UScalar ty) n): List Bool := arr.val.toBits
 @[simp] def Aeneas.Std.Array.length_toBits(arr: Aeneas.Std.Array (Aeneas.Std.UScalar ty) n)
