@@ -70,6 +70,18 @@ theorem BitVec.getElem!_rotateLeft(bv: BitVec n)(w: Nat)(i: Nat)
     ring
   )
 
+@[simp_lists_simps] 
+theorem Aeneas.Std.U64.getElem!_toBits_rotate_left(u: Aeneas.Std.U64)(w: Aeneas.Std.U32)(i: Nat)
+  (i_idx: i < Spec.w 6)
+: (u.rotate_left w).toBits[i]! = u.toBits[(i + Spec.w 6 - ↑w % Spec.w 6) % 64]! 
+:= by
+  simp only [Spec.w, Fin.isValue, Fin.val_ofNat, Nat.reducePow, Nat.reduceMod] at *
+  simp only [UScalar.toBits, List.getElem!_ofFn, i_idx, getElem!_pos, Fin.getElem_fin]
+  simp_lists
+  simp only [Fin.getElem_fin, ←getElem!_pos]
+  simp only [Aeneas.Std.UScalar.rotate_left, Std.UScalarTy.numBits]
+  simp only [BitVec.getElem!_rotateLeft, i_idx]
+
 -------------------------------------
 
 @[progress]
