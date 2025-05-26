@@ -43,6 +43,7 @@ theorem algos.IndexalgosStateArrayPairUsizeUsizeU64.index.spec(input: algos.Stat
   progress*
   simp [*]
 
+@[progress]
 theorem algos.IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut.spec(input: algos.StateArray)(x y: Std.Usize)
 : 5 * y.val + x.val < 25
 → ∃ old mk,
@@ -52,10 +53,11 @@ theorem algos.IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut.spec(input: alg
 := by 
   intros
   rw [index_mut]
-  progress*
+  /- progress* -/ -- TODO: Why does using `progress*` cause an index OOB error?
+  let* ⟨ i, i_post ⟩ ← Std.Usize.mul_spec
+  let* ⟨ i1, i1_post ⟩ ← Std.Usize.add_spec
+  let* ⟨ __discr, __discr_post ⟩ ← Std.Array.index_mut_usize_spec
   simp [*]
-
-attribute [progress] algos.IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut.spec
 
 theorem BitVec.getElem!_rotateLeft(bv: BitVec n)(w: Nat)(i: Nat)
   (i_idx: i < n)
