@@ -7,6 +7,9 @@ import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
 import Init.Data.Nat.Basic
+import Shars.Verification.Refinement
+
+-- TODO: Consider moving this out of Utils
 
 
 @[ext]
@@ -65,3 +68,69 @@ theorem Spec.Keccak.StateArray.get_set_pos(a: Spec.Keccak.StateArray l)(x x' y y
 (eq: (x,y,z) = (x',y',z'))
 : (a.set x y z val).get x' y' z' = val
 := by simp at eq; simp [eq]
+
+
+abbrev IR.encodeIndex(x y z: Nat): Nat := Spec.w 6 * (5 * y + x) + z
+
+theorem IR.encodeIndex_z(x y z: Nat)
+  (z_lt: z < Spec.w 6)
+: IR.encodeIndex x y z % Spec.w 6 = z
+:= by simp [IR.encodeIndex, z_lt, Nat.mod_eq_of_lt, *]
+
+theorem IR.encodeIndex_xy(x y z: Nat)
+  (z_lt: z < Spec.w 6)
+: IR.encodeIndex x y z / Spec.w 6 = 5 * y + x
+:= by simp [IR.encodeIndex, Nat.mul_add_div, *]
+
+-- TODO: Decide where to move these theorems.
+@[simp] theorem Aeneas.Std.U64.numBits_spec: U64.numBits = Spec.w 6 := by simp +decide [numBits]
+@[simp] theorem Aeneas.Std.UScalarTy.U64_numBits_spec: UScalarTy.U64.numBits = Spec.w 6 := by simp +decide [numBits]
+
+@[simp] theorem List.getElem!_encodeIndex_toBits(ls: List (Aeneas.Std.U64))(x y z: Nat)
+  (z_lt: z < Spec.w 6)
+: ls.toBits[IR.encodeIndex x y z]! = ls[5*y + x]!.toBits[z]!
+:= by simp only [List.getElem!_toBits, IR.encodeIndex_z, IR.encodeIndex_xy, z_lt, Aeneas.Std.UScalarTy.U64_numBits_spec]
+
+abbrev IR.decodeIndex(c: Nat) := (c / Spec.w 6 % 5, c / Spec.w 6 / 5, c % Spec.w 6)
+
+theorem IR.decode_encode(x y z: Nat): x < 5 → y < 5 → z < Spec.w 6 → decodeIndex (encodeIndex x y z) = (x, y, z) := by
+  intro x_lt y_lt z_lt
+  have:= Spec.Keccak.StateArray.encode_decode ⟨x, x_lt⟩ ⟨y, y_lt⟩ ⟨z, z_lt⟩
+  simp [Spec.Keccak.StateArray.decodeIndex, Spec.Keccak.StateArray.encodeIndex] at this
+  simp [decodeIndex, encodeIndex, this]
+
+@[simp]
+theorem IR.encode_eq_encode_iff_eq(x x' y y' z z': Nat)
+: x < 5 → y < 5 → z < Spec.w 6
+→ x' < 5 → y' < 5 → z' < Spec.w 6
+→ (encodeIndex x y z = encodeIndex x' y' z' ↔ (x, y, z) = (x', y', z')) := by
+  intros
+  apply Iff.intro
+  case mp =>
+    intro eq
+    replace eq := congrArg (f := IR.decodeIndex) eq
+    simp only [IR.decode_encode, *] at eq
+    simpa using eq
+  case mpr =>
+    rintro ⟨rfl, rfl, rfl⟩; rfl
+
+theorem IR.encode_decode(c: Nat): c < Spec.b 6 → (encodeIndex (decodeIndex c).1 (decodeIndex c).2.1 (decodeIndex c).2.2) = c := by
+  intro c_lt
+  have:= Spec.Keccak.StateArray.decode_encode ⟨c, c_lt⟩
+  simp [Spec.Keccak.StateArray.decodeIndex, Spec.Keccak.StateArray.encodeIndex] at this
+  simp [decodeIndex, encodeIndex, this]
+
+theorem IR.decode_surjective(c: Nat)
+: c < Spec.b 6 → ∃ x y z, IR.encodeIndex x y z = c ∧ x < 5 ∧ y < 5 ∧ z < Spec.w 6
+:= by
+  intro c_lt
+  have:= Spec.Keccak.StateArray.decode_encode ⟨c, c_lt⟩
+  simp [Spec.Keccak.StateArray.decodeIndex, Spec.Keccak.StateArray.encodeIndex] at this
+  let xyz := Spec.Keccak.StateArray.decodeIndex (l := 6) ⟨c, c_lt⟩
+  exists xyz.1, xyz.2.1, xyz.2.2
+  have := xyz.1.isLt
+  have := xyz.2.1.isLt 
+  have := xyz.2.2.isLt
+  unfold xyz at*
+  simp [Spec.Keccak.StateArray.decodeIndex] at *
+  simp [Spec.Keccak.StateArray.decodeIndex, encodeIndex, this, xyz, *]
