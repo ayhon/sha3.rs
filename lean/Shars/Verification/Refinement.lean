@@ -13,7 +13,9 @@ def Aeneas.Std.UScalar.toBits(u: Aeneas.Std.UScalar ty): List Bool := List.ofFn 
 @[simp] theorem Aeneas.Std.UScalar.length_toBits(u: Aeneas.Std.UScalar ty): u.toBits.length = ty.numBits := by
   simp only [toBits, Fin.getElem_fin, List.length_ofFn]
 
-@[simp, simp_lists_simps] 
+
+-- TODO: Consider eliminating, we want `toBits` to be the final opaque
+/- @[simp] -- -/ 
 theorem Aeneas.Std.UScalar.getElem!_toBits(u: Aeneas.Std.UScalar ty)(i: Nat): u.toBits[i]! = u.bv[i]! := by
   by_cases i_idx: i < ty.numBits; case neg => simp [getElem!_neg, i_idx]
   simp only [toBits, List.getElem!_ofFn, i_idx, getElem!_pos, Fin.getElem_fin]
@@ -36,6 +38,7 @@ theorem List.getElem!_toBits(ls: List (Aeneas.Std.UScalar ty))(i: Nat)
     obtain ⟨a, a_in, a_x⟩ := x_in
     simp [←a_x]
   have numBits_pos: ty.numBits > 0 := by cases ty <;> simp
+
   by_cases i_idx: i < ls.toBits.length; case neg => 
     rw [getElem!_neg]; case h => simpa only [toBits]
     rw [List.length_toBits] at i_idx
@@ -43,7 +46,7 @@ theorem List.getElem!_toBits(ls: List (Aeneas.Std.UScalar ty))(i: Nat)
     have: ls.length ≤ i / ty.numBits := by 
       exact Nat.le_div_iff_mul_le numBits_pos |>.mpr i_idx
     conv => rhs; arg 1; rw [getElem!_neg (h := by simpa using this)]
-    cases ty <;> simp [-getElem!_eq_getElem?_getD, default]
+    cases ty <;> simp [-getElem!_eq_getElem?_getD, default, Aeneas.Std.UScalar.getElem!_toBits]
   have: i / ty.numBits < ls.length := by
     rw [List.length_toBits, Nat.mul_comm] at i_idx
     exact Nat.div_lt_of_lt_mul i_idx
@@ -51,18 +54,50 @@ theorem List.getElem!_toBits(ls: List (Aeneas.Std.UScalar ty))(i: Nat)
   rw [List.getElem!_flatten_of_uniform uniform]
   simp [-getElem!_eq_getElem?_getD, *]
 
-def Aeneas.Std.Array.toBits(arr: Aeneas.Std.Array (Aeneas.Std.UScalar ty) n): List Bool := arr.val.toBits
+abbrev Aeneas.Std.Array.toBits(arr: Aeneas.Std.Array (Aeneas.Std.UScalar ty) n): List Bool := arr.val.toBits
 @[simp] def Aeneas.Std.Array.length_toBits(arr: Aeneas.Std.Array (Aeneas.Std.UScalar ty) n)
 : arr.toBits.length = n * ty.numBits
 := by simp only [toBits, List.length_toBits, arr.property]
 
-def Aeneas.Std.Slice.toBits(arr: Aeneas.Std.Slice (Aeneas.Std.UScalar ty)): List Bool := arr.val.toBits
+abbrev Aeneas.Std.Slice.toBits(arr: Aeneas.Std.Slice (Aeneas.Std.UScalar ty)): List Bool := arr.val.toBits
 @[simp] def Aeneas.Std.Slice.length_toBits(arr: Aeneas.Std.Slice (Aeneas.Std.UScalar ty))
 : arr.toBits.length = arr.length * ty.numBits
 := by simp only [toBits, List.length_toBits]
 
+abbrev List.toStateArrayCore(self: { ls : List Bool // ls.length = Spec.b 6}): Spec.Keccak.StateArray 6 := ⟨⟨self.val⟩, by simp +decide [self.property]⟩
+
+def List.toStateArray(self: List Bool): Spec.Keccak.StateArray 6 := 
+    if len_self: self.length = Spec.b 6 then
+      List.toStateArrayCore ⟨self, len_self⟩
+    else default
+-- NOTE: We make `toStateArray` fallible so that we're able to compose it with `toBits`.
+
 @[reducible, simp]
-def algos.StateArray.toSpec(self: algos.StateArray): List Bool := self.toBits
+def algos.StateArray.toSpec(self: algos.StateArray): Spec.Keccak.StateArray 6 := self.toBits.toStateArray
+
+def Spec.Keccak.StateArray.toBitsSubtype(state: Spec.Keccak.StateArray 6): { ls: List Bool // ls.length = Spec.b 6} where
+  val := state.toVector.1.1
+  property := state.toVector.2
+
+abbrev Spec.Keccak.StateArray.toBits(state: Spec.Keccak.StateArray 6): List Bool := state.toBitsSubtype.val
+
+theorem Spec.Keccak.StateArray.LeftInverse_toBitsSubtype
+: Function.LeftInverse (List.toStateArrayCore) (toBitsSubtype)
+:= by intro st; congr
+
+theorem Spec.Keccak.StateArray.toStateArray_toBits(state: Spec.Keccak.StateArray 6)
+: state.toBits.toStateArray = state
+:= by simp [toBits, List.toStateArray, Spec.Keccak.StateArray.LeftInverse_toBitsSubtype state]
+
+theorem Spec.Keccak.StateArray.LeftInverse_toBits
+: Function.LeftInverse List.toStateArray Spec.Keccak.StateArray.toBits
+:= by intro st; apply Spec.Keccak.StateArray.toStateArray_toBits st
+
+
+theorem List.toBits_toStateArray(state: List Bool)
+  (len_state: state.length = 1600)
+: state.toStateArray.toBits = state
+:= by simp +decide [*, cond, toStateArray, Spec.Keccak.StateArray.toBits, toStateArrayCore, Spec.Keccak.StateArray.toBitsSubtype]
 
 /- abbrev Aeneas.Std.Array.toArray{size: Usize}(self: Aeneas.Std.Array α size): _root_.Array α := Array.mk self.val -/
 /- abbrev Aeneas.Std.Slice.toArray(self: Aeneas.Std.Slice α): _root_.Array α := Array.mk self.val -/
