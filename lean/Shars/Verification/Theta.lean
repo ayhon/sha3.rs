@@ -21,17 +21,6 @@ open Aeneas hiding Std.Array
 open Std.alloc.vec
 
 
-@[simp] abbrev IR.encodeIndex(x y z: Nat): Nat := Spec.w 6 * (5 * y + x) + z
-theorem IR.encodeIndex_z(x y z: Nat)
-  (z_lt: z < 64)
-: IR.encodeIndex x y z % 64 = z
-:= by simp [IR.encodeIndex, z_lt, Nat.mod_eq_of_lt, Spec.w, *]
-
-theorem IR.encodeIndex_xy(x y z: Nat)
-  (z_lt: z < 64)
-: IR.encodeIndex x y z / 64 = 5 * y + x
-:= by simp [IR.encodeIndex, Nat.mul_add_div, Spec.w, *]
-
 def IR.theta.C(state: List Bool)(x: Nat)(z: Nat): Bool := 
   let encode y := encodeIndex x y z
   state[encode 0]! ^^ (state[encode 1]! ^^ (state[encode 2]! ^^ (state[encode 3]! ^^ state[encode 4]!)))
@@ -39,7 +28,10 @@ def IR.theta.C(state: List Bool)(x: Nat)(z: Nat): Bool :=
 theorem IR.theta.C.refinement(state: Spec.Keccak.StateArray 6)(x: Fin 5)(z: Fin (Spec.w 6))
 : Spec.Keccak.θ.C state x z = IR.theta.C state.toVector.toList x.val z.val
 := by
-  simp [Spec.Keccak.θ.C, Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.encodeIndex, IR.theta.C, ←getElem!_pos]
+  simp only [Spec.Keccak.θ.C, Spec.Keccak.StateArray.get, Fin.isValue,
+    Spec.Keccak.StateArray.encodeIndex, Fin.val_ofNat, Nat.zero_mod, mul_zero, zero_add, ←
+    getElem!_pos, Fin.getElem!_fin, Nat.one_mod, mul_one, Nat.reduceMod, Nat.reduceMul,
+    Bool.bne_assoc, Nat.mod_succ, C, encodeIndex, Array.getElem!_toList, Vector.getElem!_toArray]
 
 @[simp] theorem BitVec.getElem!_xor(b1 b2: BitVec n)(i: Nat)
 : (b1 ^^^ b2)[i]! = (b1[i]! ^^ b2[i]!)
@@ -60,7 +52,7 @@ theorem algos.theta.c.spec(input : algos.StateArray)(x : Std.Usize)
   simp [theta.c]
   progress*
   intro z z_idx
-  simp [IR.theta.C, Std.Array.toBits, List.getElem!_toBits, Spec.w, Nat.mul_add_div, Nat.div_eq_of_lt, Nat.mod_eq_of_lt, *]
+  simp [IR.encodeIndex, IR.theta.C, Std.Array.toBits, List.getElem!_toBits, Spec.w, Nat.mul_add_div, Nat.div_eq_of_lt, Nat.mod_eq_of_lt, *]
 
 
 def IR.theta.D(state: List Bool)(x: Nat)(z: Nat): Bool :=
@@ -132,21 +124,6 @@ theorem algos.theta.d.spec(input : algos.StateArray)(x: Std.Usize)
 /- termination_by (Spec.w 6) - z.val -/
 /- decreasing_by scalar_decr_tac -/
 
-attribute [-simp_lists_simps] List.getElem!_set
-@[simp_lists_simps]
-theorem List.getElem!_set_pos[Inhabited α](ls: List α)(v: α)(i j: Nat)
-: i = j ∧ i < ls.length → (ls.set i v)[j]! = v
-:= by rintro ⟨rfl,h⟩; apply List.getElem!_set _ _ _ h
-
-@[simp_lists_simps]
-theorem List.getElem!_set_neg[Inhabited α](ls: List α)(v: α)(i j: Nat)
-: i ≠ j ∨ i ≥ ls.length → (ls.set i v)[j]! = ls[j]!
-:= by 
-  rintro (h1 | h2)
-  · apply List.getElem!_set_ne ls i j v
-    simp [Nat.not_eq, ne_eq, lt_or_lt_iff_ne, h1]
-  · simp [h2, List.set_eq_of_length_le]
-
 @[progress]
 theorem algos.theta.inner_loop.spec(input a: algos.StateArray)(x1 y: Std.Usize)
 (x_idx: x1.val < 5)
@@ -160,14 +137,13 @@ theorem algos.theta.inner_loop.spec(input a: algos.StateArray)(x1 y: Std.Usize)
     else input.toBits[idx]!
 := by
   rw [inner_loop, inner.inner]
-  simp [-IR.encodeIndex]
+  simp
   progress*
   · intro x' y' z'
     have z_idx: z'.val < 64 := z'.isLt
     simp only [Std.Array.toBits] at *
-    simp only [*, Fin.ext_iff, Nat.mod_eq_of_lt, List.getElem!_toBits]
-    simp [IR.encodeIndex_z, IR.encodeIndex_xy, z_idx]
-    simp [*, Nat.mod_eq_of_lt, List.getElem!_toBits, List.getElem!_set]
+    simp only [*, Fin.ext_iff, Nat.mod_eq_of_lt, List.getElem!_encodeIndex_toBits, z'.isLt, Fin.val_natCast]
+    simp only [Fin.isValue, Std.UScalar.getElem!_toBits, Std.UScalarTy.U64_numBits_eq, Bvify.U64.UScalar_bv]
     /- simp [*, Fin.ext_iff, Nat.mod_eq_of_lt, List.getElem!_toBits, Std.U64.bv] -/
     split
     case isTrue prev_case => simp_ifs
@@ -220,7 +196,7 @@ decreasing_by scalar_decr_tac
 /- set_option trace.Progress true in -/
 @[progress]
 theorem algos.theta.spec(input: algos.StateArray)
-: ∃ output, theta input = .ok output ∧ output.toBits = (Spec.Keccak.θ (l := 6) ⟨⟨input.toBits⟩, by simp [Spec.b, Spec.w] ⟩).toVector.toList
+: ∃ output, theta input = .ok output ∧ output.toBits = (Spec.Keccak.θ (l := 6) input.toSpec).toVector.toList
 := by
   /- rw [theta, Spec.Keccak.θ, DefaultalgosStateArray.default] -/
   simp [theta, Spec.Keccak.θ, DefaultalgosStateArray.default, Spec.Keccak.StateArray.get,
@@ -240,7 +216,6 @@ theorem algos.theta.spec(input: algos.StateArray)
     simp [xyz, this]
   rw [this]
 
-  simp at res_post; 
   conv => lhs; simp only [Spec.Keccak.StateArray.encodeIndex, res_post]
 
   simp [List.getElem!_ofFn, Spec.Keccak.StateArray.encode_decode, ←getElem!_pos]

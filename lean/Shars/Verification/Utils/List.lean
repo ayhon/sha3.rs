@@ -499,3 +499,18 @@ theorem List.getElem!_flatten_of_uniform {ls: List (List Bool)}{n: Nat}
         simp [len_hd, Nat.mod_eq_sub_mod, h, Nat.div_eq_sub_div, n_pos]
         apply List.getElem!_flatten_of_uniform
         exact uniform_tl
+
+attribute [-simp_lists_simps] List.getElem!_set
+@[simp_lists_simps]
+theorem List.getElem!_set_pos[Inhabited α](ls: List α)(v: α)(i j: Nat)
+: i = j ∧ i < ls.length → (ls.set i v)[j]! = v
+:= by rintro ⟨rfl,h⟩; apply List.getElem!_set _ _ _ h
+
+@[simp_lists_simps]
+theorem List.getElem!_set_neg[Inhabited α](ls: List α)(v: α)(i j: Nat)
+: i ≠ j ∨ i ≥ ls.length → (ls.set i v)[j]! = ls[j]!
+:= by 
+  rintro (h1 | h2)
+  · apply List.getElem!_set_ne ls i j v
+    simp [Nat.not_eq, ne_eq, lt_or_lt_iff_ne, h1]
+  · simp [h2, List.set_eq_of_length_le]
