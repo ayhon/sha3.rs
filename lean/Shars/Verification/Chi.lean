@@ -17,74 +17,85 @@ attribute [simp] Aeneas.Std.Slice.set
 open Aeneas hiding Std.Array
 open Std.alloc.vec
 
-#check Fin.val_natCast
 attribute [scalar_tac_simps] Fin.val_natCast
--- attribute [-scalar_tac_simps] Nat.mod_eq_of_lt
--- attribute [scalar_tac x % m] Nat.over_mod_or_mod_eq
-
 @[simp]
 theorem Fin.natCast_mod(x n: Nat)[NeZero n]: ((x % n : Nat) : Fin n) = (x : Fin n) := by
   simp only [Nat.cast, NatCast.natCast, Fin.ofNat', Nat.mod_mod]
 
+@[simp]
+theorem Aeneas.Std.UScalar.getElem!_and_toBits(u1 u2: Std.UScalar ty)(i: Nat)
+: (u1 &&& u2).toBits[i]! = (u1.toBits[i]! && u2.toBits[i]!)
+:= by
+  if i_idx: i < ty.numBits then
+    simp [toBits, List.getElem!_ofFn, i_idx]
+  else
+    rw [getElem!_neg]
+    rw [getElem!_neg]
+    rw [getElem!_neg]
+    simp [default]
+    simpa using i_idx
+    simpa using i_idx
+    simpa using i_idx
+
+@[simp]
+theorem Aeneas.Std.core.num.U64.getElem!_toBits_MAX
+: U64.MAX.toBits = List.replicate (Spec.w 6) true
+:= by native_decide
+
+/- set_option trace.profiler true in -/
+set_option maxHeartbeats 1000000 in
 @[progress]
-theorem algos.chi.inner.inner_loop.spec(res a: StateArray)(x y z: Std.Usize)
+theorem algos.chi.inner_loop.spec(res a: StateArray)(x y: Std.Usize)
 : x.val < 5
-→ y.val < 5
-→ z.val <= Spec.w 6
+→ y.val ≤ 5
 → ∃ output,
-  inner_loop res a x y z = .ok output ∧
+  inner_loop res a x y = .ok output ∧
   (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-    output.toSpec.get x' y' z' =
-      if x = x' ∧ y = y' ∧ z.val ≤ z'  then
-        (a.toSpec.get x' y' z' ^^ ((a.toSpec.get (x' + 1) y' z' ^^ true) && a.toSpec.get (x' + 2) y' z'))
+    let idx := IR.encodeIndex x' y' z'
+    output.toBits[idx]! =
+      if x = x' ∧ y.val <= y'.val  then
+        (a.toBits[idx]! ^^ ((a.toBits[Spec.Keccak.StateArray.encodeIndex (x' + 1) y' z']! ^^ true) && a.toBits[Spec.Keccak.StateArray.encodeIndex (x' + 2) y' z']!))
       else
-        res.toSpec.get x' y' z')
+        res.toBits[idx]!)
   /- (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), x = x' ∧ y = y' ∧ z.val ≤ z' → -/
   /-   output.toSpec.get x' y' z' = (a.toSpec.get x' y' z' ^^ ((a.toSpec.get (x + 1) y' z' ^^ true) && a.toSpec.get (x' + 2) y' z'))) ∧ -/
   /- (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), ¬ (x = x' ∧ y = y' ∧ z ≤ z') → -/
   /-   output.toSpec.get x' y' z' = res.toSpec.get x' y' z') -/
 := by
-  intro x_lt y_lt z_loop_bound
+  intro x_lt y_loop_bnd
   rw [inner_loop]
+  simp [Std.toResult]
   progress*
   · -- z < W
     -- b2 = true
-    simp at ‹z < W›
-    simp [*, Spec.Keccak.StateArray.get_set] --, Fin.ext_iff, Nat.mod_eq_of_lt]
     intro x' y' z'
+    simp [*, Std.Array.toBits]
+    simp [List.getElem!_toBits, show 64 = Spec.w 6 from rfl,
+      ←IR.encodeIndex_spec, IR.encodeIndex_xy, IR.encodeIndex_z,
+      Nat.mod_eq_of_lt, z'.isLt]
+
+    /- simp [*, Spec.Keccak.StateArray.get_set] --, Fin.ext_iff, Nat.mod_eq_of_lt] -/
     split
     case isTrue => simp_ifs
     case isFalse =>
-      split
-      case isFalse =>
+      by_cases cond: x.val = x'.val ∧ y.val = y'.val
+      case pos =>
+        simp [cond, List.getElem!_toBits, IR.encodeIndex_xy, IR.encodeIndex_z]
+        simp_lists
+        simp [Aeneas.Std.UScalar.getElem!_xor_toBits,
+              Aeneas.Std.UScalar.getElem!_and_toBits,
+              Std.core.num.U64.getElem!_toBits_MAX, 
+              List.getElem!_replicate, Nat.mod_eq_of_lt, z'.isLt,
+              Fin.val_add]
+      case neg =>
+        simp [cond, IR.encodeIndex_xy, IR.encodeIndex_z, ‹5*y'.val + x'.val ≠ 5*y + x›']
         simp_ifs
-      case isTrue h =>
-        simp only [h, Fin.cast_val_eq_self]
-        simp [x1_post, i_post, h, Fin.cast_val_eq_self] at b1_post b2_post
-        simp_ifs
-        simp [*, -b1_post, ←b1_post, ←b2_post]
-  · -- z < W
-    -- b2 = false
-    simp [*, Spec.Keccak.StateArray.get_set]
-    intro x' y' z'
-    split
-    case isTrue => simp_ifs
-    case isFalse =>
-      split
-      case isFalse => simp_ifs
-      case isTrue h =>
-        simp_ifs
-        simp [x1_post, i_post, h, Fin.cast_val_eq_self] at b1_post b2_post
-        simp [*, -b1_post, ←b1_post, ←b2_post]
   · -- z ≥ W
-    simp [‹z.val = Spec.w 6›']
+    simp [‹y.val = 5›']
     intros
     simp_ifs
-termination_by Spec.w 6 - z.val
-decreasing_by
-  scalar_decr_tac
-  simp [*]
-  scalar_tac
+termination_by 5 - y.val
+decreasing_by scalar_decr_tac
 
 /- theorem asdf(z: Std.Usize): z.val < Spec.w 6 → Spec.w 6 - (z.val + 1) < Spec.w 6 - z.val := by -/
 /-   intro z_idx -/
@@ -93,64 +104,23 @@ decreasing_by
 /-   exact lt_add_one (Spec.w 6) -/
 
 @[progress]
-theorem algos.chi.inner_loop.spec(res a: StateArray)(x y : Std.Usize)
-: x.val < 5
-→ y.val <= 5
-→ ∃ output,
-  inner_loop res a x y = .ok output ∧
-  ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-    output.toSpec.get x' y' z' =
-      if x = x' ∧ y.val ≤ y' then
-        (a.toSpec.get x' y' z' ^^ ((a.toSpec.get (x' + 1) y' z' ^^ true) && a.toSpec.get (x' + 2) y' z'))
-      else
-        res.toSpec.get x' y' z'
-:= by
-  intro x_lt y_loop_bnd
-  rw [inner_loop, inner.inner]
-  split
-  case isTrue h =>
-    let* ⟨ res1, res1_post ⟩ ← inner.inner_loop.spec
-    simp at res1_post
-    let* ⟨ y1, y1_post ⟩ ← Std.Usize.add_spec
-    let* ⟨ rest, rest_post ⟩ ← spec
-
-    intro x' y' z'
-    simp [*]
-    split
-    case isTrue already => simp_ifs
-    case isFalse =>
-      split
-      case isFalse unprocessed => simp_ifs
-      case isTrue new_case => simp_ifs
-  case isFalse h =>
-    simp_ifs
-    simp [*]
-termination_by 5 - y.val
-decreasing_by scalar_decr_tac
-
-@[progress]
 theorem algos.chi_loop.spec(res a: StateArray)(x: Std.Usize)
 : x.val <= 5
 → ∃ output,
   chi_loop a res x = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-    output.toSpec.get x' y' z' =
+    let idx := IR.encodeIndex x' y' z'
+    output.toBits[idx]! =
       if x.val ≤ x'.val then
-        (a.toSpec.get x' y' z' ^^ ((a.toSpec.get (x' + 1) y' z' ^^ true) && a.toSpec.get (x' + 2) y' z'))
+        (a.toBits[idx]! ^^ ((a.toBits[Spec.Keccak.StateArray.encodeIndex (x' + 1) y' z']! ^^ true) && a.toBits[Spec.Keccak.StateArray.encodeIndex (x' + 2) y' z']!))
       else
-        res.toSpec.get x' y' z'
+        res.toBits[idx]!
 := by
   intro x_loop_bound
   rw [chi_loop]
-  split
-  case isTrue x_idx =>
-    simp at x_idx
-
-    let* ⟨ res1, res1_post ⟩ ← chi.inner_loop.spec
-    let* ⟨ x1, x1_post ⟩ ← Std.Usize.add_spec
-    let* ⟨ res, res_post ⟩ ← spec
-
-    intro x' y' z'
+  simp [Std.toResult]
+  progress*
+  · intro x' y' z'
     simp [*]
     split
     case isTrue already => simp_ifs
@@ -158,8 +128,7 @@ theorem algos.chi_loop.spec(res a: StateArray)(x: Std.Usize)
       split
       case isFalse unprocessed => simp_ifs
       case isTrue new_case => simp_ifs
-  case isFalse x_oob =>
-    simp [‹x.val = 5›']
+  · simp [‹x.val = 5›']
     intro x' y' z'
     simp_ifs
 termination_by 5 - x.val
@@ -174,4 +143,9 @@ theorem algos.chi.spec(input: StateArray)
   simp [chi, ClonealgosStateArray.clone]
   progress as ⟨output, output_post⟩
   ext x' y' z'
-  simp [output_post, Spec.Keccak.χ]
+  rw [List.get_toStateArray (len_ls := by simp +decide)]
+  simp [List.get_toStateArray, output_post, Spec.Keccak.χ]
+  rw [List.get_toStateArray (len_ls := by simp +decide)]
+  rw [List.get_toStateArray (len_ls := by simp +decide)]
+  rw [List.get_toStateArray (len_ls := by simp +decide)]
+  simp [IR.encodeIndex_spec]
