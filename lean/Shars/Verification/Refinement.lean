@@ -21,6 +21,8 @@ theorem Aeneas.Std.UScalar.getElem!_toBits(u: Aeneas.Std.UScalar ty)(i: Nat): u.
   simp only [toBits, List.getElem!_ofFn, i_idx, getElem!_pos, Fin.getElem_fin]
 
 def List.toBits(ls: List (Aeneas.Std.UScalar ty)): List Bool := ls.map (·.toBits) |>.flatten
+
+@[scalar_tac_simps]
 def List.length_toBits(ls: List (Aeneas.Std.UScalar ty))
 : ls.toBits.length = ls.length * ty.numBits
 := by
@@ -64,40 +66,35 @@ abbrev Aeneas.Std.Slice.toBits(arr: Aeneas.Std.Slice (Aeneas.Std.UScalar ty)): L
 : arr.toBits.length = arr.length * ty.numBits
 := by simp only [toBits, List.length_toBits]
 
-abbrev List.toStateArrayCore(self: { ls : List Bool // ls.length = Spec.b 6}): Spec.Keccak.StateArray 6 := ⟨⟨self.val⟩, by simp +decide [self.property]⟩
-
 def List.toStateArray(self: List Bool): Spec.Keccak.StateArray 6 := 
     if len_self: self.length = Spec.b 6 then
-      List.toStateArrayCore ⟨self, len_self⟩
+      ⟨⟨self⟩, by simp +decide [len_self]⟩
     else default
+
 -- NOTE: We make `toStateArray` fallible so that we're able to compose it with `toBits`.
 
 @[reducible, simp]
 def algos.StateArray.toSpec(self: algos.StateArray): Spec.Keccak.StateArray 6 := self.toBits.toStateArray
 
-def Spec.Keccak.StateArray.toBitsSubtype(state: Spec.Keccak.StateArray 6): { ls: List Bool // ls.length = Spec.b 6} where
-  val := state.toVector.1.1
-  property := state.toVector.2
+abbrev Spec.Keccak.StateArray.toBits(state: Spec.Keccak.StateArray 6): List Bool := state.toVector.toArray.toList
 
-abbrev Spec.Keccak.StateArray.toBits(state: Spec.Keccak.StateArray 6): List Bool := state.toBitsSubtype.val
-
-theorem Spec.Keccak.StateArray.LeftInverse_toBitsSubtype
-: Function.LeftInverse (List.toStateArrayCore) (toBitsSubtype)
-:= by intro st; congr
-
-theorem Spec.Keccak.StateArray.toStateArray_toBits(state: Spec.Keccak.StateArray 6)
+@[simp] theorem Spec.Keccak.StateArray.toStateArray_toBits(state: Spec.Keccak.StateArray 6)
 : state.toBits.toStateArray = state
-:= by simp [toBits, List.toStateArray, Spec.Keccak.StateArray.LeftInverse_toBitsSubtype state]
+:= by simp [toBits, List.toStateArray]
+
+@[simp] theorem Spec.Keccak.StateArray.toBits_toStateArray(state: List Bool)(len_state: state.length = Spec.b 6)
+: state.toStateArray.toBits = state
+:= by simp [toBits, List.toStateArray, len_state]
 
 theorem Spec.Keccak.StateArray.LeftInverse_toBits
 : Function.LeftInverse List.toStateArray Spec.Keccak.StateArray.toBits
 := by intro st; apply Spec.Keccak.StateArray.toStateArray_toBits st
 
 
-theorem List.toBits_toStateArray(state: List Bool)
-  (len_state: state.length = 1600)
-: state.toStateArray.toBits = state
-:= by simp +decide [*, cond, toStateArray, Spec.Keccak.StateArray.toBits, toStateArrayCore, Spec.Keccak.StateArray.toBitsSubtype]
+/- theorem List.toBits_toStateArray(state: List Bool) -/
+/-   (len_state: state.length = 1600) -/
+/- : state.toStateArray.toBits = state -/
+/- := by simp +decide [*, cond, toStateArray, Spec.Keccak.StateArray.toBits, toStateArrayCore, Spec.Keccak.StateArray.toBitsSubtype] -/
 
 /- abbrev Aeneas.Std.Array.toArray{size: Usize}(self: Aeneas.Std.Array α size): _root_.Array α := Array.mk self.val -/
 /- abbrev Aeneas.Std.Slice.toArray(self: Aeneas.Std.Slice α): _root_.Array α := Array.mk self.val -/

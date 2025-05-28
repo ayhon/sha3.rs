@@ -130,3 +130,9 @@ theorem BitVec.setWidth_eq_cast{n m: Nat}(bv: BitVec n)(h: n = m)
   simp only [getElem_setWidth, getElem_cast]
   simp only [GetElem.getElem]
   exact rfl
+
+@[simp] theorem BitVec.getElem!_xor(b1 b2: BitVec n)(i: Nat)
+: (b1 ^^^ b2)[i]! = (b1[i]! ^^ b2[i]!)
+:= by
+  assume i < n; case otherwise h => simp [h, getElem!_neg]
+  simp only [getElem!_pos, getElem_xor, *]

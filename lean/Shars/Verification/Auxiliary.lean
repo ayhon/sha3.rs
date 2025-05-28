@@ -24,10 +24,9 @@ theorem Std.core.cmp.impls.OrdUsize.min_spec (x y : Std.Usize) :
   ∃ z, Std.toResult (Std.core.cmp.impls.OrdUsize.min x y) = .ok z ∧ z = Std.core.cmp.impls.OrdUsize.min x y := by
   simp [Std.core.cmp.impls.OrdUsize.min, Std.toResult]
 
-/- @[simp] -/
-/- theorem U64.numBits_eq_w -/
-/- : Std.UScalarTy.U64.numBits = Spec.w 6 -/
-/- := by simp [Spec.w] -/
+theorem U64.numBits_eq_w
+: Std.UScalarTy.U64.numBits = Spec.w 6
+:= by simp +decide
 
 attribute [local simp] Std.Array.length
 attribute [-simp] List.ofFn_succ in 
