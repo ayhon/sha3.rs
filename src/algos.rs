@@ -67,47 +67,34 @@ where
 }
 
 impl StateArray {
-    fn xor_bytes_at(dst: &mut Lane, src: &[u8], pos: usize) {
+    pub fn xor_byte_at(&mut self, byte: u8, pos: usize /* u8s */) {
+        let lane_idx = pos / 8;
+        let offset = pos % 8;
+        let mut buf = self.0[lane_idx].to_le_bytes();
+        buf[offset] ^= byte;
+        self.0[lane_idx] = u64::from_le_bytes(buf);
+    }
+
+    fn xor_lane(dst: &mut Lane, src: &[u8]){
         let mut buf = dst.to_le_bytes();
-        let mut i = 0;
-        while pos + i < 8 && i < src.len() {
-            buf[pos + i] ^= src[i];
-            i += 1;
-        }
+        #[inline] fn inline(mut i: usize, buf: &mut [u8; 8], src: &[u8]) {
+            while i < src.len() {
+                buf[i] ^= src[i];
+                i += 1;
+            }
+        } inline(0, &mut buf, src);
         *dst = u64::from_le_bytes(buf);
     }
-    /*
-    xor_bytes_at dst src pos = .ok output /\
-    output.toBitList = IR.xor_at dst.toBitList pos.val (src.toBits)
 
-where
-    IR.xor_at dst pos src := dst.replace_slice pos.val (dst.drop pos.val |>.zipWith (· ^^ ·) src)
 
-    Std.Aeneas.Slice.toBits: Slice (UScalar ty) → List Bool
-    Std.Aeneas.Slice.toBits self := arr.val.map (·.toBitList) |>.flatten
-
-also 
-    (Std.Aeneas.Slice.toBits self).length = self.length * ty.numBits
-    */
-
-    pub fn xor_at(&mut self, other: &[u8], pos: usize){
-        let mut block_idx = pos / 8;
-        let mut offset = pos % 8;
-        let mut i = 0;
-        while block_idx < self.len() && i < other.len() {
-            Self::xor_bytes_at(&mut self.0[block_idx], &other[i..], offset);
-            block_idx += 1;
-            i += 8 - offset;
-            offset = 0;
-        }
-    }
-    /*
-    xor_at self other pos := .ok output /\
-    output.toBits = IR.xor_at self.toBits pos.val other.toBits
-    */
-
+    /** Assumes `other.len() < self.len() * 8` and `other.len() % 8 == 0`. */
     pub fn xor(&mut self, other: &[u8]) {
-        self.xor_at(other, 0);
+        // self.xor_at(other, 0);
+        let mut block_idx = 0;
+        while 8*block_idx < other.len() {
+            Self::xor_lane(&mut self.0[block_idx], &other[8*block_idx..8*(block_idx+1)]);
+            block_idx += 1;
+        }
     }
 
     pub fn copy_to(&self, dst: &mut [u8]) {
@@ -124,7 +111,7 @@ also
     }
     /*
     copy_to src dst := .ok output /\
-    output.toBits = dst.toBits.replace_slice src.toBits 
+    output.toBits = dst.toBits.setSlice! src.toBits 
     */
 }
 
@@ -233,6 +220,7 @@ fn keccak_p(s: &mut StateArray) {
     }
 }
 
+/** Assumes r % 8 == 0 */
 fn sponge_absorb_initial(bs: &[u8], r: usize, s: &mut StateArray) {
     let n = bs.len() / r ;
     let mut i = 0;
@@ -244,6 +232,7 @@ fn sponge_absorb_initial(bs: &[u8], r: usize, s: &mut StateArray) {
     }
 }
 
+/** Assumes `r % 8 == 0`, `rest.len() < r` */
 fn sponge_absorb_final(s: &mut StateArray, rest: &[u8], extra: u8, r: usize){
     /* Since things are now byte aligned, we have that rest is given in terms
     *  of multiples of 8, and therefore both the suffix and the padding fit in
@@ -254,11 +243,12 @@ fn sponge_absorb_final(s: &mut StateArray, rest: &[u8], extra: u8, r: usize){
     *  Taking into account the endianness.
     * */
     s.xor(rest);
-    s.xor_at(&[extra], rest.len());
-    s.xor_at(&[0x80], r - 1);
+    s.xor_byte_at(extra, rest.len());
+    s.xor_byte_at(0x80, r-1);
     keccak_p(s);
 }
 
+/** Assumes `r % 8 == 0` */
 fn sponge_absorb(bs: &[u8], r: usize, s: &mut StateArray, extra: u8) {
     sponge_absorb_initial(bs, r, s);
     let n = bs.len() / r;
@@ -282,7 +272,8 @@ fn sponge_squeeze(r: usize, z: &mut [u8], s: StateArray) {
     }
 }
 
-fn sponge(r: usize, bs: &[u8], output: &mut [u8], extra: u8) {
+/** Assumes `r % 8 == 0` */
+fn sponge(r: usize /* u8s */, bs: &[u8], output: &mut [u8], extra: u8) {
     let mut s = StateArray::default();
     sponge_absorb(bs, r, &mut s, extra);
     sponge_squeeze(r, output, s);
@@ -424,38 +415,6 @@ mod tests {
             let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..]));
             
             assert_eq!(actual, expected);
-        }
-    }
-
-    #[test] fn xor_long_at_works() {
-        for _attempt in 0..100 {
-            let min_state_len = 0;
-            dbg!(&min_state_len);
-            let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
-            dbg!(&state_len);
-            let bytes_len = state_len * 8 - (random::<usize>() % (8*state_len).max(1));
-            dbg!(&bytes_len);
-            let offset = random::<usize>() % (8*state_len + 1 - bytes_len);
-            dbg!(&offset);
-
-            let mut state_bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
-            let mut state = StateArray::default();
-            state.0[..state_len].copy_from_slice(&compress_u64(&state_bits)[..]);
-
-            let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
-            let data = compress_u8(&data_bits);
-
-            state.xor_at(&data, offset);
-            let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..state_len]));
-
-            for (i, bit) in data_bits.iter().enumerate() {
-                if 8*offset + i < state_bits.len() {
-                    state_bits[8*offset + i] ^= bit;
-                } else { break }
-            }
-            let expected = crate::hex_of_vec_of_bits(&state_bits[..64*state_len]);
-
-            assert_eq!(actual, expected)
         }
     }
 
