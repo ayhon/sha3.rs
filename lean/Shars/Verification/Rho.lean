@@ -235,8 +235,8 @@ theorem algos.rho_loop.spec(input res : StateArray) (x y : Std.Usize) (t: Std.U3
       case otherwise => 
         rw [getElem!_neg]; case h => simp [List.length_toBits, Spec.w]; scalar_tac
         rw [getElem!_neg]; case h => simp [IR.rho.length_bitmangling]; scalar_tac
-      have ⟨x', y', z', encode_xyz_def, x'_lt, y'_lt, z'_lt⟩:= IR.decode_surjective i (by assumption)
-      rw [←encode_xyz_def, algos.rho.bitmangling.spec]
+      have ⟨x', y', z', encode_xyz_def⟩:= IR.decode_surjective i (by assumption)
+      rw [←encode_xyz_def, algos.rho.bitmangling.spec, i1_post]
       all_goals (first | assumption | simp [*])
     · congr 1; omega
   case isFalse =>
@@ -346,7 +346,7 @@ theorem IR.rho.bitmangling.refinement'(A A': Spec.Keccak.StateArray 6)(x y : Fin
     rw [IR.rho.bitmangling.refinement']
     congr
     -- TODO: This should be a theorem, toBits_set or something like that.
-    simp +arith +decide [Spec.Keccak.StateArray.set, Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.toBits, Spec.Keccak.StateArray.toBitsSubtype,
+    simp +arith +decide [Spec.Keccak.StateArray.set, Spec.Keccak.StateArray.get, Spec.Keccak.StateArray.toBits,
       Spec.Keccak.StateArray.encodeIndex, encodeIndex, Nat.mod_eq_of_lt, *, Spec.Keccak.ρ.offset, Fin.val_sub, ←getElem!_pos]
     rw [Nat.add_sub_assoc]
     case h => simp +decide [le_of_lt, Nat.mod_lt]
@@ -464,5 +464,5 @@ theorem algos.rho.spec(input: algos.StateArray)
   /- rw [Spec.Keccak.ρ.loop] -/
   simp [rho, Spec.Keccak.ρ.unfold]
   progress with rho_loop.spec as ⟨ res, res_post ⟩
-  simp +decide [*, IR.rho.loop.refinement', List.toBits_toStateArray]
+  simp +decide [*, IR.rho.loop.refinement', List.toStateArray]
   
