@@ -10,134 +10,99 @@ import Init.Data.Nat.Basic
 import Shars.Verification.Utils
 import Shars.Verification.Auxiliary
 
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 100000
+set_option Elab.async false
 attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Aeneas.Std.Slice.set
+attribute [ext (iff := false)] List.ext_getElem
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec
 
--- #check algos.pi
--- #check Spec.Keccak.StateArray.encodeIndex
--- def algos.pi.panic_free(a: List Bool): List Bool := Id.run do
---   let mut a := a
---   for x in List.finRange 5 do
---     for y in List.finRange 5 do
---       for z in List.finRange (Spec.w 6) do
---         a := a.set (Spec.Keccak.StateArray.encodeIndex x y z) 0
---   return a
+/-
+Spec.Keccak.StateArray.ofFn fun
+  | (x, y, z) => Spec.Keccak.StateArray.get (x + 3 * y) x z A
+-/
 
-
+set_option maxHeartbeats 1000000 in
 @[progress]
-theorem algos.pi.inner.inner_loop.spec(res input : algos.StateArray) (x y z : Std.Usize)
+theorem algos.pi.inner_loop.spec(res input : algos.StateArray) (x y : Std.Usize)
 : x.val < 5
-→ y.val < 5
-→ z.val <= Spec.w 6
+→ y.val ≤ 5
 → ∃ output,
-  inner_loop res input x y z = .ok output ∧
+  inner_loop res input x y = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-    output.toSpec.get x' y' z' =
-      if x.val = x'.val ∧ y.val = y'.val ∧ z.val ≤ z'.val then
-        input.toSpec.get (x + 3*y) x z'
+    let idx := IR.encodeIndex x' y' z'
+    output.toBits[idx]! =
+      if x.val = x'.val ∧ y.val ≤ y'.val then
+        input.toBits[IR.encodeIndex ((x' + 3*y') % 5) x' z']!
       else
-        res.toSpec.get x' y' z'
+        res.toBits[idx]!
 := by
-  intro x_idx y_idx z_loop_bnd
+  intro x_idx y_loop_bnd
   rw [inner_loop]
-  split
-  case isTrue z_lt =>
-    simp at z_lt
-    let* ⟨ i, i_post ⟩ ← Std.Usize.mul_spec
-    let* ⟨ i1, i1_post ⟩ ← Std.Usize.add_spec
-    let* ⟨ x2, x2_post ⟩ ← Std.Usize.rem_spec
-    let* ⟨ b, b_post ⟩ ← StateArray.index.spec
-    let* ⟨ x_1, x_2, x_post_1, x_post_2 ⟩ ← StateArray.index_mut.spec
-    let* ⟨ z1, z1_post ⟩ ← Std.Usize.add_spec
-    let* ⟨ rest, rest_post ⟩ ← spec
-    intro x' y' z'
-    simp [*, Spec.Keccak.StateArray.get_set, Fin.ext_iff, Nat.mod_eq_of_lt]
+  progress*
+  · intro x' y' z'
+    simp only [*, List.getElem!_encodeIndex_toBits, z'.isLt]
     split
     case isTrue already => simp_ifs
     case isFalse =>
       split
       case isFalse unprocessed =>
         simp_ifs
+        simp_lists
       case isTrue just_updated =>
-        simp_ifs
-        simp [*]
-        congr 1
-        zmodify
+        simp_lists
+        simp [*, ‹y.val = y'.val›']
 
   case isFalse z_oob =>
     simp; intros; simp_ifs
-termination_by Spec.w 6 - z.val
-decreasing_by scalar_decr_tac
-
-@[progress]
-theorem algos.pi.inner_loop.spec(input res : algos.StateArray) (x y: Std.Usize)
-: x.val < 5
-→ y.val <= 5
-→ ∃ output,
-  inner_loop res input x y = .ok output ∧
-  ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-    output.toSpec.get x' y' z' =
-      if x.val = x' ∧ y.val ≤ y' then
-        input.toSpec.get (x' + 3*y') x' z'
-      else
-        res.toSpec.get x' y' z'
-:= by
-  intro x_lt y_loop_bnd
-  rw [inner_loop]
-  split
-  . let* ⟨ res1, res1_post ⟩ ← inner.inner_loop.spec
-    let* ⟨ y1, y1_post ⟩ ← Std.Usize.add_spec
-    let* ⟨ rest, rest_post ⟩ ← spec
-    simp [*]
-    intro x' y' z'
-    split
-    case isTrue already => simp_ifs
-    case isFalse =>
-      split
-      case isFalse unprocessed => simp_ifs
-      case isTrue new_case =>
-        simp [*]
-  . simp
-    simp_ifs [implies_true]
 termination_by 5 - y.val
 decreasing_by scalar_decr_tac
 
 @[progress]
-theorem algos.pi_loop.spec(input res : algos.StateArray) (x : Std.Usize)
-: ∃ output,
-  algos.pi_loop input res x = .ok output ∧
+theorem algos.pi_loop.spec(input res : algos.StateArray) (x: Std.Usize)
+: x.val ≤ 5
+→ ∃ output,
+   pi_loop input res  x = .ok output ∧
   ∀ (x' y': Fin 5)(z': Fin (Spec.w 6)),
-    output.toSpec.get x' y' z' =
-      if x.val ≤ x' then
-        input.toSpec.get (x' + 3*y') x' z'
+    let idx := IR.encodeIndex x' y' z'
+    output.toBits[idx]! =
+      if x.val ≤ x'.val then
+        input.toBits[IR.encodeIndex ((x' + 3*y') % 5) x' z']!
       else
-        res.toSpec.get x' y' z'
+        res.toBits[idx]!
 := by
+  intro x_loop_bnd
   rw [pi_loop]
   progress*
-  · intro x' y' z'
-    simp [*]
+  · simp [*]
+    intro x' y' z'
     split
-    · simp_ifs
-    · split
-      · simp [*]
-      · simp_ifs
-  · simp
-    simp_ifs
+    case isTrue => simp_ifs
+    case isFalse =>
+      split <;> simp_ifs
+  · simp_ifs; simp 
 termination_by 5 - x.val
 decreasing_by scalar_decr_tac
 
+/- set_option maxHeartbeats 10000 in -/
 @[progress]
 theorem algos.pi.spec(input: algos.StateArray)
 : ∃ output,
   pi input = .ok output ∧
-  output.toSpec = Spec.Keccak.π input.toSpec
+  output.toBits = (Spec.Keccak.π input.toSpec).toBits
 := by
   simp [pi, Spec.Keccak.π, ClonealgosStateArray.clone]
   let* ⟨ res, res_post ⟩ ← pi_loop.spec
-  ext x' y' z'
-  simp [res_post]
+  ext i i_idx i_idx_rhs: 1
+  · simp +decide
+  simp at i_idx
+  simp [←getElem!_pos]
+  have ⟨x', y', z', encode_xyz_def⟩:= IR.decode_surjective i i_idx
+  simp only [←encode_xyz_def] at i_idx ⊢
+  simp [res_post, Spec.Keccak.StateArray.ofFn]
+  rw [Spec.Keccak.StateArray.Vector.getElem!_ofFn', ←Spec.Keccak.StateArray.encodeIndex]
+  simp
+  rw [List.get_toStateArray (len_ls := by simp +decide), Fin.getElem!_fin, IR.encodeIndex_spec]
+  congr 2; zmodify
