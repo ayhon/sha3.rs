@@ -23,7 +23,7 @@ theorem Aeneas.Std.UScalar.getElem!_toBits(u: Aeneas.Std.UScalar ty)(i: Nat): u.
 def List.toBits(ls: List (Aeneas.Std.UScalar ty)): List Bool := ls.map (·.toBits) |>.flatten
 
 @[scalar_tac_simps]
-def List.length_toBits(ls: List (Aeneas.Std.UScalar ty))
+theorem List.length_toBits(ls: List (Aeneas.Std.UScalar ty))
 : ls.toBits.length = ls.length * ty.numBits
 := by
   rw [toBits]
