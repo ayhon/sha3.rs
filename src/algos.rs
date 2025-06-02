@@ -77,15 +77,14 @@ impl StateArray {
 
     fn xor_lane(dst: &mut Lane, src: &[u8]){
         let mut buf = dst.to_le_bytes();
-        #[inline] fn inline(mut i: usize, buf: &mut [u8; 8], src: &[u8]) {
+        #[inline] fn inner(mut i: usize, buf: &mut [u8; 8], src: &[u8]) {
             while i < src.len() {
                 buf[i] ^= src[i];
                 i += 1;
             }
-        } inline(0, &mut buf, src);
+        } inner(0, &mut buf, src);
         *dst = u64::from_le_bytes(buf);
     }
-
 
     /** Assumes `other.len() < self.len() * 8` and `other.len() % 8 == 0`. */
     pub fn xor(&mut self, other: &[u8]) {
