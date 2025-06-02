@@ -67,7 +67,7 @@ where
 }
 
 impl StateArray {
-    pub fn xor_byte_at(&mut self, byte: u8, pos: usize /* u8s */) {
+    pub fn xor_byte_at(&mut self, byte: u8, pos: usize /*&u8*/) {
         let lane_idx = pos / 8;
         let offset = pos % 8;
         let mut buf = self.0[lane_idx].to_le_bytes();
@@ -77,7 +77,7 @@ impl StateArray {
 
     fn xor_lane(dst: &mut Lane, src: &[u8]){
         let mut buf = dst.to_le_bytes();
-        #[inline] fn inner(mut i: usize, buf: &mut [u8; 8], src: &[u8]) {
+        #[inline] fn inner(mut i: usize /*&u8*/, buf: &mut [u8; 8], src: &[u8]) {
             while i < src.len() {
                 buf[i] ^= src[i];
                 i += 1;
@@ -86,14 +86,19 @@ impl StateArray {
         *dst = u64::from_le_bytes(buf);
     }
 
-    /** Assumes `other.len() < self.len() * 8`. */
+    /** Assumes `other.len() < self.len() * 8` and `other.len() > 0`. */
     pub fn xor(&mut self, other: &[u8]) {
-        let mut block_idx = 0;
-        while 8*block_idx + 8 < other.len() {
-            Self::xor_lane(&mut self.0[block_idx], &other[8*block_idx..8*(block_idx+1)]);
-            block_idx += 1;
+        let mut block_idx = 0; /*&u64*/
+        /** Assumes `8*block_idx < other.len()` */
+        #[inline] fn inner(this: &mut StateArray, block_idx: &mut usize /*&u64*/, other: &[u8]){
+            while 8* *block_idx + 8 <= other.len() {
+                StateArray::xor_lane(&mut this.0[*block_idx], &other[8* *block_idx..8*(*block_idx+1)]);
+                *block_idx += 1;
+            }
+        } inner(self, &mut block_idx, other);
+        if 8 * block_idx  < other.len() {
+            StateArray::xor_lane(&mut self.0[block_idx], &other[8*block_idx..]);
         }
-        Self::xor_lane(&mut self.0[block_idx], &other[8*block_idx..]);
     }
 
     pub fn copy_to(&self, dst: &mut [u8]) {
