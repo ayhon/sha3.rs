@@ -66,3 +66,8 @@ theorem algos.keccak_p.spec(input: StateArray)
   rw [keccak_p]
   progress as ⟨res, res_post⟩
   simp [res_post, Spec.Keccak.P.loop.refinement, res_post]
+
+def IR.keccak_p(l: List Bool): List Bool := 
+  let state := List.toStateArray l
+  let state := Spec.Keccak.P 6 24 state.toVector
+  state.toList

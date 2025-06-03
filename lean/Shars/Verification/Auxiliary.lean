@@ -475,7 +475,7 @@ theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index.spec{T :
     unfold index
     simp [*, Slice.drop]
 
-theorem algos.StateArray.xor.spec (input : algos.StateArray) (other : Std.Slice Std.U8)
+theorem algos.StateArray.xor.spec'(input : algos.StateArray) (other : Std.Slice Std.U8)
 -- /** Assumes `other.len() < self.len() * 8` and `other.len() > 0`. */
 : other.toBits.length ≤ input.toBits.length
 → other.length > 0
@@ -537,6 +537,44 @@ theorem algos.StateArray.xor.spec (input : algos.StateArray) (other : Std.Slice 
   · simp
     intros
     simp [*, -val_leftover, ←val_leftover, ‹8 * (other.val.length / 8) = other.val.length›']
+
+def IR.xor(s: List Bool)(r: List Bool): List Bool :=
+  s.zipWith (· ^^ ·) r ++ s.drop r.length
+
+@[simp] theorem IR.length_xor(s: List Bool)(r: List Bool)
+: (IR.xor s r).length = s.length
+:= by simp [IR.xor, Nat.min_def]
+      split <;> omega
+
+theorem IR.getElem!_xor(s: List Bool)(r: List Bool)(i: Nat)
+: (IR.xor s r)[i]! = if i < r.length ∧ i < s.length then s[i]! ^^ r[i]! else s[i]!
+:= by
+  assume i < s.length; case otherwise => simp [getElem!_neg, *]
+  unfold IR.xor
+  if i < r.length then
+    simp_lists
+    simp_ifs
+  else
+    simp_lists
+    simp_ifs
+    congr; omega
+
+@[progress]
+theorem algos.StateArray.xor.spec (input : algos.StateArray) (other : Std.Slice Std.U8)
+: other.toBits.length ≤ input.toBits.length
+→ other.length > 0 
+→ 8 ∣ other.length
+→ ∃ output,
+  xor input other = .ok output ∧
+  output.toBits = IR.xor input.toBits other.toBits
+:= by
+  intro input_big_enough length_other_pos length_other_mult_8
+  progress  with spec' as ⟨output,  output_spec⟩
+  apply List.ext_getElem
+  · simp
+  intro j j_idx _
+  simp [←getElem!_pos] at j_idx ⊢
+  simp [*, IR.getElem!_xor]
 
 -------------------------------------
 
