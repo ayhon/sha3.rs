@@ -171,28 +171,38 @@ def StateArray.xor_lane (dst : U64) (src : Slice U8) : Result U64 :=
   ok (core.num.U64.from_le_bytes buf1)
 
 /- [algos::{algos::StateArray}#5::xor]: loop 0:
-   Source: 'src/algos.rs', lines 93:8-96:9 -/
+   Source: 'src/algos.rs', lines 92:8-95:9 -/
 def StateArray.xor_loop
   (self : StateArray) (other : Slice U8) (block_idx : Usize) :
   Result StateArray
   :=
   do
   let i ← 8#usize * block_idx
-  let i1 := Slice.len other
-  if i < i1
+  let i1 ← i + 8#usize
+  let i2 := Slice.len other
+  if i1 < i2
   then
     do
-    let (i2, index_mut_back) ← Array.index_mut_usize self block_idx
-    let i3 ← block_idx + 1#usize
-    let i4 ← 8#usize * i3
+    let (i3, index_mut_back) ← Array.index_mut_usize self block_idx
+    let i4 ← block_idx + 1#usize
+    let i5 ← 8#usize * i4
     let s ←
       core.slice.index.Slice.index
         (core.slice.index.SliceIndexRangeUsizeSliceInst U8) other
-        { start := i, end_ := i4 }
-    let i5 ← StateArray.xor_lane i2 s
-    let a := index_mut_back i5
-    StateArray.xor_loop a other i3
-  else ok self
+        { start := i, end_ := i5 }
+    let i6 ← StateArray.xor_lane i3 s
+    let a := index_mut_back i6
+    StateArray.xor_loop a other i4
+  else
+    do
+    let (i3, index_mut_back) ← Array.index_mut_usize self block_idx
+    let s ←
+      core.slice.index.Slice.index
+        (core.slice.index.SliceIndexRangeFromUsizeSlice U8) other
+        { start := i }
+    let i4 ← StateArray.xor_lane i3 s
+    let a := index_mut_back i4
+    ok a
 partial_fixpoint
 
 /- [algos::{algos::StateArray}#5::xor]:

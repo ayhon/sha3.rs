@@ -86,14 +86,14 @@ impl StateArray {
         *dst = u64::from_le_bytes(buf);
     }
 
-    /** Assumes `other.len() < self.len() * 8` and `other.len() % 8 == 0`. */
+    /** Assumes `other.len() < self.len() * 8`. */
     pub fn xor(&mut self, other: &[u8]) {
-        // self.xor_at(other, 0);
         let mut block_idx = 0;
-        while 8*block_idx < other.len() {
+        while 8*block_idx + 8 < other.len() {
             Self::xor_lane(&mut self.0[block_idx], &other[8*block_idx..8*(block_idx+1)]);
             block_idx += 1;
         }
+        Self::xor_lane(&mut self.0[block_idx], &other[8*block_idx..]);
     }
 
     pub fn copy_to(&self, dst: &mut [u8]) {
@@ -421,8 +421,11 @@ mod tests {
         for _attempt in 0..100 {
             let min_state_len = 0;
             let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
+            dbg!(&state_len);
             let bytes_len = state_len * 8 - (random::<usize>() % (8*state_len).max(1));
-            let r = (random::<usize>() % (25*8 - 1) + 1) * 8;
+            dbg!(&bytes_len);
+            let r = (random::<usize>() % (25 - 1) + 1) * 8;
+            dbg!(&r);
 
             let bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
             let mut state_bits = [false; 1600];
@@ -433,10 +436,10 @@ mod tests {
             let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
             let data = compress_u8(&data_bits);
 
-            simple::sponge_absorb_initial(&data_bits, r, &mut state_bits);
+            simple::sponge_absorb_initial(&data_bits, r*8, &mut state_bits);
             let expected = crate::hex_of_vec_of_bits(&state_bits[..64*state_len]);
 
-            sponge_absorb_initial(&data, r/8, &mut state);
+            sponge_absorb_initial(&data, r, &mut state);
             let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..state_len]));
 
             assert_eq!(actual, expected);
@@ -447,8 +450,8 @@ mod tests {
         for _attempt in 0..100 {
             let min_state_len = 0;
             let state_len = (random::<usize>() % (25 - min_state_len)) + min_state_len;
-            let r = (random::<usize>() % (25*8 - 1) + 1) * 8;
-            let bytes_len = random::<usize>() % (r/8);
+            let r = (random::<usize>() % (25 - 1) + 1) * 8;
+            let bytes_len = (random::<usize>() % r) / 8 * 8;
             // let bytes_len = random::<usize>() % (r / 8);
 
             let bits: Vec<bool> = (0..64*state_len).map(|_| random()).collect();
@@ -460,10 +463,10 @@ mod tests {
             let data_bits: Vec<bool> = (0..8*bytes_len).map(|_| random()).collect();
             let data = compress_u8(&data_bits);
 
-            simple::sponge_absorb_final(&mut state_bits, &data_bits, &simple::SHA3_SUFFIX, r);
+            simple::sponge_absorb_final(&mut state_bits, &data_bits, &simple::SHA3_SUFFIX, r*8);
             let expected = crate::hex_of_vec_of_bits(&state_bits[..]);
 
-            sponge_absorb_final(&mut state, &data, SHA3_EXTRA, r/8);
+            sponge_absorb_final(&mut state, &data, SHA3_EXTRA, r);
             let actual = crate::hex_of_vec_of_bits(&decompress_u64(&state.0[..]));
 
             assert_eq!(actual, expected);
@@ -510,24 +513,31 @@ mod tests {
             "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
             "Lean",
         ];
+        eprintln!("Starting with 224");
         for msg in mgs {
+            eprintln!("Message {msg}");
             let bits = crate::get_vec_of_bits(msg);
+            assert!(bits.len() % 8 == 0);
+            assert_eq!(compress_u8(&bits).len(), msg.len());
             let expected = crate::hex_of_vec_of_bits(&simple::sha3_224(&bits));
             let actual = crate::hex_of_vec_of_bits(&decompress_u8(&sha3_224(&compress_u8(&bits))));
             assert_eq!(actual, expected, "Failed at 224");
         }
+        eprintln!("Starting with 256");
         for msg in mgs {
             let bits = crate::get_vec_of_bits(msg);
             let expected = crate::hex_of_vec_of_bits(&simple::sha3_256(&bits));
             let actual = crate::hex_of_vec_of_bits(&decompress_u8(&sha3_256(&compress_u8(&bits))));
             assert_eq!(actual, expected, "Failed at 256");
         }
+        eprintln!("Starting with 384");
         for msg in mgs {
             let bits = crate::get_vec_of_bits(msg);
             let expected = crate::hex_of_vec_of_bits(&simple::sha3_384(&bits));
             let actual = crate::hex_of_vec_of_bits(&decompress_u8(&sha3_384(&compress_u8(&bits))));
             assert_eq!(actual, expected, "Failed at 384");
         }
+        eprintln!("Starting with 512");
         for msg in mgs {
             let bits = crate::get_vec_of_bits(msg);
             let expected = crate::hex_of_vec_of_bits(&simple::sha3_512(&bits));
