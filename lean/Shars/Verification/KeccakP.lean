@@ -71,3 +71,5 @@ def IR.keccak_p(l: List Bool): List Bool :=
   let state := List.toStateArray l
   let state := Spec.Keccak.P 6 24 state.toVector
   state.toList
+
+@[simp] theorem IR.length_keccak_p(l: List Bool): (IR.keccak_p l).length = Spec.b 6 := by simp [IR.keccak_p]
