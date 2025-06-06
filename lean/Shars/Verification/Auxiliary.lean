@@ -229,7 +229,28 @@ theorem Aeneas.Std.core.num.U64.getElem_toBits_getElem_to_le_bytes(u: Std.U64)(i
   · congr; rw [←getElem!_pos]
   · rw [BitVec.toLEBytes_getElem!_testBit, ←getElem!_pos]; assumption
 
-theorem algos.StateArray.xor_byte_at.spec (input : StateArray) (byte : Std.U8) (pos : Std.Usize)
+def IR.xor(s: List Bool)(r: List Bool): List Bool :=
+  s.zipWith (· ^^ ·) r ++ s.drop r.length
+
+@[simp] theorem IR.length_xor(s r: List Bool): (IR.xor s r).length = s.length := by
+  simp [IR.xor, Nat.min_def]
+  split <;> omega
+
+theorem IR.getElem!_xor(s: List Bool)(r: List Bool)(i: Nat)
+: (IR.xor s r)[i]! = if i < r.length ∧ i < s.length then s[i]! ^^ r[i]! else s[i]!
+:= by
+  assume i < s.length; case otherwise => simp [getElem!_neg, *]
+  unfold IR.xor
+  if i < r.length then
+    simp_lists
+    simp_ifs
+  else
+    simp_lists
+    simp_ifs
+    congr; omega
+
+-- @[progress]
+theorem algos.StateArray.xor_byte_at.spec' (input : StateArray) (byte : Std.U8) (pos : Std.Usize)
 : 8 * pos.val < 1600
 → ∃ output,
   xor_byte_at (input : algos.StateArray) (byte : Std.U8) (pos : Std.Usize) = .ok output ∧
@@ -285,6 +306,27 @@ theorem algos.StateArray.xor_byte_at.spec (input : StateArray) (byte : Std.U8) (
   case isFalse =>
     simp_ifs
 
+@[progress]
+theorem algos.StateArray.xor_byte_at.spec (input : StateArray) (byte : Std.U8) (pos : Std.Usize)
+: 8 * pos.val < 1600
+→ ∃ output,
+  xor_byte_at (input : algos.StateArray) (byte : Std.U8) (pos : Std.Usize) = .ok output ∧
+  output.toBits = IR.xor input.toBits (List.replicate (8*pos.val) false ++ byte.toBits)
+:= by
+  intro pos_bit_idx
+  progress with spec' as ⟨output, output_post⟩
+  apply List.ext_getElem
+  · simp
+  simp [←getElem!_pos]
+  intro i i_idx
+  simp [*, IR.getElem!_xor, Std.Array.toBits]
+  split
+  case isTrue inrange =>
+    simp_lists [Std.UScalar.length_toBits, Std.UScalarTy.numBits]
+    simp_ifs
+  case isFalse not_inrange =>
+    simp_lists [Std.UScalar.length_toBits, Std.UScalarTy.numBits]
+    split <;> simp
 
 @[progress]
 theorem algos.StateArray.xor_lane.inner_loop.spec(i : Std.Usize)(input : Aeneas.Std.Array Std.U8 8#usize)(src : Std.Slice Std.U8)
@@ -478,13 +520,12 @@ theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index.spec{T :
 theorem algos.StateArray.xor.spec'(input : algos.StateArray) (other : Std.Slice Std.U8)
 -- /** Assumes `other.len() < self.len() * 8` and `other.len() > 0`. */
 : other.toBits.length ≤ input.toBits.length
-→ other.length > 0
 → ∃ output,
   xor input other = .ok output ∧
   ∀ j < output.toBits.length,
     output.toBits[j]! = if j < other.toBits.length then input.toBits[j]! ^^ other.toBits[j]! else input.toBits[j]!
 := by
-  intro input_big_enough length_other_pos
+  intro input_big_enough
   unfold xor inner
   simp [Std.core.slice.index.Slice.index]
 
@@ -538,43 +579,31 @@ theorem algos.StateArray.xor.spec'(input : algos.StateArray) (other : Std.Slice 
     intros
     simp [*, -val_leftover, ←val_leftover, ‹8 * (other.val.length / 8) = other.val.length›']
 
-def IR.xor(s: List Bool)(r: List Bool): List Bool :=
-  s.zipWith (· ^^ ·) r ++ s.drop r.length
-
-@[simp] theorem IR.length_xor(s: List Bool)(r: List Bool)
-: (IR.xor s r).length = s.length
-:= by simp [IR.xor, Nat.min_def]
-      split <;> omega
-
-theorem IR.getElem!_xor(s: List Bool)(r: List Bool)(i: Nat)
-: (IR.xor s r)[i]! = if i < r.length ∧ i < s.length then s[i]! ^^ r[i]! else s[i]!
-:= by
-  assume i < s.length; case otherwise => simp [getElem!_neg, *]
-  unfold IR.xor
-  if i < r.length then
-    simp_lists
-    simp_ifs
-  else
-    simp_lists
-    simp_ifs
-    congr; omega
-
 @[progress]
 theorem algos.StateArray.xor.spec (input : algos.StateArray) (other : Std.Slice Std.U8)
 : other.toBits.length ≤ input.toBits.length
-→ other.length > 0 
-→ 8 ∣ other.length
 → ∃ output,
   xor input other = .ok output ∧
   output.toBits = IR.xor input.toBits other.toBits
 := by
-  intro input_big_enough length_other_pos length_other_mult_8
+  intro input_big_enough
   progress  with spec' as ⟨output,  output_spec⟩
   apply List.ext_getElem
   · simp
   intro j j_idx _
   simp [←getElem!_pos] at j_idx ⊢
   simp [*, IR.getElem!_xor]
+
+theorem IR.xor_assoc(s0 s1 s2: List Bool)
+: IR.xor (IR.xor s0 s1) s2 = IR.xor s0 (IR.xor (s1.setWidth s0.length) s2)
+:= by
+  apply List.ext_getElem
+  · simp
+  simp [←getElem!_pos]
+  intro i i_idx
+  simp [IR.getElem!_xor, i_idx]
+  by_cases i < s2.length <;> by_cases i < s1.length <;> simp [*, getElem!_neg]
+
 
 -------------------------------------
 
