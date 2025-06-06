@@ -86,7 +86,7 @@ impl StateArray {
         *dst = u64::from_le_bytes(buf);
     }
 
-    /** Assumes `other.len() < self.len() * 8` and `other.len() > 0`. */
+    /** Assumes `other.len() < self.len() * 8`. */
     pub fn xor(&mut self, other: &[u8]) {
         let mut block_idx = 0; /*&u64*/
         /** Assumes `8*block_idx < other.len()` */
