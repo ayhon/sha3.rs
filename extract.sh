@@ -7,12 +7,12 @@ charon(){
     nix run github:aeneasverif/aeneas#charon -L \
         -- \
         rustc \
-        --input "src/$1.rs" \
         --dest-file="$1.llbc" \
         --hide-marker-traits \
         --remove-associated-types="*" \
         -- \
-        --crate-type=lib
+        --crate-type=lib \
+        "src/$1.rs"
 }
 
 aeneas(){
