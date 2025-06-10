@@ -604,6 +604,115 @@ theorem IR.xor_assoc(s0 s1 s2: List Bool)
   simp [IR.getElem!_xor, i_idx]
   by_cases i < s2.length <;> by_cases i < s1.length <;> simp [*, getElem!_neg]
 
+#check Std.core.ops.index.IndexSliceInst (Std.core.slice.index.SliceIndexRangeFromUsizeSlice Std.U8)
+
+theorem Nat.quite_trivial_really(a b: Nat): a * (b + 1) - a * b = a := by simp [Nat.mul_add]
+
+@[progress]
+theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec {T : Type}
+  (r : Std.core.ops.range.RangeFrom Std.Usize) (s : Std.Slice T)
+: ∃ old new,
+  index_mut r s =  .ok (old, new) ∧
+  old.val = s.val.drop r.start.val ∧
+  ∀ u, (new u).val = s.val.setSlice! r.start.val u.val
+:= by
+  sorry
+
+-- TODO: Move to somewhere more useful
+@[simp] theorem Aeneas.Std.UScalar.numBits_pos(ty: Std.UScalarTy): ty.numBits > 0 := by cases ty <;> simp
+
+-- TODO: Move to `Refinement.lean`
+@[simp] theorem List.toBits_setSlice!(ls s: List (Std.UScalar ty))(off: Nat)
+: (ls.setSlice! off s).toBits = ls.toBits.setSlice! (ty.numBits*off) s.toBits
+:= by
+  sorry
+
+@[simp] theorem List.toBits_getElem(ls: List (Std.UScalar ty))(i: Nat)
+  (i_idx: i < ls.length)
+: ls[i].toBits = ls.toBits.slice (ty.numBits*i) (ty.numBits*(i+1))
+:= by
+  have: (ls.toBits.slice (ty.numBits*i) (ty.numBits*(i+1))).length = ls[i].toBits.length := by
+    simp [List.slice, Nat.quite_trivial_really, List.length_toBits, ←Nat.mul_comm ty.numBits, ←Nat.mul_sub]
+    omega
+  apply List.ext_getElem <;> simp only [↓this, ←getElem!_pos]
+  simp
+  intro j j_idx
+  simp [List.slice, Nat.quite_trivial_really, j_idx, List.getElem!_toBits, Nat.mod_eq_of_lt, Nat.add_comm, Nat.add_mul_div_left, Nat.div_eq_of_lt]
+
+@[simp] theorem List.toBits_getElem!(ls: List (Std.UScalar ty))(i: Nat)
+  (i_idx: i < ls.length)
+: ls[i]!.toBits = ls.toBits.slice (ty.numBits*i) (ty.numBits*(i+1))
+:= by simp [getElem!_pos, i_idx]
+
+attribute [-progress] Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec
+
+-- @[progress]
+-- theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index.spec(input: Slice α)(r: ops.range.Range Usize)
+-- : r.start.val ≤ r.end_.val
+-- → r.end_.val ≤ input.length
+-- → ∃ output,
+--   core.slice.index.SliceIndexRangeUsizeSlice.index r input = .ok output ∧
+--   output.val = input.val.extract r.start.val r.end_.val
+-- := by
+--   obtain ⟨start, end_⟩ := r
+--   intro r_proper end_lt_length
+--   simp at *
+--   rw [index]
+--   simp [List.slice, *]
+
+set_option trace.Progress true in
+theorem algos.StateArray.copy_to_loop.spec
+  (src : StateArray) (input : Std.Slice Std.U8) (i : Std.Usize)
+: ∃ output,
+  copy_to_loop src input i = .ok output ∧
+  output.toBits = input.toBits.setSlice! (64*i.val) (src.toBits.drop (64*i.val))
+:= by
+  unfold copy_to_loop
+  simp [DerefalgosStateArrayArrayU6425.deref, Std.toResult,
+        Std.core.array.Array.index,       Std.core.array.Array.index_mut,
+        Std.core.slice.index.Slice.index, Std.core.slice.index.Slice.index_mut,
+        Aeneas.Std.core.ops.index.Index.index,
+        Std.core.ops.index.IndexSliceInst,
+      ]
+  split
+  . let* ⟨ i2, i2_post ⟩ ← Std.Usize.add_spec
+    let* ⟨ i3, i3_post ⟩ ← Std.Usize.mul_spec
+    split
+    . let* ⟨ i5, i5_post ⟩ ← Std.Usize.mul_spec
+      progress with Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec
+      sorry
+    . let* ⟨ i6, i6_post ⟩ ← Std.Usize.mul_spec
+      split
+      . let* ⟨ nb_left, nb_left_post_1, nb_left_post_2 ⟩ ← Std.Usize.sub_spec
+        let* ⟨ __discr_1, __discr_2, __discr_post_1, __discr_post_2 ⟩ ←
+          Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec
+        let* ⟨ i9, i9_post ⟩ ← Std.Array.index_usize_spec
+        sorry
+      . sorry
+  . sorry
+
+  skip
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  -- . sorry
+  -- · simp [*, List.slice, Nat.mul_add]; scalar_tac
+  -- · sorry
+  -- · simp [*, List.slice, Nat.mul_add]; scalar_tac
+  -- simp +arith [*, Std.Slice.toBits, Std.Array.toBits, List.slice]
+  -- have: 64 * i.val ≤ 8 * input.length := by
+  --   rw [(by decide: 64 = 8 * 8), Nat.mul_comm, ←Nat.mul_assoc]     ·
+  --   apply Nat.mul_le_of_le_div
+  --   simp; omega
+  -- congr
+  -- rw [List.take_of_length_le]
+  -- swap; { simp +arith [Nat.mul_sub, Nat.sub_add_cancel]; sorry }
+  -- rw [List.take_of_length_le]
+  -- simp; scalar_tac
+  -- swap; { simp +arith [Nat.mul_sub, Nat.sub_add_cancel]; sorry }
+
+
 
 -------------------------------------
 
