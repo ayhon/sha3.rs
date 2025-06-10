@@ -101,21 +101,33 @@ impl StateArray {
         }
     }
 
+    /** */
     pub fn copy_to(&self, dst: &mut [u8]) {
-        let mut i = 0;
-        while i < self.len()  && 8*i < dst.len() {
-            if 8*i + 8 < dst.len() {
-                dst[8*i..8*(i + 1)].copy_from_slice(&self.0[i].to_le_bytes()[0..]);
-            } else {
-                let nb_left = dst.len() - 8*i;
-                dst[8*i..].copy_from_slice(&self.0[i].to_le_bytes()[0..nb_left]);
-            }
+        let mut i = 0 /*u64s*/;
+        while i < self.len() && 8*(i + 1) < dst.len() {
+            dst[8*i..8*(i + 1)].copy_from_slice(&self.0[i].to_le_bytes()[0..]);
             i += 1;
         }
+        if i < self.len() && 8*i < dst.len() {
+            let nb_left = dst.len() - 8*i;
+            dst[8*i..].copy_from_slice(&self.0[i].to_le_bytes()[0..nb_left]);
+        }
+        // while i < self.len() && 8*i < dst.len() {
+        //     if 8*i + 8 < dst.len() {
+        //         dst[8*i..8*(i + 1)].copy_from_slice(&self.0[i].to_le_bytes()[0..]);
+        //     } else {
+        //         let nb_left = dst.len() - 8*i;
+        //         dst[8*i..].copy_from_slice(&self.0[i].to_le_bytes()[0..nb_left]);
+        //     }
+        //     i += 1;
+        // }
     }
     /*
-    copy_to src dst := .ok output /\
-    output.toBits = dst.toBits.setSlice! src.toBits 
+    coyp_to_from src input i = .ok output /\
+    output.toBits = input.toBits.setSlice! (8*i) (src.toBits.take (64 * input.toBits.length / 64 ) |>.drop (8*i))
+    ---
+    copy_to src input := .ok output /\
+    output.toBits = input.toBits.setSlice! 0 (src.toBits.take input.toBits.length)
     */
 }
 
