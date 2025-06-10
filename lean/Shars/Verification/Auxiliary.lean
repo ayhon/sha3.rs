@@ -606,17 +606,36 @@ theorem IR.xor_assoc(s0 s1 s2: List Bool)
 
 #check Std.core.ops.index.IndexSliceInst (Std.core.slice.index.SliceIndexRangeFromUsizeSlice Std.U8)
 
-theorem Nat.quite_trivial_really(a b: Nat): a * (b + 1) - a * b = a := by simp [Nat.mul_add]
+@[simp] theorem Nat.quite_trivial_really(a b: Nat): a * (b + 1) - a * b = a := by simp [Nat.mul_add]
 
 @[progress]
 theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec {T : Type}
   (r : Std.core.ops.range.RangeFrom Std.Usize) (s : Std.Slice T)
-: ∃ old new,
+: r.start.val ≤ s.length
+→  ∃ old new,
   index_mut r s =  .ok (old, new) ∧
   old.val = s.val.drop r.start.val ∧
-  ∀ u, (new u).val = s.val.setSlice! r.start.val u.val
+  ∀ u, u.length = s.length - r.start.val → (new u).val = s.val.setSlice! r.start.val u.val
 := by
-  sorry
+  intro cond
+  simp [index_mut, cond]
+  intro u cond2
+  simp [cond2]
+
+@[progress]
+theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.spec {T : Type}
+  (r : Std.core.ops.range.Range Std.Usize) (s : Std.Slice T)
+: r.start.val ≤ r.end_.val
+→ r.end_.val ≤ s.length
+→ ∃ old new,
+  index_mut r s =  .ok (old, new) ∧
+  old.val = s.val.slice r.start.val r.end_.val ∧
+  ∀ u, u.length = r.end_.val - r.start.val → (new u).val = s.val.setSlice! r.start.val u.val
+:= by
+  intro cond cond'
+  simp [index_mut, cond, cond']
+  intro u cond2
+  simp [cond2]
 
 -- TODO: Move to somewhere more useful
 @[simp] theorem Aeneas.Std.UScalar.numBits_pos(ty: Std.UScalarTy): ty.numBits > 0 := by cases ty <;> simp
@@ -646,76 +665,6 @@ theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec
 
 attribute [-progress] Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec
 
--- @[progress]
--- theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index.spec(input: Slice α)(r: ops.range.Range Usize)
--- : r.start.val ≤ r.end_.val
--- → r.end_.val ≤ input.length
--- → ∃ output,
---   core.slice.index.SliceIndexRangeUsizeSlice.index r input = .ok output ∧
---   output.val = input.val.extract r.start.val r.end_.val
--- := by
---   obtain ⟨start, end_⟩ := r
---   intro r_proper end_lt_length
---   simp at *
---   rw [index]
---   simp [List.slice, *]
-
-set_option trace.Progress true in
-theorem algos.StateArray.copy_to_loop.spec
-  (src : StateArray) (input : Std.Slice Std.U8) (i : Std.Usize)
-: ∃ output,
-  copy_to_loop src input i = .ok output ∧
-  output.toBits = input.toBits.setSlice! (64*i.val) (src.toBits.drop (64*i.val))
-:= by
-  unfold copy_to_loop
-  simp [DerefalgosStateArrayArrayU6425.deref, Std.toResult,
-        Std.core.array.Array.index,       Std.core.array.Array.index_mut,
-        Std.core.slice.index.Slice.index, Std.core.slice.index.Slice.index_mut,
-        Aeneas.Std.core.ops.index.Index.index,
-        Std.core.ops.index.IndexSliceInst,
-      ]
-  split
-  . let* ⟨ i2, i2_post ⟩ ← Std.Usize.add_spec
-    let* ⟨ i3, i3_post ⟩ ← Std.Usize.mul_spec
-    split
-    . let* ⟨ i5, i5_post ⟩ ← Std.Usize.mul_spec
-      progress with Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec
-      sorry
-    . let* ⟨ i6, i6_post ⟩ ← Std.Usize.mul_spec
-      split
-      . let* ⟨ nb_left, nb_left_post_1, nb_left_post_2 ⟩ ← Std.Usize.sub_spec
-        let* ⟨ __discr_1, __discr_2, __discr_post_1, __discr_post_2 ⟩ ←
-          Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec
-        let* ⟨ i9, i9_post ⟩ ← Std.Array.index_usize_spec
-        sorry
-      . sorry
-  . sorry
-
-  skip
-  · sorry
-  · sorry
-  · sorry
-  · sorry
-  -- . sorry
-  -- · simp [*, List.slice, Nat.mul_add]; scalar_tac
-  -- · sorry
-  -- · simp [*, List.slice, Nat.mul_add]; scalar_tac
-  -- simp +arith [*, Std.Slice.toBits, Std.Array.toBits, List.slice]
-  -- have: 64 * i.val ≤ 8 * input.length := by
-  --   rw [(by decide: 64 = 8 * 8), Nat.mul_comm, ←Nat.mul_assoc]     ·
-  --   apply Nat.mul_le_of_le_div
-  --   simp; omega
-  -- congr
-  -- rw [List.take_of_length_le]
-  -- swap; { simp +arith [Nat.mul_sub, Nat.sub_add_cancel]; sorry }
-  -- rw [List.take_of_length_le]
-  -- simp; scalar_tac
-  -- swap; { simp +arith [Nat.mul_sub, Nat.sub_add_cancel]; sorry }
-
-
-
--------------------------------------
-
 @[progress]
 theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index.spec(input: Slice α)(r: ops.range.Range Usize)
 : r.start.val ≤ r.end_.val
@@ -729,6 +678,113 @@ theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index.spec(input: 
   simp at *
   rw [index]
   simp [List.slice, *]
+
+@[simp] theorem List.setSlice!_nil(ls: List α){i: Nat}: ls.setSlice! i [] = ls := by simp [List.setSlice!]
+
+@[simp] theorem List.setSlice!_of_length_le(ls: List α){i: Nat}
+ (length_le : ls.length ≤ i)(s: List α)
+: ls.setSlice! i s = ls := by simp [setSlice!, length_le]
+
+@[simp_lists_simps]
+theorem List.setSlice!_consecutive[Inhabited α](ls s1 s2: List α)(i j: Nat)
+: i + s1.length = j
+→ (ls.setSlice! i s1).setSlice! j s2 = ls.setSlice! i (s1 ++ s2)
+:= by
+  rintro rfl
+  apply List.ext_getElem <;> simp [←getElem!_pos]
+  intro p p_idx
+  if p < i then
+    simp_lists
+  else if p < i + s1.length then
+    simp_lists
+  else if p < i + s1.length + s2.length then
+    simp_lists
+    simp [Nat.sub_add_eq]
+  else
+    simp_lists
+
+@[simp] theorem List.slice_of_empty(ls: List α)(i j: Nat)
+: i ≥ j → ls.slice i j = []
+:= by intro cond; simp [List.slice, cond]
+
+theorem List.slice_append_getElem(ls: List α)
+  (j_idx: j < ls.length)
+: i ≤ j → ls.slice i j ++ [ls[j]] = ls.slice i (j+1)
+:= by
+  intro proper
+  simp [List.slice]
+  have: ls[j] = (drop i ls)[j - i]'(by simp; omega) := by simp [*]
+  rw [this, List.take_append_getElem, Nat.sub_add_comm]
+  omega
+
+@[simp_lists_simps]
+theorem List.slice_append_drop(ls: List α)(j: Nat)
+:  ∀ i, i ≤ j → ls.slice i j ++ ls.drop j = ls.drop i
+:= by
+  intros i proper
+  assume j < ls.length; case otherwise =>
+    simp [List.take_drop, List.take_of_length_le, not_lt.mp, List.slice, *]
+  if i = j then
+    simp [*, List.slice]
+  else
+    have: i < j := by omega
+    obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_lt this
+    rw [←List.slice_append_getElem]
+    case j_idx => omega
+    case a => omega
+    simp
+    rw [List.slice_append_drop]
+    case a => omega
+
+
+theorem List.setSlice!_truncate(ls s: List α)(i: Nat)
+: ls.setSlice! i s = ls.setSlice! i (s.take (ls.length - i))
+:= by
+  conv => rhs; rw [List.setSlice!]
+  simp [List.setSlice!, List.take_take, Nat.min_comm]
+
+-- set_option trace.Progress true in
+theorem algos.StateArray.copy_to_loop.spec
+  (src : StateArray) (input : Std.Slice Std.U8) (i : Std.Usize)
+: ∃ output,
+  copy_to_loop src input i = .ok output ∧
+  output.toBits = input.toBits.setSlice! (64*i.val) (src.toBits.drop (64*i.val))
+:= by
+  unfold copy_to_loop
+  simp [DerefalgosStateArrayArrayU6425.deref, Std.toResult,
+        Std.core.array.Array.index,       Std.core.array.Array.index_mut,
+        Std.core.slice.index.Slice.index, Std.core.slice.index.Slice.index_mut,
+        Aeneas.Std.core.ops.index.Index.index,
+        Std.core.ops.index.IndexSliceInst,
+      ]
+  progress*? by simp [*]; scalar_tac
+  · -- Copying over a chunk from `src` to `input`
+    simp +arith [*, Std.Array.toBits, Std.Slice.toBits] at *
+    simp_lists
+  · -- Copying the leftover bits from `src` to `input`
+    simp [*, Std.Array.toBits, Std.Slice.toBits] at *
+    rw [__discr_post_2]; case a => simp +arith [*]; omega
+    simp +arith [*, List.slice]
+    simp_lists
+    conv => rhs; rw [List.setSlice!_truncate]
+    simp +arith [Nat.mul_sub]
+  · -- There is no more space at `input`
+    simp [*] at *
+    rw [List.setSlice!_of_length_le]
+    scalar_tac
+  . -- There are no bits left to copy from `src`
+    have: 64 * i.val ≥ 1600 := by
+      change 64 * i.val ≥ 64 * 25
+      apply Nat.mul_le_mul_left
+      omega
+    simp [*]
+termination_by input.length - i.val
+decreasing_by
+  simp [*] -- TODO: Why do I need this `simp [*]`
+  scalar_decr_tac
+
+
+-------------------------------------
 
 @[progress]
 theorem Aeneas.Std.core.slice.index.Slice.index.slice_index_range_usize_slice_spec(input: Slice α)(r: ops.range.Range Usize)
