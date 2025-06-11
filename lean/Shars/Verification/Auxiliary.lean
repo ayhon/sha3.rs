@@ -604,8 +604,6 @@ theorem IR.xor_assoc(s0 s1 s2: List Bool)
   simp [IR.getElem!_xor, i_idx]
   by_cases i < s2.length <;> by_cases i < s1.length <;> simp [*, getElem!_neg]
 
-#check Std.core.ops.index.IndexSliceInst (Std.core.slice.index.SliceIndexRangeFromUsizeSlice Std.U8)
-
 @[simp] theorem Nat.quite_trivial_really(a b: Nat): a * (b + 1) - a * b = a := by simp [Nat.mul_add]
 
 @[progress]
@@ -783,6 +781,16 @@ decreasing_by
   simp [*] -- TODO: Why do I need this `simp [*]`
   scalar_decr_tac
 
+@[progress]
+theorem algos.StateArray.copy_to.spec
+  (src : StateArray) (input : Std.Slice Std.U8)
+: ∃ output,
+  copy_to src input = .ok output ∧
+  output.toBits = input.toBits.setSlice! 0 src.toBits
+:= by
+  unfold copy_to
+  progress with algos.StateArray.copy_to_loop.spec
+  simp [*]
 
 -------------------------------------
 
