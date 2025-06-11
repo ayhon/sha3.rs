@@ -112,10 +112,9 @@ theorem algos.sponge_squeeze.panic_free.refinement(r i d: Std.Usize)
         Std.core.ops.index.IndexSliceInst,
       ]
   progress* by simp; scalar_tac
-  · -- have: s2.length = r := by scalar_tac
-    -- have: (__discr_2 s2).length = dst.length := by simp [*]
+  · have: s2.length = r := by scalar_tac
+    have: (__discr_2 s2).length = dst.length := by simp [*]
     progress as ⟨res, res_post⟩
-    · extract_goal
     simp [*, le_of_lt]
     simp_ifs
     simp only [*, List.toBits_slice, Std.UScalarTy.numBits]
