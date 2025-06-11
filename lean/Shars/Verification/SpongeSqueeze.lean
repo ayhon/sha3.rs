@@ -67,27 +67,27 @@ theorem List.length_slice(ls: List α): (ls.slice a b).length = (b - a) ⊓  (ls
 attribute [scalar_tac ls.toBits] List.length_toBits
 attribute [scalar_tac_simps] Std.UScalarTy.numBits
 
-theorem algos.sponge_squeeze.panic_free.extracted_1 (r i : Std.Usize) (dst : Std.Slice Std.U8) (s : StateArray)
-  (r_pos : 0 < (↑r : ℕ))
+-- theorem algos.sponge_squeeze.panic_free.extracted_1 (r i : Std.Usize) (dst : Std.Slice Std.U8) (s : StateArray)
+--   (r_pos : 0 < (↑r : ℕ))
 
-  (i1 : Std.Usize)
-  (i1_post : (↑i1 : ℕ) = (↑i : ℕ) + (↑r : ℕ))
-  (h : (↑i1 : ℕ) < (↑dst : List Std.U8).length) -- Needed by A and C
+--   (i1 : Std.Usize)
+--   (i1_post : (↑i1 : ℕ) = (↑i : ℕ) + (↑r : ℕ))
+--   (h : (↑i1 : ℕ) < (↑dst : List Std.U8).length) -- Needed by A and C
 
-  (__discr_1 : Std.Slice Std.U8) (__discr_2 : Std.Slice Std.U8 → Std.Slice Std.U8) -- Needed by ↓ and 2↓
-  (__discr_post_1 : (↑__discr_1 : List Std.U8) = List.slice (↑i : ℕ) (↑i1 : ℕ) (↑dst : List Std.U8)) -- Needed by A
-  (__discr_post_2 : -- Needed by B
-    ∀ (u : Std.Slice Std.U8),
-      u.length = (↑i1 : ℕ) - (↑i : ℕ) →
-        (↑(__discr_2 u) : List Std.U8) = (↑dst : List Std.U8).setSlice! (↑i : ℕ) (↑u : List Std.U8))
+--   (__discr_1 : Std.Slice Std.U8) (__discr_2 : Std.Slice Std.U8 → Std.Slice Std.U8) -- Needed by ↓ and 2↓
+--   (__discr_post_1 : (↑__discr_1 : List Std.U8) = List.slice (↑i : ℕ) (↑i1 : ℕ) (↑dst : List Std.U8)) -- Needed by A
+--   (__discr_post_2 : -- Needed by B
+--     ∀ (u : Std.Slice Std.U8),
+--       u.length = (↑i1 : ℕ) - (↑i : ℕ) →
+--         (↑(__discr_2 u) : List Std.U8) = (↑dst : List Std.U8).setSlice! (↑i : ℕ) (↑u : List Std.U8))
 
-  (s2 : Std.Slice Std.U8) -- Needed by ↓
-  (s2_post : s2.toBits = __discr_1.toBits.setSlice! 0 (Std.Array.toBits s)) -- Needed by A
-: (↑i1 : ℕ) ≤ (__discr_2 s2).length := by
-    have: s2.length = r := by scalar_tac -- A
-    have: (__discr_2 s2).length = dst.length := by scalar_tac
-    scalar_tac -- C
-    done
+--   (s2 : Std.Slice Std.U8) -- Needed by ↓
+--   (s2_post : s2.toBits = __discr_1.toBits.setSlice! 0 (Std.Array.toBits s)) -- Needed by A
+-- : (↑i1 : ℕ) ≤ (__discr_2 s2).length := by
+--     have: s2.length = r := by scalar_tac -- A
+--     have: (__discr_2 s2).length = dst.length := by scalar_tac
+--     scalar_tac -- C
+--     done
 
 set_option pp.coercions.types true in
 set_option maxHeartbeats 1000000 in
