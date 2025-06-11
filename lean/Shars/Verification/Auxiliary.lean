@@ -543,7 +543,6 @@ theorem algos.StateArray.xor.spec'(input : algos.StateArray) (other : Std.Slice 
   case isTrue =>
     intros j j_lt
     simp [*] at *
-    simp [*, Std.Array.set, Std.Array.toBits]
     simp [*, List.toBits_set, List.getElem!_setSlice!_eq_ite_getElem!, List.length_toBits, List.toBits_take]
 
     if j_processed?: j < 64*leftover then

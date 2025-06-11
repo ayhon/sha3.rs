@@ -56,11 +56,13 @@ theorem List.getElem!_toBits(ls: List (Aeneas.Std.UScalar ty))(i: Nat)
   rw [List.getElem!_flatten_of_uniform uniform]
   simp [-getElem!_eq_getElem?_getD, *]
 
+@[simp, scalar_tac_simps]
 abbrev Aeneas.Std.Array.toBits(arr: Aeneas.Std.Array (Aeneas.Std.UScalar ty) n): List Bool := arr.val.toBits
 @[simp] def Aeneas.Std.Array.length_toBits(arr: Aeneas.Std.Array (Aeneas.Std.UScalar ty) n)
 : arr.toBits.length = n * ty.numBits
 := by simp only [toBits, List.length_toBits, arr.property]
 
+@[simp, scalar_tac_simps]
 abbrev Aeneas.Std.Slice.toBits(arr: Aeneas.Std.Slice (Aeneas.Std.UScalar ty)): List Bool := arr.val.toBits
 @[simp] def Aeneas.Std.Slice.length_toBits(arr: Aeneas.Std.Slice (Aeneas.Std.UScalar ty))
 : arr.toBits.length = arr.length * ty.numBits
