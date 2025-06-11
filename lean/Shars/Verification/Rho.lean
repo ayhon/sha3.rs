@@ -197,12 +197,11 @@ theorem algos.rho.bitmangling.spec(input state: List Std.U64)(x' y': Nat)(offset
     rw [IR.rho.getElem!_bitmangling_pos]
     all_goals (first | simp [*, List.length_toBits, Spec.b, Spec.w]; done | try scalar_tac)
     have: ((z + Spec.w 6 - ↑offset % Spec.w 6) % Spec.w 6) < Spec.w 6 := by simp [Nat.mod_lt, Spec.w]
-    simp [List.getElem!_toBits, IR.encodeIndex_xy, IR.encodeIndex_z, *, Std.core.num.U64.rotate_left]
-    /- rw [List.getElem!_set]; case h => simp [len_state, *] -/
-    /- rw [Aeneas.Std.U64.getElem!_toBits_rotate_left]; case i_idx => simp [Nat.mod_lt, Spec.w] -/
-    simp_lists 
-    simp only [Nat.mod_eq_of_lt, *]
-    simp [Spec.w]
+    simp [*, List.getElem!_encodeIndex_toBits, Std.core.num.U64.rotate_left]
+    simp_lists
+    rw [List.toBits_getElem!]; case i_idx => scalar_tac
+    simp_lists
+    simp +decide [Spec.w]
   else
     rw [IR.rho.getElem!_bitmangling_neg]
     all_goals (first | simp [*, List.length_toBits, Spec.b]; done | try scalar_tac)
