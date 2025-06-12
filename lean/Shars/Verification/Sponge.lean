@@ -32,6 +32,117 @@ theorem Spec.«size_pad10*1_of_m_add_2_le_r»(r m: Nat)
   rw [Spec.«size_pad10*1_eq_ite»]; case a => omega
   simp [Nat.mod_eq_of_lt, ‹m < r›', ‹m ≠ r - 1›']
 
+theorem Nat.le_mul{a b c: Nat}
+: 0 < c → a ≤ b → a ≤ b * c
+:= by
+  intro pos lt
+  cases c
+  case zero => simp at *
+  case succ c' =>
+    induction c'
+    case zero => simp [*]
+    case succ c'' ih =>
+      simp [Nat.mul_add] at *
+      omega
+
+theorem Nat.add_mul_mod_mul{m x y r: Nat}
+: 0 < r → y < m → (m*x + y) % (m*r) = m * (x % r) + y
+:= by
+  intro r_pos y_lt
+  have m_pos: 0 < m := by omega
+  rw [Nat.add_mod]
+  rw [Nat.mul_mod_mul_left]
+  rw [Nat.mod_eq_of_lt (show y < m * r from by
+    induction r
+    case zero => simp at *
+    case succ n' ih => simp [Nat.mul_add]; omega
+  )]
+  rw [Nat.mod_eq_of_lt]
+  calc
+    _ ≤ m * (r - 1) + y := by simp; apply Nat.mul_le_mul_left; simp [r_pos, Nat.mod_lt, le_sub_one_of_lt]
+    _ < m * (r - 1) + m := by simp [y_lt]
+    _ = m * r := by simp [Nat.mul_sub]; rw [Nat.sub_add_cancel]; apply Nat.le_mul r_pos; simp
+
+attribute [scalar_tac_simps] Aeneas.Std.UScalar.length_toBits List.length_setWidth
+
+set_option maxHeartbeats 1000000 in
+theorem asdf(extra: Std.U8)(bs: List Bool)(r: Nat)
+  (border: { i // i < 7 })
+  (border_spec: extra.toBits[border.val]! = true ∧ ∀ j, border.val < j → extra.toBits[j]! = false)
+: 8 ∣ bs.length
+→ 8 ∣ r
+→ r ≥ 2
+→ (extra.toBits.setWidth (r - (bs.length % r) - 1) ++ [true]) =
+  (List.take border.val extra.toBits ++ (Spec.«pad10*1» r (bs.length + border.val)).toList)
+:= by
+  intro length_bs_mtpl_8 r_mtpl_8 r_ge_2
+  obtain ⟨getElem!_border, getElem!_of_border_lt⟩ := border_spec
+
+  have last_extra_eq_false: extra.toBits[7]! = false := getElem!_of_border_lt 7 border.property
+  have r_pos: 0 < r := by omega
+  have border_lt_8: border.val < 8 := by omega
+  have: (bs.length + ↑border) % r = bs.length % r + ↑border := by
+    obtain ⟨r', n'_def⟩ := r_mtpl_8
+    have r'_pos: 0 < r' := by omega
+    obtain ⟨m', m'_def⟩ := length_bs_mtpl_8
+    have := Nat.add_mul_mod_mul (x := m') (y := border.val) (m := 8) r'_pos border_lt_8
+    simp [m'_def, n'_def, this, Nat.mul_mod_mul_left]
+  have len_padding: (Spec.«pad10*1» r (bs.length + border.val)).size = r - (bs.length + border.val) % r
+  · rw [Spec.«size_pad10*1_eq_ite»]; case a => omega
+    rw [ite_cond_eq_false]
+    obtain ⟨r', rfl⟩ := r_mtpl_8
+    obtain ⟨m', m'_def⟩ := length_bs_mtpl_8
+    have r'_pos: 0 < r' := by omega
+    have := Nat.add_mul_mod_mul (x := m') (y := border.val) (m := 8) r'_pos border_lt_8
+    simp [m'_def, this]
+    omega
+  have: 8 ≤ r - (bs.length % r) := by
+    obtain ⟨r', r'_def⟩ := r_mtpl_8
+    obtain ⟨m', m'_def⟩ := length_bs_mtpl_8
+    simp [r'_def, m'_def, *, Nat.mul_mod_mul_left]
+    scalar_tac
+
+  -- Function extensionality
+  apply List.ext_getElem
+  · simp [*, len_padding, le_of_lt]
+    scalar_tac
+  simp [*, ←getElem!_pos, Nat.sub_add_cancel]
+  intro i i_idx i_idx2
+
+  if i < border then
+    -- Suffix part
+    simp_lists
+    simp_ifs
+  else if i = border then
+    -- First true
+    simp_lists [getElem!_padding]
+    simp_ifs
+    simp [*]
+  else if h: i = r - (bs.length) % r - 1 then
+    -- Last true
+    subst h
+    rw [List.getElem!_append_right]; case h => simp
+    simp only [List.length_setWidth, Nat.sub_self, List.getElem!_cons_zero]
+    rw [List.getElem!_append_right]; case h => simp; scalar_tac
+    simp only [List.length_take, Std.UScalar.length_toBits, Std.UScalarTy.numBits, Nat.min_eq_left, border_lt_8, le_of_lt, Array.getElem!_toList]
+    rw [getElem!_padding]
+    simp_ifs
+  else
+    -- False paddings
+    rw [List.getElem!_append_left]; case h => simp; scalar_tac
+    rw [List.getElem!_append_right]; case h => simp; scalar_tac
+    rw [List.getElem!_setWidth]
+    simp only [Array.getElem!_toList]
+    rw [getElem!_padding]
+    simp_ifs
+    if cond: i ≤ 8 then -- The padding is included in the `extra` part.
+      apply getElem!_of_border_lt
+      omega
+    else
+      rw [getElem!_neg]; case h => simp; omega
+      simp
+
+
 -- set_option diagnostics true in
 set_option maxRecDepth 7500 in
 set_option maxHeartbeats 1000000 in
@@ -130,16 +241,7 @@ theorem algos.sponge.spec(r : Std.Usize) (bs input : Std.Slice Std.U8)(extra: St
     sorry
   simp [*, ←getElem!_pos]
   intro i i_idx i_idx2
-  rw [List.getElem!_append_right]; case h => simpa [←Nat.mul_comm 8, ←Nat.mul_sub, ←Nat.mod_eq_sub] using cond
-  conv => rhs; rw [List.getElem!_append_right (h := by simpa [←Nat.mul_comm 8, ←Nat.mul_sub, ←Nat.mod_eq_sub] using cond)]
   simp
-
-      -- simpa using i_idx
-    simp
-
-
-    sorry
-
 
   sorry
 
