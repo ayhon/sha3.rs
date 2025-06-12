@@ -111,7 +111,7 @@ theorem algos.sponge_squeeze.panic_free.refinement(r i d: Std.Usize)
         Aeneas.Std.core.ops.index.Index.index,
         Std.core.ops.index.IndexSliceInst,
       ]
-  progress* by simp; scalar_tac
+  progress* by simp
   · have: s2.length = r := by scalar_tac
     have: (__discr_2 s2).length = dst.length := by simp [*]
     progress as ⟨res, res_post⟩
@@ -247,11 +247,12 @@ termination_by d - m
 decreasing_by scalar_decr_tac
 
 /-- The final theorem, putting everything together -/
+@[progress]
 theorem algos.sponge_squeeze.spec(r: Std.Usize)
   (dst: Std.Slice Std.U8)(s: StateArray)
 : (r_bnd: 0 < r.val ∧ r.val < 200)
 → dst.length + r.val < Std.Usize.max
-→ have _: NeZero r.val := {out:= Nat.ne_zero_of_lt r_bnd.left}
+→ let _: NeZero r.val := {out:= Nat.ne_zero_of_lt r_bnd.left}
   ∃ output,
   sponge_squeeze r dst s = .ok output ∧
   output.toBits = IR.squeeze dst.toBits.length (8*r) [] s.toBits
