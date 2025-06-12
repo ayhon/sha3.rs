@@ -66,41 +66,36 @@ theorem Nat.add_mul_mod_mul{m x y r: Nat}
 attribute [scalar_tac_simps] Aeneas.Std.UScalar.length_toBits List.length_setWidth
 
 set_option maxHeartbeats 1000000 in
-theorem asdf(extra: Std.U8)(bs: List Bool)(r: Nat)
-  (border: { i // i < 7 })
-  (border_spec: extra.toBits[border.val]! = true ∧ ∀ j, border.val < j → extra.toBits[j]! = false)
+theorem extra_eq_suffix_append_take_padding(extra: Std.U8)(bs: List Bool)(r: Nat)
+  (suffix_len: { i // i < 7 })
+  (border_spec: extra.toBits[suffix_len.val]! = true ∧ ∀ j, suffix_len.val < j → extra.toBits[j]! = false)
 : 8 ∣ bs.length
 → 8 ∣ r
 → r ≥ 2
 → (extra.toBits.setWidth (r - (bs.length % r) - 1) ++ [true]) =
-  (List.take border.val extra.toBits ++ (Spec.«pad10*1» r (bs.length + border.val)).toList)
+  (List.take suffix_len.val extra.toBits ++ (Spec.«pad10*1» r (bs.length + suffix_len.val)).toList)
 := by
   intro length_bs_mtpl_8 r_mtpl_8 r_ge_2
   obtain ⟨getElem!_border, getElem!_of_border_lt⟩ := border_spec
 
-  have last_extra_eq_false: extra.toBits[7]! = false := getElem!_of_border_lt 7 border.property
+  have last_extra_eq_false: extra.toBits[7]! = false := getElem!_of_border_lt 7 suffix_len.property
   have r_pos: 0 < r := by omega
-  have border_lt_8: border.val < 8 := by omega
-  have: (bs.length + ↑border) % r = bs.length % r + ↑border := by
+  have border_lt_8: suffix_len.val < 8 := by omega
+  have: (bs.length + ↑suffix_len) % r = bs.length % r + ↑suffix_len := by
     obtain ⟨r', n'_def⟩ := r_mtpl_8
     have r'_pos: 0 < r' := by omega
     obtain ⟨m', m'_def⟩ := length_bs_mtpl_8
-    have := Nat.add_mul_mod_mul (x := m') (y := border.val) (m := 8) r'_pos border_lt_8
+    have := Nat.add_mul_mod_mul (x := m') (y := suffix_len.val) (m := 8) r'_pos border_lt_8
     simp [m'_def, n'_def, this, Nat.mul_mod_mul_left]
-  have len_padding: (Spec.«pad10*1» r (bs.length + border.val)).size = r - (bs.length + border.val) % r
+  have len_padding: (Spec.«pad10*1» r (bs.length + suffix_len.val)).size = r - (bs.length + suffix_len.val) % r
   · rw [Spec.«size_pad10*1_eq_ite»]; case a => omega
     rw [ite_cond_eq_false]
     obtain ⟨r', rfl⟩ := r_mtpl_8
     obtain ⟨m', m'_def⟩ := length_bs_mtpl_8
     have r'_pos: 0 < r' := by omega
-    have := Nat.add_mul_mod_mul (x := m') (y := border.val) (m := 8) r'_pos border_lt_8
+    have := Nat.add_mul_mod_mul (x := m') (y := suffix_len.val) (m := 8) r'_pos border_lt_8
     simp [m'_def, this]
     omega
-  have: 8 ≤ r - (bs.length % r) := by
-    obtain ⟨r', r'_def⟩ := r_mtpl_8
-    obtain ⟨m', m'_def⟩ := length_bs_mtpl_8
-    simp [r'_def, m'_def, *, Nat.mul_mod_mul_left]
-    scalar_tac
 
   -- Function extensionality
   apply List.ext_getElem
@@ -109,11 +104,11 @@ theorem asdf(extra: Std.U8)(bs: List Bool)(r: Nat)
   simp [*, ←getElem!_pos, Nat.sub_add_cancel]
   intro i i_idx i_idx2
 
-  if i < border then
+  if i < suffix_len then
     -- Suffix part
     simp_lists
     simp_ifs
-  else if i = border then
+  else if i = suffix_len then
     -- First true
     simp_lists [getElem!_padding]
     simp_ifs
@@ -121,19 +116,11 @@ theorem asdf(extra: Std.U8)(bs: List Bool)(r: Nat)
   else if h: i = r - (bs.length) % r - 1 then
     -- Last true
     subst h
-    rw [List.getElem!_append_right]; case h => simp
-    simp only [List.length_setWidth, Nat.sub_self, List.getElem!_cons_zero]
-    rw [List.getElem!_append_right]; case h => simp; scalar_tac
-    simp only [List.length_take, Std.UScalar.length_toBits, Std.UScalarTy.numBits, Nat.min_eq_left, border_lt_8, le_of_lt, Array.getElem!_toList]
-    rw [getElem!_padding]
+    simp_lists [getElem!_padding]
     simp_ifs
   else
     -- False paddings
-    rw [List.getElem!_append_left]; case h => simp; scalar_tac
-    rw [List.getElem!_append_right]; case h => simp; scalar_tac
-    rw [List.getElem!_setWidth]
-    simp only [Array.getElem!_toList]
-    rw [getElem!_padding]
+    simp_lists [getElem!_padding]
     simp_ifs
     if cond: i ≤ 8 then -- The padding is included in the `extra` part.
       apply getElem!_of_border_lt
