@@ -493,6 +493,7 @@ theorem Spec.«size_pad10*1» (x m : Nat)
     simp [Int.emod_nonneg, *, Nat.ne_zero_of_lt x_pos]
     zmodify
     simp
+    ring
   simp [Spec.«pad10*1», this]
   simp +arith
 
