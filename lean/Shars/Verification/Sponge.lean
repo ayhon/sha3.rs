@@ -25,6 +25,13 @@ theorem Nat.cast_mod_Int(a b: Nat)
 : ((a % b).cast: ℤ) = a.cast % b.cast
 := by simp [Nat.cast]
 
+theorem Spec.«size_pad10*1_of_m_add_2_le_r»(r m: Nat)
+: m + 2 ≤ r → (Spec.«pad10*1» r m).size = r - m
+:= by
+  intro cond
+  rw [Spec.«size_pad10*1_eq_ite»]; case a => omega
+  simp [Nat.mod_eq_of_lt, ‹m < r›', ‹m ≠ r - 1›']
+
 -- set_option diagnostics true in
 set_option maxRecDepth 7500 in
 set_option maxHeartbeats 1000000 in
@@ -85,6 +92,55 @@ theorem algos.sponge.spec(r : Std.Usize) (bs input : Std.Slice Std.U8)(extra: St
   simp [*, Array.toList_chunks_exact, List.append_assoc]
   congr
   rw [←Nat.mod_eq_sub]
+  conv =>
+    rhs
+    rw [←List.chunks_exact_split _ (8*r.val) (bs.toBits.length / (8*r.val))]
+    lhs
+    rw [List.take_append_of_le_length (h := by simp [←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le])]
+  rw [List.chunks_exact_truncate]
+  congr
+  rw [List.drop_append_of_le_length (h := by simp [←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le])]
+
+  -- TODO: This should probably be its own theorem
+  unfold List.chunks_exact
+  rw [ite_cond_eq_false]
+  case h =>
+    -- TODO(Son): Think about this thingy here
+    simp
+    simp [←Nat.mul_comm 8, ←Nat.mod_eq_sub, *]
+    simp [*, ←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le, ←Nat.mul_sub, ←Nat.mod_eq_sub]
+    sorry
+
+  unfold List.chunks_exact
+  rw [ite_cond_eq_true]
+  case h =>
+    simp [*, ←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le, ←Nat.mul_sub, ←Nat.mod_eq_sub]
+    sorry
+  simp [*, ←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le, ←Nat.mul_sub, ←Nat.mod_eq_sub]
+  rw [List.take_of_length_le (h := by simp [*, ←Nat.mul_comm 8, ←Nat.mul_sub, ←Nat.mod_eq_sub]; sorry)]
+  have: 8 * (r.val - bs.length % r.val) ≥ 8 := by
+    simp
+    change 0 < r.val - bs.length % r.val
+    simp [Nat.mod_lt, *]
+
+  -- TODO: Look into `olet` and `tlet`
+  congr 1
+  apply List.ext_getElem
+  · simp [*]
+    sorry
+  simp [*, ←getElem!_pos]
+  intro i i_idx i_idx2
+  rw [List.getElem!_append_right]; case h => simpa [←Nat.mul_comm 8, ←Nat.mul_sub, ←Nat.mod_eq_sub] using cond
+  conv => rhs; rw [List.getElem!_append_right (h := by simpa [←Nat.mul_comm 8, ←Nat.mul_sub, ←Nat.mod_eq_sub] using cond)]
+  simp
+
+      -- simpa using i_idx
+    simp
+
+
+    sorry
+
+
   sorry
 
   -- progress with algos.sponge_absorb.spec_list as ⟨mid, mid_post⟩

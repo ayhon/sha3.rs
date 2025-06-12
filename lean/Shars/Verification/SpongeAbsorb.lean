@@ -502,7 +502,7 @@ theorem Spec.«pad10*1_mod» (x m : Nat)
 := by simp [«pad10*1»]; congr 4; zmodify
 
 theorem Spec.«size_pad10*1_eq_ite» (x m : Nat)
-: x > 2
+: x >= 2
 → (Spec.«pad10*1» x m).size = if m%x = x - 1 then 1 + x else x - m % x
 := by
   intro x_gt
@@ -527,7 +527,7 @@ theorem Spec.«pad10*1_of_mtpl_8»(r bs_len: Nat)
   rw [←Spec.«pad10*1_mod»]
   generalize r'_def: 8*r = r'
   have: r' > 0 := by omega
-  have: r' > 2 := by omega
+  have: r' >= 2 := by omega
   generalize bs_len'_def: (8 * bs_len) % r' = bs_len'
   simp [←r'_def, Nat.mul_mod_mul_left] at bs_len'_def
   have bs_len'_lt: bs_len' < r' := by simp [←r'_def, ←bs_len'_def, Nat.mod_lt, r_pos]
