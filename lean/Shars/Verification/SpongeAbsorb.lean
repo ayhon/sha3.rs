@@ -20,9 +20,8 @@ attribute [ext (iff := false)] List.ext_getElem!
 /- attribute [simp] Aeneas.Std.Slice.set -/
 
 theorem Spec.«toList_pad10*1»(x m: Nat)
-: let j := Int.toNat <| (- (m: Int) - 2) % x
-  (Spec.«pad10*1» x m).toList = [true] ++ List.replicate j false ++ [true]
-:= by simp [Spec.«pad10*1»]
+: (Spec.«pad10*1» x m).toList = [true] ++ List.replicate ((Spec.«pad10*1» x m).size - 2) false ++ [true]
+:= by simp +arith [Spec.«pad10*1»]
 
 @[simp] theorem Spec.«pos_pad10*1»(x m: Nat)
 : (Spec.«pad10*1» x m).size > 0
@@ -37,13 +36,14 @@ theorem getElem!_padding(x m: Nat)(i: Nat)
     rw [getElem!_neg]
     simp
     omega
-    simp [Spec.«pad10*1»]at i_idx
+    simp [Spec.«pad10*1»]at i_idx ⊢
     scalar_tac
   split
   · rename_i h
     obtain rfl | rfl := h
     · simp
-    · simp [Spec.«pad10*1»]
+    · simp_lists
+      simp +arith
   · simp [Spec.«pad10*1»] at *
     simp_lists
 
