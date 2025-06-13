@@ -262,7 +262,7 @@ theorem IR.xor_append(state: List Bool)
     simp_lists
     simp
 
-theorem IR.absorb.refinement  (r: Nat)(r_pos: r > 0)(r_bnd: 8*r < Spec.b 6)(chunks : Array (Spec.Bitstring (8*r)))(init: Spec.Bitstring (Spec.b 6))(i: Nat)
+theorem IR.absorb.refinement'  (r: Nat)(r_pos: r > 0)(r_bnd: 8*r < Spec.b 6)(chunks : Array (Spec.Bitstring (8*r)))(init: Spec.Bitstring (Spec.b 6))(i: Nat)
 : (array_absorb (8 * r) r_bnd chunks init i).toList = IR.absorb.loop init.toList (chunks.toList.map (·.toList)) i
 := by
   rw [IR.array_absorb.unfold]
@@ -270,11 +270,43 @@ theorem IR.absorb.refinement  (r: Nat)(r_pos: r > 0)(r_bnd: 8*r < Spec.b 6)(chun
   simp
   if cond: i < chunks.size then
     simp [cond, IR.array_absorb.upd]
-    rw [IR.absorb.refinement r r_pos r_bnd]
+    rw [IR.absorb.refinement' r r_pos r_bnd]
     simp [Spec.Keccak.toList_P]
     simp [Vector.toList_xor]
   else
     simp [cond]
+
+theorem Array.toList_chunks_exact(arr: Array α)(r: Nat)
+: (arr.chunks_exact r).toList.map (·.toList) = arr.toList.chunks_exact r
+:= by
+  obtain ⟨data⟩ := arr
+  if r_pos: r = 0 then
+    subst r_pos
+    simp [chunks_exact, List.chunks_exact]
+  else if data_small: data.length < r then
+    unfold chunks_exact List.chunks_exact
+    simp [Nat.le_of_sub_eq_zero, Nat.lt_of_add_one_le, *]
+  else
+    have: data.length ≥ r := by omega
+    unfold chunks_exact List.chunks_exact
+    simp [*, not_lt.mpr]
+    rw [Array.toList_chunks_exact]
+    simp [List.take_of_length_le]
+termination_by arr.size + 1 - r
+decreasing_by simp [*]; omega
+
+theorem IR.absorb.refinement(r: Nat)
+  (r_pos   : r > 0        := by scalar_tac)
+  (r_bnd   : r < Spec.b 6 := by scalar_tac)
+  (r_mtpl_8: 8 ∣ r        := by scalar_tac)
+: (Spec.sponge.absorb (f := Spec.Keccak.P 6 24) (pad := Spec.«pad10*1») (r := ⟨r, ⟨r_pos, r_bnd⟩⟩) N).toList
+= IR.absorb (List.replicate (Spec.b 6) false) (List.chunks_exact r (N ++ Spec.«pad10*1» r N.size).toList)
+:= by
+  rw [IR.array_absorb.refinement (r_pos := r_pos) (r_bnd := r_bnd)]
+  obtain ⟨r', rfl⟩ := r_mtpl_8
+  rw [IR.absorb.refinement' (r_pos := by omega)]
+  rw [IR.absorb.unfold, Array.toList_chunks_exact]
+  simp only [Vector.toArray_replicate, Array.toList_replicate, Array.toList_append]
 
 attribute [simp_scalar_simps] Nat.add_sub_cancel
 
@@ -378,25 +410,6 @@ theorem IR.absorb_absorb(s: List Bool)(bs bs2: List (List Bool))
   simp [absorb.loop] at *
   rw [List.setWidth_of_length_eq]
   simpa using len_absorb
-
-theorem Array.toList_chunks_exact(arr: Array α)(r: Nat)
-: (arr.chunks_exact r).toList.map (·.toList) = arr.toList.chunks_exact r
-:= by
-  obtain ⟨data⟩ := arr
-  if r_pos: r = 0 then
-    subst r_pos
-    simp [chunks_exact, List.chunks_exact]
-  else if data_small: data.length < r then
-    unfold chunks_exact List.chunks_exact
-    simp [Nat.le_of_sub_eq_zero, Nat.lt_of_add_one_le, *]
-  else
-    have: data.length ≥ r := by omega
-    unfold chunks_exact List.chunks_exact
-    simp [*, not_lt.mpr]
-    rw [Array.toList_chunks_exact]
-    simp [List.take_of_length_le]
-termination_by arr.size + 1 - r
-decreasing_by simp [*]; omega
 
 theorem List.chunks_exact_truncate{α: Type}(bs: List α)(r: Nat)
 : (bs.take (r*(bs.length/r))).chunks_exact r = bs.chunks_exact r
