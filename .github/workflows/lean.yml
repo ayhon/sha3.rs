@@ -12,12 +12,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - run: cd lean
       - uses: leanprover/lean-action@v1
-        with:
-          auto-config: "false"
-          use-github-cache: "false"
-          build: "false"
-      - run: |
-          cd lean
-          lake update
-          lake build
+        # with:
+        #   auto-config: "false"
+        #   use-github-cache: "false"
+        #   build: "false"
+      # - run: |
+        #   cd lean
+        #   lake update
+        #   lake build
