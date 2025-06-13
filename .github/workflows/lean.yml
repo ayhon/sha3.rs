@@ -14,8 +14,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: leanprover/lean-action@v1
         with:
-          auto-config: false
-          use-github-cache: false
+          auto-config: "false"
+          use-github-cache: "false"
+          build: "false"
       - run: |
           cd lean
           lake update
