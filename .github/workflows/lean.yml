@@ -16,4 +16,7 @@ jobs:
         with:
           auto-config: false
           use-github-cache: false
-      - run: "cd lean && lake build"
+      - run: |
+          cd lean
+          lake update
+          lake build
