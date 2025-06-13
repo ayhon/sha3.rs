@@ -638,10 +638,15 @@ theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.spec {T 
 @[simp] theorem Aeneas.Std.UScalar.numBits_pos(ty: Std.UScalarTy): ty.numBits > 0 := by cases ty <;> simp
 
 -- TODO: Move to `Refinement.lean`
+@[simp] theorem List.toBits_append(ls1 ls2: List (Std.UScalar ty))
+: (ls1 ++ ls2).toBits = ls1.toBits ++ ls2.toBits
+:= by simp [List.toBits]
+
+-- TODO: Move to `Refinement.lean`
 @[simp] theorem List.toBits_setSlice!(ls s: List (Std.UScalar ty))(off: Nat)
 : (ls.setSlice! off s).toBits = ls.toBits.setSlice! (ty.numBits*off) s.toBits
-:= by
-  sorry
+:= by simp only [List.setSlice!, List.toBits_drop, List.toBits_take, List.toBits_append,
+   ←Nat.mul_comm ty.numBits, List.length_toBits, Nat.mul_min_mul_left, ←Nat.mul_sub, ←Nat.mul_add]
 
 @[simp] theorem List.toBits_getElem(ls: List (Std.UScalar ty))(i: Nat)
   (i_idx: i < ls.length)
