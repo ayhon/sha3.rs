@@ -1,19 +1,19 @@
-name: Lean Action CI
+# name: Lean Action CI
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+# on:
+#   push:
+#     branches: [ "main" ]
+#   pull_request:
+#     branches: [ "main" ]
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
-      - run: cd lean
-      - uses: leanprover/lean-action@v1
+#     steps:
+#       - uses: actions/checkout@v4
+#       - run: cd lean
+#       - uses: leanprover/lean-action@v1
         # with:
         #   auto-config: "false"
         #   use-github-cache: "false"
