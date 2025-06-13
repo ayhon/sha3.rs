@@ -68,7 +68,7 @@ attribute [scalar_tac_simps] Aeneas.Std.UScalar.length_toBits List.length_setWid
 set_option maxHeartbeats 1000000 in
 theorem extra_eq_suffix_append_take_padding(extra: Std.U8)(bs: List Bool)(r: Nat)
   (suffix_len: { i // i < 7 })
-  (border_spec: extra.toBits[suffix_len.val]! = true ∧ ∀ j, suffix_len.val < j → extra.toBits[j]! = false)
+  (border_spec: extra.toBits[suffix_len.val]! = true ∧ ∀ j < 8, suffix_len.val < j → extra.toBits[j]! = false)
 : 8 ∣ bs.length
 → 8 ∣ r
 → r ≥ 2
@@ -78,7 +78,7 @@ theorem extra_eq_suffix_append_take_padding(extra: Std.U8)(bs: List Bool)(r: Nat
   intro length_bs_mtpl_8 r_mtpl_8 r_ge_2
   obtain ⟨getElem!_border, getElem!_of_border_lt⟩ := border_spec
 
-  have last_extra_eq_false: extra.toBits[7]! = false := getElem!_of_border_lt 7 suffix_len.property
+  have last_extra_eq_false: extra.toBits[7]! = false := getElem!_of_border_lt 7 (by decide) suffix_len.property
   have r_pos: 0 < r := by omega
   have border_lt_8: suffix_len.val < 8 := by omega
   have: (bs.length + ↑suffix_len) % r = bs.length % r + ↑suffix_len := by
@@ -122,54 +122,59 @@ theorem extra_eq_suffix_append_take_padding(extra: Std.U8)(bs: List Bool)(r: Nat
     -- False paddings
     simp_lists [getElem!_padding]
     simp_ifs
-    if cond: i ≤ 8 then -- The padding is included in the `extra` part.
-      apply getElem!_of_border_lt
-      omega
+    if cond: i < 8 then -- The padding is included in the `extra` part.
+      apply getElem!_of_border_lt i cond (by omega)
     else
       rw [getElem!_neg]; case h => simp; omega
       simp
 
+theorem List.chunks_exact_append{α: Type}(xs ys: List α)(r: Nat)
+: (xs ++ ys).chunks_exact r = xs.chunks_exact r ++ (xs.drop (r*(xs.length/r)) ++ ys).chunks_exact r
+:= by rw [
+    ←List.chunks_exact_split (i := xs.length / r),
+    List.take_append_of_le_length (h := by simp only [Nat.mul_div_le]),
+    List.chunks_exact_truncate,
+    List.drop_append_of_le_length (h := by simp only [Nat.mul_div_le] )
+  ]
+
+theorem List.chunks_exact_of_length_eq{α: Type}(ls: List α)(r: Nat)(r_pos: r > 0)
+: ls.length = r → ls.chunks_exact r = [ls]
+:= by
+  intro eq
+  unfold chunks_exact
+  simp [eq, ‹r ≠ 0›']
 
 -- set_option diagnostics true in
 set_option maxRecDepth 7500 in
 set_option maxHeartbeats 1000000 in
--- @[progress]
+@[progress]
 theorem algos.sponge.spec(r : Std.Usize) (bs input : Std.Slice Std.U8)(extra: Std.U8)
-  (border: { i // i < 7 })
-  (border_spec: extra.toBits[border.val]! = true ∧ ∀ j, border.val < j → extra.toBits[j]! = false)
+  -- (suffix_len: Nat)
+  -- (suffix_len_lt: suffix_len < 7 := by omega)
+  -- (extra_spec: extra.toBits.take suffix_len ++ (Spec.«pad10*1» (8*r) (bs.toBits.length + suffix_len)).toList.take (8 - suffix_len) = extra.toBits)
+  -- (last_extra_eq_false: extra.toBits[7]! = false)
+  (suffix_len: Nat)
+  (suffix_len_lt: suffix_len < 7 := by simp +decide)
+  (suffix_len_spec: extra.toBits[suffix_len]! = true ∧ ∀ j < 8, suffix_len < j → extra.toBits[j]! = false)
 : (r_pos: 0 < r.val)
 → (r_bnd: r.val < 200)
 → 8 ∣ r.val
-→ dst.length + r.val < Std.Usize.max
+→ input.length + r.val < Std.Usize.max
 → ∃ output,
-  sponge r bs dst extra = .ok output ∧
+  sponge r bs input extra = .ok output ∧
   output.toBits = (Spec.sponge
     (f := Spec.Keccak.P 6 24)
     (pad := Spec.«pad10*1»)
     (r := ⟨8*r, by simp [*, Spec.b, Spec.w]; omega⟩)
-    (bs.toBits ++ extra.toBits.take border).toArray
-    dst.toBits.length
+    (bs.toBits ++ extra.toBits.take suffix_len).toArray
+    input.toBits.length
    ).toList
 := by
   intros
-  obtain ⟨getElem!_border, getElem!_of_border_lt⟩ := border_spec
-  have border_le_8: border.val ≤ 8 := by omega
-  have: extra.toBits.take border ++ [true] ++ List.replicate (8 - border - 1) false = extra.toBits := by
-    apply List.ext_getElem <;> simp +decide [*, ←getElem!_pos, ‹border.val + (8 - border.val - 1 + 1) = 8›']
-    intro i i_lt
-    if i < border then
-      rw [List.getElem!_append_left]; case h => simp; omega
-      rw [List.getElem!_take_of_lt]; case x => omega
-    else if i = border then
-      simp [*]
-    else
-      simp [getElem!_of_border_lt, ‹border < i›']
-      rw [List.getElem!_append_right]; case h => simp; omega
-      simp [border_le_8]
-      obtain ⟨m', m'_val⟩ := Nat.exists_eq_add_one.mpr ‹0 < i - border.val›'
-      simp [m'_val]
-      rw [List.getElem!_replicate]; case h => omega
-  have last_extra_eq_false: extra.toBits[7]! = false := getElem!_of_border_lt 7 border.property
+  simp only [autoParam] at suffix_len_lt suffix_len_spec
+  obtain ⟨getElem!_suffix_len, getElem!_of_suffix_len_lt⟩ := suffix_len_spec
+  have suffix_len_le_8: suffix_len ≤ 8 := by omega
+  have last_extra_eq_false: extra.toBits[7]! = false := getElem!_of_suffix_len_lt 7 (by decide) suffix_len_lt
   unfold sponge sponge_absorb
   simp [DefaultalgosStateArray.default, Std.core.slice.index.Slice.index]
   have: r.val * (bs.val.length / r.val) ≤ bs.length := by scalar_tac
@@ -178,115 +183,105 @@ theorem algos.sponge.spec(r : Std.Usize) (bs input : Std.Slice Std.U8)(extra: St
   progress*? by simp [*, ←Nat.mod_eq_sub, Nat.mod_lt]; try omega
   progress with algos.sponge_squeeze.spec as ⟨res, res_post⟩
 
-  simp [*, Spec.sponge, IR.squeeze.refinement]
+  simp [*, Spec.sponge, IR.squeeze.refinement, IR.absorb.refinement (r := 8*r.val)]
 
-  -- TODO: Make this nicer, IR.absorb.refinement should be enough
-  rw [IR.array_absorb.refinement]
-  case r_pos => omega
-  case r_bnd => simp [Spec.b, Spec.w]; omega
-  rw [IR.absorb.refinement, IR.absorb.unfold]
-  case r_pos => omega
-
-  simp [*, Array.toList_chunks_exact, List.append_assoc]
   congr
-  rw [←Nat.mod_eq_sub]
-  conv =>
-    rhs
-    rw [←List.chunks_exact_split _ (8*r.val) (bs.toBits.length / (8*r.val))]
-    lhs
-    rw [List.take_append_of_le_length (h := by simp [←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le])]
-  rw [List.chunks_exact_truncate]
+  rw [List.chunks_exact_append]
   congr
-  rw [List.drop_append_of_le_length (h := by simp [←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le])]
+  rw [List.chunks_exact_of_length_eq (r_pos := by omega)]
+  simp [←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, ←Nat.mod_eq_sub]
+  have :=  extra_eq_suffix_append_take_padding extra (bs.toBits) (8*r.val) ⟨suffix_len, by omega⟩ ⟨getElem!_suffix_len, getElem!_of_suffix_len_lt⟩ (by simp) (by simp) (by omega)
+  simp [*, ←Nat.mul_comm 8, Nat.mul_sub, Nat.mul_mod_mul_left] at this
+  rw [this]
 
-  -- TODO: This should probably be its own theorem
-  unfold List.chunks_exact
-  rw [ite_cond_eq_false]
-  case h =>
-    -- TODO(Son): Think about this thingy here
-    simp
-    simp [←Nat.mul_comm 8, ←Nat.mod_eq_sub, *]
-    simp [*, ←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le, ←Nat.mul_sub, ←Nat.mod_eq_sub]
-    sorry
+  have len_padding: (Spec.«pad10*1» (8*r) (8*bs.length + suffix_len)).size = 8*r - 8 * (bs.length % r) - suffix_len := by
+    rw [Spec.«size_pad10*1_eq_ite»]; case a => omega
+    have h2 := Nat.add_mul_mod_mul (x := bs.length) (y := suffix_len) (m := 8) (r := r) (by omega) (by omega)
+    rw [ite_cond_eq_false]
+    · simp [←Nat.mul_comm 8, h2]
+      omega
+    · simp [←Nat.mul_comm 8, h2]
+      omega
+  simp [*, ←Nat.mul_comm 8, ←Nat.mul_sub, ←Nat.mul_add, Nat.mul_div_mul_left, Nat.mul_assoc, len_padding, ←Nat.mod_eq_sub]
+  scalar_tac
 
-  unfold List.chunks_exact
-  rw [ite_cond_eq_true]
-  case h =>
-    simp [*, ←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le, ←Nat.mul_sub, ←Nat.mod_eq_sub]
-    sorry
-  simp [*, ←Nat.mul_comm 8, Nat.mul_div_mul_left, Nat.mul_assoc, Nat.mul_div_le, ←Nat.mul_sub, ←Nat.mod_eq_sub]
-  rw [List.take_of_length_le (h := by simp [*, ←Nat.mul_comm 8, ←Nat.mul_sub, ←Nat.mod_eq_sub]; sorry)]
-  have: 8 * (r.val - bs.length % r.val) ≥ 8 := by
-    simp
-    change 0 < r.val - bs.length % r.val
-    simp [Nat.mod_lt, *]
-
-  -- TODO: Look into `olet` and `tlet`
-  congr 1
-  apply List.ext_getElem
-  · simp [*]
-    sorry
-  simp [*, ←getElem!_pos]
-  intro i i_idx i_idx2
-  simp
-
-  sorry
-
-  -- progress with algos.sponge_absorb.spec_list as ⟨mid, mid_post⟩
-  -- · simp [Std.Array.repeat]
-  -- progress with algos.sponge_squeeze.spec as ⟨res, post⟩
-  -- simp [*]
-  -- simp [Spec.sponge]
-  -- have absorb_spec := absorb.spec
-  -- simp [spec_sponge_absorb] at absorb_spec
-  -- rw [ListIR.sponge.squeeze.refinement, absorb_spec, absorb.refinement]
-  -- case r_pos => scalar_tac
-  -- simp
-  -- congr 6
-  -- unfold Spec.«pad10*1»
-  -- simp
-  -- congr 2
-  -- ext i i_lhs i_rhs
-  -- · simp [BitVec.toNat]
-  --   congr 1
-  --   -- apply Int.ModEq.eq
-  --   ring_nf
-  --   rw [←Int.add_emod_emod]
-  --   rw [Int.sub_emod_emod]
-  --   rw [Int.add_emod_emod]
-  -- simp [BitVec.toArray]
-
-
-attribute [local simp] Std.Array.make Std.Array.to_slice Std.Array.from_slice Std.Array.length Std.Array.repeat
+attribute [local simp] Std.Array.make Std.Array.to_slice Std.Array.from_slice Std.Array.length Std.Array.repeat Std.Array.to_slice_mut
 attribute [-simp] List.reduceReplicate
--- attribute [-progress] Std.Array.to_slice_mut.spec
--- attribute [progress] Std.Array.to_slice_mut.spec'
-
+attribute [progress] Std.Array.to_slice_mut.spec'
 attribute [simp] Fin.val_ofNat
+attribute [scalar_tac_simps] Std.Array.to_slice_mut
 
-theorem algos.sha3_224.spec (bs: Std.Slice Bool)
-: ∃ output, algos.sha3_224 bs = .ok output ∧ output.val = (Spec.SHA3_224 (Array.mk bs.val)).toList
-:= by rw [sha3_224]; progress*; simp [*]; congr <;> simp [*]
+attribute [local simp] algos.sha3_224 algos.sha3_256 algos.sha3_384 algos.sha3_512 algos.shake128 algos.shake256
+attribute [local simp] Spec.SHA3_224 Spec.SHA3_256 Spec.SHA3_384 Spec.SHA3_512 Spec.SHAKE128 Spec.SHAKE256
 
-theorem algos.sha3_256.spec (bs: Std.Slice Bool)
-: ∃ output, algos.sha3_256 bs = .ok output ∧ output.val = (Spec.SHA3_256 (Array.mk bs.val)).toList
-:= by rw [sha3_256]; progress*; simp [*]; congr <;> simp [*]
+@[scalar_tac_simps]
+theorem Simp.length_toBits_eq(ls: List (Std.UScalar ty))(x: Nat)
+: ls.toBits.length = x → ls.length = x / ty.numBits
+:= by
+  intro eq
+  simp [List.length_toBits] at eq
+  rw [←eq, Nat.mul_div_left]
+  simp only [Std.UScalar.numBits_pos]
 
-theorem algos.sha3_384.spec (bs: Std.Slice Bool)
-: ∃ output, algos.sha3_384 bs = .ok output ∧ output.val = (Spec.SHA3_384 (Array.mk bs.val)).toList
-:= by rw [sha3_384]; progress*; simp [*]; congr <;> simp [*]
+section Artifacts
+
+variable (bs: Std.Slice Std.U8)
+
+theorem algos.sha3_224.spec
+: ∃ output, algos.sha3_224 bs = .ok output ∧ output.toBits = (Spec.SHA3_224 bs.toBits.toArray).toList
+:= by
+  simp
+  progress with algos.sponge.spec (suffix_len := 2) as ⟨res, res_post⟩
+  case suffix_len_spec => simp +decide
+  simp +decide [*, Spec.Keccak, Spec.b, Spec.w, List.length_toBits, Simp.length_toBits_eq res.val]
+  congr
+
+set_option maxRecDepth 200000 in
+theorem algos.sha3_256.spec
+: ∃ output, algos.sha3_256 bs = .ok output ∧ output.toBits = (Spec.SHA3_256 bs.toBits.toArray).toList
+:= by
+  simp
+  progress with algos.sponge.spec (suffix_len := 2) as ⟨res, res_post⟩
+  case suffix_len_spec => simp +decide
+  simp +decide [*, Spec.Keccak, Spec.b, Spec.w, List.length_toBits, Simp.length_toBits_eq res.val]
+  congr
+
+set_option maxRecDepth 200000 in
+theorem algos.sha3_384.spec
+: ∃ output, algos.sha3_384 bs = .ok output ∧ output.toBits = (Spec.SHA3_384 bs.toBits.toArray).toList
+:= by
+  simp
+  progress with algos.sponge.spec (suffix_len := 2) as ⟨res, res_post⟩
+  case suffix_len_spec => simp +decide
+  simp +decide [*, Spec.Keccak, Spec.b, Spec.w, List.length_toBits, Simp.length_toBits_eq res.val]
+  congr
 
 set_option maxRecDepth 1000000 in
-theorem algos.sha3_512.spec (bs: Std.Slice Bool)
-: ∃ output, algos.sha3_512 bs = .ok output ∧ output.val = (Spec.SHA3_512 (Array.mk bs.val)).toList
-:= by rw [sha3_512]; progress*; simp [*]; congr <;> simp [*]
+theorem algos.sha3_512.spec
+: ∃ output, algos.sha3_512 bs = .ok output ∧ output.toBits = (Spec.SHA3_512 bs.toBits.toArray).toList
+:= by
+  simp
+  progress with algos.sponge.spec (suffix_len := 2) as ⟨res, res_post⟩
+  case suffix_len_spec => simp +decide
+  simp +decide [*, Spec.Keccak, Spec.b, Spec.w, List.length_toBits, Simp.length_toBits_eq res.val]
+  congr
 
-theorem algos.shake128.spec (bs dst: Std.Slice Bool)
-: dst.length + (1600 - 256) < Std.Usize.max
-→ ∃ output, algos.shake128 bs dst = .ok output ∧ output.val = (Spec.SHAKE128 (Array.mk bs.val) dst.length).toList
-:= by intros; rw [shake128]; progress*; simp [*]; congr; simp
+theorem algos.shake128.spec (dst: Std.Slice Std.U8)
+: dst.length + 168 < Std.Usize.max
+→ ∃ output, algos.shake128 bs dst = .ok output ∧ output.toBits = (Spec.SHAKE128 bs.toBits.toArray dst.toBits.length).toList
+:= by
+  intros; simp
+  progress with algos.sponge.spec (suffix_len := 4) as ⟨res, res_post⟩
+  case suffix_len_spec => simp +decide
+  simp +decide [*, Spec.Keccak, Spec.b, Spec.w, List.length_toBits, Simp.length_toBits_eq res.val, Std.UScalar.toBits]
 
-theorem algos.shake256.spec (bs dst: Std.Slice Bool)
-: dst.length + (1600 - 512) < Std.Usize.max
-→ ∃ output, algos.shake256 bs dst = .ok output ∧ output.val = (Spec.SHAKE256 (Array.mk bs.val) dst.length).toList
-:= by intros; rw [shake256]; progress*; simp [*]; congr; simp
+theorem algos.shake256.spec (dst: Std.Slice Std.U8)
+: dst.length + 136 < Std.Usize.max
+→ ∃ output, algos.shake256 bs dst = .ok output ∧ output.toBits = (Spec.SHAKE256 bs.toBits.toArray dst.toBits.length).toList
+:= by
+  intros; simp
+  progress with algos.sponge.spec (suffix_len := 4) as ⟨res, res_post⟩
+  case suffix_len_spec => simp +decide
+  simp +decide [*, Spec.Keccak, Spec.b, Spec.w, List.length_toBits, Simp.length_toBits_eq res.val, Std.UScalar.toBits]
+
+end Artifacts
