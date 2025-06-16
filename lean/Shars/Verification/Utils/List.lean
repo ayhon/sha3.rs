@@ -1,6 +1,8 @@
 import Aeneas.ScalarTac
 import Mathlib
 import Shars.Verification.Utils.SimpLikeTactics
+import Shars.Verification.Utils.ScalarTac
+import Shars.Verification.Utils.Notation
 
 set_option maxHeartbeats 100000
 set_option maxRecDepth 10000000
@@ -56,25 +58,6 @@ theorem List.zipWith_append_truncate_left{α : Type u} (f:  β → α → γ) (x
   conv in (occs := *) List.zipWith f _ _ => all_goals rw [List.zipWith_comm]
   apply List.zipWith_append_truncate_right (hyp := hyp)
 
-/- attribute [simp_lists_simps] List.take_zipWith in -/
-/- @[simp_lists_simps] -/
-/- theorem List.zipWith_append_right{α : Type u} (f: α → β → γ) (x : List α)(y z: List β) -/
-/- : List.zipWith f x (y ++ z) = (List.zipWith f x y).take y.length ++ List.zipWith f (x.drop y.length) z -/
-/- := by -/
-/-   by_cases x.length < y.length -/
-/-   case pos => -/
-/-     simp_lists [List.zipWith_append_truncate_right] -/
-/-     simp -/
-/-   case neg h => -/
-/-     simp at h -/
-/-     have: (x.zipWith f y).length = y.length := by simp [h] -/
-/-     simp_lists -/
-/-     simp -/
-/-     match x, y with -/
-/-     | [], _ | _, [] => simp -/
-/-     | a :: x', b :: y' => -/
-/-       simp [List.zipWith_append_right] -/
-
 @[simp]
 theorem List.drop_eq_drop(ls: List α)(n m: Nat)
 : ls.drop n = ls.drop m ↔ n = m ∨ (n ≥ ls.length ∧ m ≥ ls.length)
@@ -96,7 +79,6 @@ theorem List.drop_eq_drop(ls: List α)(n m: Nat)
       conv at this => lhs; (first | rw [←h] | rw [h])
       simp at this
       scalar_tac
-
 
 def List.setLength(ls: List α)(n: Nat)(fill: α) :=
   match ls, n with
@@ -358,14 +340,14 @@ theorem List.length_flatten_of_uniform{n: Nat}{ls: List (List Bool)}
 def List.matrix_idx(ls: List (List α))(i: Nat)(acc: Nat := 0): Nat × Nat :=
   match ls with
   | [] => (acc, i)
-  | hd :: tl => 
+  | hd :: tl =>
     if i < hd.length then
       (acc, i)
     else
       List.matrix_idx tl (i - hd.length) (acc + 1)
 
 theorem List.acc_le_matrix_idx_1(ls: List (List α))(i acc: Nat)
-: acc ≤ (ls.matrix_idx i acc).1 
+: acc ≤ (ls.matrix_idx i acc).1
 := by
   unfold List.matrix_idx
   match ls with
@@ -441,7 +423,7 @@ theorem List.uniform_zero{ls: List (List α)}
   simp at *
   match ls with
   | [] => simp
-  | hd :: tl => 
+  | hd :: tl =>
     simp at *
     obtain ⟨len_hd, uniform_tl⟩ := uniform
     simp [len_hd]
@@ -461,7 +443,7 @@ theorem List.getElem!_flatten_of_uniform {ls: List (List Bool)}{n: Nat}
 := by
   intro uniform i
 
-  by_cases n_pos: n > 0; case neg => 
+  by_cases n_pos: n > 0; case neg =>
     simp at n_pos
     simp only [n_pos] at *
     replace uniform := List.uniform_zero uniform
@@ -469,7 +451,7 @@ theorem List.getElem!_flatten_of_uniform {ls: List (List Bool)}{n: Nat}
     cases ls.length <;> simp [default]
 
   by_cases i_idx: i < ls.flatten.length
-  case neg => 
+  case neg =>
     rw [getElem!_neg]; case h => assumption
     simp [List.length_flatten_of_uniform uniform] at i_idx
     rw [Nat.mul_comm] at i_idx
@@ -493,14 +475,13 @@ theorem List.getElem!_flatten_of_uniform {ls: List (List Bool)}{n: Nat}
       if h: i < n then
         simp_lists
         simp [Nat.mod_eq_of_lt, Nat.div_eq_of_lt, h]
-      else 
+      else
         simp at h
         simp_lists
         simp [len_hd, Nat.mod_eq_sub_mod, h, Nat.div_eq_sub_div, n_pos]
         apply List.getElem!_flatten_of_uniform
         exact uniform_tl
 
-attribute [-simp_lists_simps] List.getElem!_set
 @[simp_lists_simps]
 theorem List.getElem!_set_pos[Inhabited α](ls: List α)(v: α)(i j: Nat)
 : i = j ∧ i < ls.length → (ls.set i v)[j]! = v
@@ -509,8 +490,89 @@ theorem List.getElem!_set_pos[Inhabited α](ls: List α)(v: α)(i j: Nat)
 @[simp_lists_simps]
 theorem List.getElem!_set_neg[Inhabited α](ls: List α)(v: α)(i j: Nat)
 : i ≠ j ∨ i ≥ ls.length → (ls.set i v)[j]! = ls[j]!
-:= by 
+:= by
   rintro (h1 | h2)
   · apply List.getElem!_set_ne ls i j v
     simp [Nat.not_eq, ne_eq, lt_or_lt_iff_ne, h1]
   · simp [h2, List.set_eq_of_length_le]
+
+---
+
+@[simp] theorem List.setSlice!_nil(ls: List α){i: Nat}: ls.setSlice! i [] = ls := by simp [List.setSlice!]
+
+@[simp] theorem List.setSlice!_of_length_le(ls: List α){i: Nat}
+ (length_le : ls.length ≤ i)(s: List α)
+: ls.setSlice! i s = ls := by simp [setSlice!, length_le]
+
+@[simp_lists_simps]
+theorem List.setSlice!_consecutive[Inhabited α](ls s1 s2: List α)(i j: Nat)
+: i + s1.length = j
+→ (ls.setSlice! i s1).setSlice! j s2 = ls.setSlice! i (s1 ++ s2)
+:= by
+  rintro rfl
+  apply List.ext_getElem <;> simp [←getElem!_pos]
+  intro p p_idx
+  if p < i then
+    simp_lists
+  else if p < i + s1.length then
+    simp_lists
+  else if p < i + s1.length + s2.length then
+    simp_lists
+    simp [Nat.sub_add_eq]
+  else
+    simp_lists
+
+@[simp] theorem List.slice_of_ge(ls: List α)(i j: Nat)
+: i ≥ j → ls.slice i j = []
+:= by intro cond; simp [List.slice, cond]
+
+theorem List.slice_append_getElem(ls: List α)
+  (j_idx: j < ls.length)
+: i ≤ j → ls.slice i j ++ [ls[j]] = ls.slice i (j+1)
+:= by
+  intro proper
+  simp [List.slice]
+  have: ls[j] = (drop i ls)[j - i]'(by simp; omega) := by simp [*]
+  rw [this, List.take_append_getElem, Nat.sub_add_comm]
+  omega
+
+@[simp_lists_simps]
+theorem List.slice_append_drop(ls: List α)(j: Nat)
+:  ∀ i, i ≤ j → ls.slice i j ++ ls.drop j = ls.drop i
+:= by
+  intros i proper
+  assume j < ls.length; case otherwise =>
+    simp [List.take_drop, List.take_of_length_le, not_lt.mp, List.slice, *]
+  if i = j then
+    simp [*, List.slice]
+  else
+    have: i < j := by omega
+    obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_lt this
+    rw [←List.slice_append_getElem]
+    case j_idx => omega
+    case a => omega
+    simp
+    rw [List.slice_append_drop]
+    case a => omega
+
+theorem List.setSlice!_truncate(ls s: List α)(i: Nat)
+: ls.setSlice! i s = ls.setSlice! i (s.take (ls.length - i))
+:= by
+  conv => rhs; rw [List.setSlice!]
+  simp [List.setSlice!, List.take_take, Nat.min_comm]
+
+theorem List.getElem!_setSlice!_eq_ite_getElem!{α : Type u_1} [Inhabited α] (s s' : List α) (i j : ℕ)
+: (s.setSlice! i s')[j]! =
+  if i ≤ j ∧ j - i < s'.length ∧ j < s.length then
+   s'[j - i]!
+  else
+   s[j]!
+:= by
+  assume j < s.length; case otherwise => simp [*, getElem!_neg]
+  if h : i ≤ j ∧ j - i < s'.length then
+    simp [h, List.getElem!_setSlice!_middle, *]
+  else
+    simp [h, *]
+    simp [-not_and, not_and_or] at h
+    rw [List.getElem!_setSlice!_same]
+    omega

@@ -11,8 +11,11 @@ import Shars.Verification.Utils
 import Shars.Verification.Refinement
 
 set_option maxHeartbeats 1000000
-attribute [-simp] List.getElem!_eq_getElem?_getD
+attribute [-simp] List.getElem!_eq_getElem?_getD List.ofFn_succ
 attribute [simp] Aeneas.Std.Slice.set
+attribute [scalar_tac_simps] Nat.mul_add Nat.mul_sub
+
+attribute [-progress] Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec
 
 open Aeneas hiding Std.Array
 open Std.alloc.vec
@@ -28,8 +31,62 @@ theorem U64.numBits_eq_w
 : Std.UScalarTy.U64.numBits = Spec.w 6
 := by simp +decide
 
-attribute [local simp] Std.Array.length
-attribute [-simp] List.ofFn_succ in
+@[progress]
+theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index.spec{T : Type}
+  (r : Std.core.ops.range.RangeFrom Std.Usize)(input : Std.Slice T)
+: r.start ≤ input.length
+→  ∃ output,
+    index r input = .ok output ∧
+    output.val = input.val.drop r.start.val
+  := by
+    intro
+    unfold index
+    simp [*, Slice.drop]
+
+@[progress]
+theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec {T : Type}
+  (r : Std.core.ops.range.RangeFrom Std.Usize) (s : Std.Slice T)
+: r.start.val ≤ s.length
+→  ∃ old new,
+  index_mut r s =  .ok (old, new) ∧
+  old.val = s.val.drop r.start.val ∧
+  ∀ u, u.length = s.length - r.start.val → (new u).val = s.val.setSlice! r.start.val u.val
+:= by
+  intro cond
+  simp [index_mut, cond]
+  intro u cond2
+  simp [cond2]
+
+@[progress]
+theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index.spec(input: Slice α)(r: ops.range.Range Usize)
+: r.start.val ≤ r.end_.val
+→ r.end_.val ≤ input.length
+→ ∃ output,
+  core.slice.index.SliceIndexRangeUsizeSlice.index r input = .ok output ∧
+  output.val = input.val.extract r.start.val r.end_.val
+:= by
+  obtain ⟨start, end_⟩ := r
+  intro r_proper end_lt_length
+  simp at *
+  rw [index]
+  simp [List.slice, *]
+
+@[progress]
+theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.spec {T : Type}
+  (r : Std.core.ops.range.Range Std.Usize) (s : Std.Slice T)
+: r.start.val ≤ r.end_.val
+→ r.end_.val ≤ s.length
+→ ∃ old new,
+  index_mut r s =  .ok (old, new) ∧
+  old.val = s.val.slice r.start.val r.end_.val ∧
+  ∀ u, u.length = r.end_.val - r.start.val → (new u).val = s.val.setSlice! r.start.val u.val
+:= by
+  intro cond cond'
+  simp [index_mut, cond, cond']
+  intro u cond2
+  simp [cond2]
+
+
 @[progress]
 theorem algos.IndexalgosStateArrayPairUsizeUsizeU64.index.spec(input: algos.StateArray)(x y: Std.Usize)
 : 5 * y.val + x.val < 25
@@ -52,10 +109,7 @@ theorem algos.IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut.spec(input: alg
 := by
   intros
   rw [index_mut]
-  /- progress* -/ -- TODO: Why does using `progress*` cause an index OOB error?
-  let* ⟨ i, i_post ⟩ ← Std.Usize.mul_spec
-  let* ⟨ i1, i1_post ⟩ ← Std.Usize.add_spec
-  let* ⟨ __discr, __discr_post ⟩ ← Std.Array.index_mut_usize_spec
+  progress*
   simp [*]
 
 theorem BitVec.getElem!_rotateLeft(bv: BitVec n)(w: Nat)(i: Nat)
@@ -82,9 +136,6 @@ theorem Aeneas.Std.U64.getElem!_toBits_rotate_left(u: Aeneas.Std.U64)(w: Aeneas.
   simp only [Fin.getElem_fin, ←getElem!_pos]
   simp only [Aeneas.Std.UScalar.rotate_left, Std.UScalarTy.numBits]
   simp only [BitVec.getElem!_rotateLeft, i_idx]
-
-
-attribute [-simp] List.ofFn_succ
 
 @[simp]
 theorem Std.core.num.U64.toBits_to_le_bytes(u: Std.U64)
@@ -124,72 +175,6 @@ theorem Std.core.num.U64.toBits_from_le_bytes(arr : Aeneas.Std.Array Std.U8 8#us
   rw [Byte.testBit]
   rw [BitVec.getElem!_eq_testBit_toNat]
 
-/- theorem Nat.add_one_div_mul_gt(a b: Nat) -/
-/- : a < (a / b + 1) * b -/
-/- := by -/
-/-   sorry -/
-
-theorem Nat.div_spec(n q: Nat){d: Nat}
-: 0 < d
-→ (q = n / d ↔ d * q ≤ n ∧ n < d * (q + 1))
-:= by
-  intro d_pos
-  apply Iff.intro
-  · rintro rfl
-    simp [Nat.mul_div_le, Nat.lt_mul_div_succ, d_pos]
-  · rintro ⟨lb, ub⟩
-    apply Nat.le_antisymm
-    · have := Nat.div_le_div_right (c := d) lb
-      rw [Nat.mul_div_cancel_left _ d_pos] at this
-      exact this
-    · have := Nat.div_lt_of_lt_mul ub
-      have := Nat.le_of_lt_add_one this
-      exact this
-
-theorem List.toBits_set(ls: List (Std.UScalar ty))(u: Std.UScalar ty)(i: Nat)
-: (ls.set i u).toBits = ls.toBits.setSlice! (i * ty.numBits) u.toBits
-:= by
-  apply List.ext_getElem
-  · simp [List.length_toBits]
-  intro j j_idx j_idx2
-  simp [←getElem!_pos]
-  simp [List.length_setSlice!, List.length_toBits] at j_idx j_idx2
-  simp [List.getElem!_toBits]
-  have numBits_pos: ty.numBits > 0 := by cases ty <;> simp
-  have j_block_idx: j / ty.numBits < ls.length := by
-    apply Nat.lt_of_mul_lt_mul_left (a := ty.numBits)
-    calc _ ≤ j := by apply Nat.mul_div_le
-         j < _ := Nat.mul_comm _ _ ▸ j_idx
-  if cond: i = j / ty.numBits then
-    subst cond
-    simp [List.getElem!_set, j_block_idx]
-    rw [List.getElem!_setSlice!_middle]
-    all_goals simp [Nat.mul_comm _ ty.numBits, ←Nat.mod_eq_sub]
-    simp [Nat.mul_div_le, Nat.mod_lt, numBits_pos, List.length_toBits, j_idx]
-  else
-    have := Nat.div_spec j i numBits_pos |>.not.mp cond
-    simp [Nat.mul_add, -not_and, not_and_or] at this
-    simp [List.getElem!_set_ne, cond, ←List.getElem!_toBits]
-    rw [List.getElem!_setSlice!_same]
-    simp
-    rw [Nat.mul_comm] at this
-    assumption
-
-theorem List.getElem!_setSlice!_eq_ite_getElem!{α : Type u_1} [Inhabited α] (s s' : List α) (i j : ℕ)
-: (s.setSlice! i s')[j]! =
-  if i ≤ j ∧ j - i < s'.length ∧ j < s.length then
-   s'[j - i]!
-  else
-   s[j]!
-:= by
-  assume j < s.length; case otherwise => simp [*, getElem!_neg]
-  if h : i ≤ j ∧ j - i < s'.length then
-    simp [h, List.getElem!_setSlice!_middle, *]
-  else
-    simp [h, *]
-    simp [-not_and, not_and_or] at h
-    rw [List.getElem!_setSlice!_same]
-    omega
 
 @[simp] theorem Aeneas.Std.UScalar.toBits_default (ty: Std.UScalarTy)
 : (default: Std.UScalar ty).toBits = (List.replicate ty.numBits false)
@@ -199,14 +184,9 @@ theorem Aeneas.Std.core.num.U64.getElem_toBits_getElem_to_le_bytes(u: Std.U64)(i
 : j < 8
 → (U64.to_le_bytes u).val[i]!.toBits[j]! = u.toBits[8*i + j]!
 := by
-  -- TODO: Analyze why this kind of thing makes sense. Do we want to have this
-  -- kind of simplification? Didn't List.getELem!_toBits do quite the opposite?
-  -- TODO: Also, does this actually make use of `toBits (f bs) = toBits bs`?
-  -- I guess it also needs some kind of property over `toBits` and `getElem`.
-  -- Idk.
   intro j_lt
   rw [getElem!_pos]; case h => simp [UScalar.toBits, j_lt]
-  by_cases i_lt: i < 8; case neg =>
+  assume i_lt: i < 8; case otherwise =>
     simp at i_lt
     conv => lhs; arg 1; rw [getElem!_neg (h := by simp [i_lt])]
     conv => rhs; rw [getElem!_neg (h := by
@@ -216,18 +196,20 @@ theorem Aeneas.Std.core.num.U64.getElem_toBits_getElem_to_le_bytes(u: Std.U64)(i
     )]
     simp only [UScalar.toBits_default, List.getElem_replicate]
     simp
-  rw [getElem!_pos]; case pos.h => simp [i_lt]
+  rw [getElem!_pos]; case h => simp [i_lt]
   have ij_idx: 8 * i + j < 64 := by
     have: 8 * i ≤ 8 * 7 := Nat.mul_le_mul_left 8 (by omega)
     omega
 
-  rw [getElem!_pos]; case pos.h => simp [UScalar.toBits, ij_idx]
+  rw [getElem!_pos]; case h => simp [UScalar.toBits, ij_idx]
   simp [to_le_bytes]
   unfold Std.UScalar.toBits
   simp
   trans u.bv.toLEBytes[i]!.testBit j
   · congr; rw [←getElem!_pos]
   · rw [BitVec.toLEBytes_getElem!_testBit, ←getElem!_pos]; assumption
+
+section IR
 
 def IR.xor(s: List Bool)(r: List Bool): List Bool :=
   s.zipWith (· ^^ ·) r ++ s.drop r.length
@@ -248,6 +230,18 @@ theorem IR.getElem!_xor(s: List Bool)(r: List Bool)(i: Nat)
     simp_lists
     simp_ifs
     congr; omega
+
+theorem IR.xor_assoc(s0 s1 s2: List Bool)
+: IR.xor (IR.xor s0 s1) s2 = IR.xor s0 (IR.xor (s1.setWidth s0.length) s2)
+:= by
+  apply List.ext_getElem
+  · simp
+  simp [←getElem!_pos]
+  intro i i_idx
+  simp [IR.getElem!_xor, i_idx]
+  by_cases i < s2.length <;> by_cases i < s1.length <;> simp [*, getElem!_neg]
+
+end IR
 
 -- @[progress]
 theorem algos.StateArray.xor_byte_at.spec' (input : StateArray) (byte : Std.U8) (pos : Std.Usize)
@@ -273,33 +267,19 @@ theorem algos.StateArray.xor_byte_at.spec' (input : StateArray) (byte : Std.U8) 
       simp +decide [Nat.mul_add] at this
       have := this (by omega) (by omega)
       simp [this]
+    simp [←j_block_eq_pos_block, ←Nat.mul_comm 64, ←Nat.mod_eq_sub]
+    simp [j_block_eq_pos_block, ←Nat.mul_comm 8, ←Nat.mod_eq_sub]
+    simp [←j_block_eq_pos_block]
+
     split
     case isTrue in_byte =>
       simp [Std.UScalar.getElem!_xor_toBits]
-      rw [Aeneas.Std.core.num.U64.getElem_toBits_getElem_to_le_bytes]
-      case a => omega
-      have: 8 * pos.val ≤ j := by
-        rw [←Nat.div_add_mod pos.val 8]
-        simp +arith [Nat.mul_add]
-        omega
-      have: j < 8 * pos.val + 8 := by
-        rw [←Nat.div_add_mod pos.val 8]
-        simp +arith [Nat.mul_add]
-        omega
-      simp [*]
+      rw [Aeneas.Std.core.num.U64.getElem_toBits_getElem_to_le_bytes]; case a => omega
+      simp_ifs
+      simp_scalar
       simp [List.getElem!_toBits]
-      congr 2
-      · simp [j_block_eq_pos_block]
-      · have: pos.val * 8 = pos.val * 8 := by rfl
-        conv at this => lhs; rw [←Nat.div_add_mod pos.val 8]; simp +arith [Nat.mul_add]; rw [Nat.mul_comm, Nat.mul_comm 8]
-        rw [Nat.sub_sub, this, Nat.add_comm]
-        conv => lhs; rw [←Nat.div_add_mod j 64, j_block_eq_pos_block]
-        conv => lhs; lhs; rhs; rw [←Nat.div_add_mod pos.val 8]
-        simp +arith [Nat.mul_add]
-        omega
-      · conv => rhs; rw [←Nat.div_add_mod pos.val 8]
-        simp +arith [Nat.mul_add]
-        omega
+      congr 1
+      scalar_tac
     case isFalse =>
       simp_ifs
       simp +arith [List.getElem!_toBits, Nat.mod_eq_sub, j_block_eq_pos_block]
@@ -384,8 +364,6 @@ theorem algos.StateArray.xor_lane.spec(input : Std.U64) (src : Std.Slice Std.U8)
   intro j j_idx
   simp [*]
 
-attribute [scalar_tac_simps] Nat.mul_add
-
 @[progress]
 theorem algos.StateArray.xor.inner_loop.spec (input : algos.StateArray) (other : Std.Slice Std.U8) (block_idx : Std.Usize)
 : 8*block_idx.val ≤ other.val.length
@@ -395,18 +373,13 @@ theorem algos.StateArray.xor.inner_loop.spec (input : algos.StateArray) (other :
   inner_loop input block_idx other = .ok (output, leftover) ∧
   leftover = other.length / 8 ∧
   ∀ j < output.toBits.length,
-  -- TODO: This doesn't cover all of `other`, but those which are not multiples of 8
+  -- This doesn't cover all of `other`, but those which are not multiples of 8
     output.toBits[j]! = if 64 * block_idx.val ≤ j ∧ j < (other.val.take (8*leftover)).toBits.length then input.toBits[j]! ^^ other.toBits[j]! else input.toBits[j]!
 := by
   intro block_idx_lt input_big_enough
   unfold inner_loop
 
-  simp [Std.toResult, Std.core.slice.index.Slice.index, Std.core.slice.index.SliceIndexRangeUsizeSlice.index]
-  progress*
-  -- TODO: This progress section is not super smooth, we handle the `index` call a bit crudely
-  simp [*, Nat.mul_add]
-  simp_ifs
-  simp
+  simp [Std.toResult, Std.core.slice.index.Slice.index]
   progress*
   · simp[*]
     intro j j_idx
@@ -416,29 +389,15 @@ theorem algos.StateArray.xor.inner_loop.spec (input : algos.StateArray) (other :
     split
     case isTrue prev =>
       simp_ifs
-      rw [List.getElem!_setSlice!_same]
-      simp; omega
+      -- simp_lists -- TODO: Check how much more inefficient it is with `
+      rw [List.getElem!_setSlice!_same]; case h => scalar_tac
     case isFalse not_prev =>
       simp [-not_and, not_and_or] at not_prev
       obtain not_prev | not_prev := not_prev; swap
       · simp_ifs
-        have: 64 * block_idx + 64 ≤ j := by
-          calc
-            _ ≤ other.length / 8 * 8 * 8 := by
-              rename i1.val ≤ other.val.length => cond
-              simp [*] at cond
-              have := Nat.div_le_div_right (c := 8) cond
-              simp at this
-              have := Nat.mul_le_mul_right 8 this
-              simp only [←Nat.mul_comm 8 (_ + _), Nat.mul_add, Nat.mul_one] at this
-              have := Nat.mul_le_mul_right 8 this
-              simp only [←Nat.mul_comm 8 (_ + _), Nat.mul_add, Nat.mul_one] at this
-              conv at this => lhs; simp +arith only
-              simp
-              assumption
-              -- TODO: PAINFUL! Work this out better.
-            _ ≤ j := by
-              simp [not_prev]
+        have: 64 * block_idx + 64 ≤ j := calc
+            _ ≤ 64 * (other.length / 8) := by scalar_tac
+            _ ≤ j := by scalar_tac
         rw [List.getElem!_setSlice!_suffix]
         simp [←Nat.mul_comm 64, this]
       by_cases 64*block_idx ≤ j ∧ j < other.length * 8
@@ -447,78 +406,25 @@ theorem algos.StateArray.xor.inner_loop.spec (input : algos.StateArray) (other :
           apply Nat.div_spec j block_idx (show 0 < 64 from by decide) |>.mpr
           omega
         simp_ifs
-        rw [List.getElem!_setSlice!_middle]
-        case h => simp [block_idx_eq_j]; omega
-        rw [i6_post]; case a => simp; omega
+        rw [List.getElem!_setSlice!_middle]; case h => scalar_tac
+        rw [i6_post]; case a => scalar_tac
+        simp [*]
         simp_ifs
         simp [List.getElem!_toBits]
         simp_lists
-        simp +arith only [←Nat.mul_add_div, block_idx_eq_j, ←Nat.mod_eq_sub, Nat.div_add_mod]
-        congr 2
-        rw [Nat.mod_mod_of_dvd]
-        decide
+        simp +arith only [←Nat.mul_add_div, block_idx_eq_j, ←Nat.mod_eq_sub, Nat.div_add_mod, List.getElem!_toBits, Std.UScalarTy.numBits]
       case neg unprocessed =>
         simp_ifs
-        rw [List.getElem!_setSlice!_same]
-        simp [*, ←Nat.mul_comm 64]
-        scalar_tac
+        rw [List.getElem!_setSlice!_same]; case h => scalar_tac
   · rename_i block_idx_next_ge
-    simp [*] at block_idx_next_ge
-    simp [*]
+    simp [*, Nat.div_spec other.val.length block_idx.val ‹0 < 8›' |>.symm]
     constructor
-    · have := Nat.div_spec other.val.length block_idx.val ‹0 < 8›' |>.mpr (by scalar_tac)
-      exact this
+    · scalar_tac
     · simp_ifs
 termination_by input.length - block_idx.val
 decreasing_by scalar_decr_tac
 
-@[simp] theorem List.toBits_take(ls: List (Aeneas.Std.UScalar ty))(n: Nat)
-: (ls.take n).toBits = ls.toBits.take (n* ty.numBits)
-:= by
-  apply List.ext_getElem
-  · simp [List.length_toBits]
-  simp [List.length_toBits, ←getElem!_pos]
-  intro i i_idx
-  by_cases cond: n ≤ ls.length
-  case pos =>
-    simp [cond] at i_idx
-    have := Nat.div_lt_of_lt_mul (Nat.mul_comm _ _ ▸ i_idx)
-    simp [List.getElem!_toBits]
-    simp_lists
-    simp [List.getElem!_toBits]
-  case neg =>
-    simp [not_le.mp] at cond
-    simp [cond, le_of_lt] at i_idx
-    have := Nat.div_lt_of_lt_mul (Nat.mul_comm _ _ ▸ i_idx)
-    have := Nat.mul_lt_mul_left (by cases ty <;> simp : 0 < ty.numBits) |>.mpr cond
-    simp [List.getElem!_toBits]
-    simp_lists
-    rw [List.take_of_length_le, List.getElem!_toBits]
-    simp [List.length_toBits, ←Nat.mul_comm ty.numBits, this, le_of_lt]
-
-@[simp] theorem List.toBits_drop(ls: List (Aeneas.Std.UScalar ty))(n: Nat)
-: (ls.drop n).toBits = ls.toBits.drop (n* ty.numBits)
-:= by
-  apply List.ext_getElem
-  · simp [List.length_toBits, Nat.sub_mul]
-  simp [List.length_toBits, Nat.sub_mul, ←getElem!_pos]
-  intro i i_idx
-  simp [List.getElem!_toBits, Nat.mul_comm n, Nat.mul_add_div (show 0 < ty.numBits from by cases ty <;> simp)]
-
-@[progress]
-theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index.spec{T : Type}
-  (r : Std.core.ops.range.RangeFrom Std.Usize)(input : Std.Slice T)
-: r.start ≤ input.length
-→  ∃ output,
-    index r input = .ok output ∧
-    output.val = input.val.drop r.start.val
-  := by
-    intro
-    unfold index
-    simp [*, Slice.drop]
-
 theorem algos.StateArray.xor.spec'(input : algos.StateArray) (other : Std.Slice Std.U8)
--- /** Assumes `other.len() < self.len() * 8` and `other.len() > 0`. */
 : other.toBits.length ≤ input.toBits.length
 → ∃ output,
   xor input other = .ok output ∧
@@ -556,19 +462,21 @@ theorem algos.StateArray.xor.spec'(input : algos.StateArray) (other : Std.Slice 
       simp only [this, ←Nat.mul_comm 64, ←Nat.mod_eq_sub]
       simp [*, Nat.mod_lt]
 
-      have := List.getElem!_toBits processed.val j
+      have := List.getElem!_toBits processed.val j |>.symm
       simp at this -- The issue with having UScalar defined this way is that to not have to do these
-                    -- manipulations I need to define specialized theorems for each type.
-      rw [←this]
+                    -- manipulations I need to define specialized theorems for each type. I don't want
+                    -- to have the intermediary `ty.numBits` call, or at least have it be abstracted away.
+                    -- Perhaps a better handling of `reducible` definitions would allow this.
+      rw [this]
 
       if j_changed_part?: j < other.val.length * 8 then
         -- This is the part where bits were xored
-        simp [*, Std.Array.toBits, Std.Slice.toBits]
+        simp [*]
         simp_ifs
         simp +arith [Nat.div_add_mod]
       else
         -- This is the part where bits were left unchanged
-        simp [*, Std.Array.toBits, Std.Slice.toBits]
+        simp [*]
         simp_ifs
     else
       simp +decide only [val_leftover] at j_processed? j_new_lane?
@@ -592,158 +500,6 @@ theorem algos.StateArray.xor.spec (input : algos.StateArray) (other : Std.Slice 
   intro j j_idx _
   simp [←getElem!_pos] at j_idx ⊢
   simp [*, IR.getElem!_xor]
-
-theorem IR.xor_assoc(s0 s1 s2: List Bool)
-: IR.xor (IR.xor s0 s1) s2 = IR.xor s0 (IR.xor (s1.setWidth s0.length) s2)
-:= by
-  apply List.ext_getElem
-  · simp
-  simp [←getElem!_pos]
-  intro i i_idx
-  simp [IR.getElem!_xor, i_idx]
-  by_cases i < s2.length <;> by_cases i < s1.length <;> simp [*, getElem!_neg]
-
-@[simp] theorem Nat.quite_trivial_really(a b: Nat): a * (b + 1) - a * b = a := by simp [Nat.mul_add]
-
-@[progress]
-theorem Aeneas.Std.core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.spec {T : Type}
-  (r : Std.core.ops.range.RangeFrom Std.Usize) (s : Std.Slice T)
-: r.start.val ≤ s.length
-→  ∃ old new,
-  index_mut r s =  .ok (old, new) ∧
-  old.val = s.val.drop r.start.val ∧
-  ∀ u, u.length = s.length - r.start.val → (new u).val = s.val.setSlice! r.start.val u.val
-:= by
-  intro cond
-  simp [index_mut, cond]
-  intro u cond2
-  simp [cond2]
-
-@[progress]
-theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.spec {T : Type}
-  (r : Std.core.ops.range.Range Std.Usize) (s : Std.Slice T)
-: r.start.val ≤ r.end_.val
-→ r.end_.val ≤ s.length
-→ ∃ old new,
-  index_mut r s =  .ok (old, new) ∧
-  old.val = s.val.slice r.start.val r.end_.val ∧
-  ∀ u, u.length = r.end_.val - r.start.val → (new u).val = s.val.setSlice! r.start.val u.val
-:= by
-  intro cond cond'
-  simp [index_mut, cond, cond']
-  intro u cond2
-  simp [cond2]
-
--- TODO: Move to somewhere more useful
-@[simp] theorem Aeneas.Std.UScalar.numBits_pos(ty: Std.UScalarTy): ty.numBits > 0 := by cases ty <;> simp
-
--- TODO: Move to `Refinement.lean`
-@[simp] theorem List.toBits_append(ls1 ls2: List (Std.UScalar ty))
-: (ls1 ++ ls2).toBits = ls1.toBits ++ ls2.toBits
-:= by simp [List.toBits]
-
--- TODO: Move to `Refinement.lean`
-@[simp] theorem List.toBits_setSlice!(ls s: List (Std.UScalar ty))(off: Nat)
-: (ls.setSlice! off s).toBits = ls.toBits.setSlice! (ty.numBits*off) s.toBits
-:= by simp only [List.setSlice!, List.toBits_drop, List.toBits_take, List.toBits_append,
-   ←Nat.mul_comm ty.numBits, List.length_toBits, Nat.mul_min_mul_left, ←Nat.mul_sub, ←Nat.mul_add]
-
-@[simp] theorem List.toBits_getElem(ls: List (Std.UScalar ty))(i: Nat)
-  (i_idx: i < ls.length)
-: ls[i].toBits = ls.toBits.slice (ty.numBits*i) (ty.numBits*(i+1))
-:= by
-  have: (ls.toBits.slice (ty.numBits*i) (ty.numBits*(i+1))).length = ls[i].toBits.length := by
-    simp [List.slice, Nat.quite_trivial_really, List.length_toBits, ←Nat.mul_comm ty.numBits, ←Nat.mul_sub]
-    omega
-  apply List.ext_getElem <;> simp only [↓this, ←getElem!_pos]
-  simp
-  intro j j_idx
-  simp [List.slice, Nat.quite_trivial_really, j_idx, List.getElem!_toBits, Nat.mod_eq_of_lt, Nat.add_comm, Nat.add_mul_div_left, Nat.div_eq_of_lt]
-
-@[simp] theorem List.toBits_getElem!(ls: List (Std.UScalar ty))(i: Nat)
-  (i_idx: i < ls.length)
-: ls[i]!.toBits = ls.toBits.slice (ty.numBits*i) (ty.numBits*(i+1))
-:= by simp [getElem!_pos, i_idx]
-
-attribute [-progress] Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec
-
-@[progress]
-theorem Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index.spec(input: Slice α)(r: ops.range.Range Usize)
-: r.start.val ≤ r.end_.val
-→ r.end_.val ≤ input.length
-→ ∃ output,
-  core.slice.index.SliceIndexRangeUsizeSlice.index r input = .ok output ∧
-  output.val = input.val.extract r.start.val r.end_.val
-:= by
-  obtain ⟨start, end_⟩ := r
-  intro r_proper end_lt_length
-  simp at *
-  rw [index]
-  simp [List.slice, *]
-
-@[simp] theorem List.setSlice!_nil(ls: List α){i: Nat}: ls.setSlice! i [] = ls := by simp [List.setSlice!]
-
-@[simp] theorem List.setSlice!_of_length_le(ls: List α){i: Nat}
- (length_le : ls.length ≤ i)(s: List α)
-: ls.setSlice! i s = ls := by simp [setSlice!, length_le]
-
-@[simp_lists_simps]
-theorem List.setSlice!_consecutive[Inhabited α](ls s1 s2: List α)(i j: Nat)
-: i + s1.length = j
-→ (ls.setSlice! i s1).setSlice! j s2 = ls.setSlice! i (s1 ++ s2)
-:= by
-  rintro rfl
-  apply List.ext_getElem <;> simp [←getElem!_pos]
-  intro p p_idx
-  if p < i then
-    simp_lists
-  else if p < i + s1.length then
-    simp_lists
-  else if p < i + s1.length + s2.length then
-    simp_lists
-    simp [Nat.sub_add_eq]
-  else
-    simp_lists
-
-@[simp] theorem List.slice_of_empty(ls: List α)(i j: Nat)
-: i ≥ j → ls.slice i j = []
-:= by intro cond; simp [List.slice, cond]
-
-theorem List.slice_append_getElem(ls: List α)
-  (j_idx: j < ls.length)
-: i ≤ j → ls.slice i j ++ [ls[j]] = ls.slice i (j+1)
-:= by
-  intro proper
-  simp [List.slice]
-  have: ls[j] = (drop i ls)[j - i]'(by simp; omega) := by simp [*]
-  rw [this, List.take_append_getElem, Nat.sub_add_comm]
-  omega
-
-@[simp_lists_simps]
-theorem List.slice_append_drop(ls: List α)(j: Nat)
-:  ∀ i, i ≤ j → ls.slice i j ++ ls.drop j = ls.drop i
-:= by
-  intros i proper
-  assume j < ls.length; case otherwise =>
-    simp [List.take_drop, List.take_of_length_le, not_lt.mp, List.slice, *]
-  if i = j then
-    simp [*, List.slice]
-  else
-    have: i < j := by omega
-    obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_lt this
-    rw [←List.slice_append_getElem]
-    case j_idx => omega
-    case a => omega
-    simp
-    rw [List.slice_append_drop]
-    case a => omega
-
-
-theorem List.setSlice!_truncate(ls s: List α)(i: Nat)
-: ls.setSlice! i s = ls.setSlice! i (s.take (ls.length - i))
-:= by
-  conv => rhs; rw [List.setSlice!]
-  simp [List.setSlice!, List.take_take, Nat.min_comm]
 
 -- set_option trace.Progress true in
 theorem algos.StateArray.copy_to_loop.spec
@@ -815,12 +571,6 @@ theorem Aeneas.Std.core.slice.index.Slice.index.slice_index_range_usize_slice_sp
   progress as ⟨old, new, post⟩
   simp [Std.Array.to_slice, Std.Array.to_slice_mut] at post
   simp [post, Std.Array.to_slice, Std.Array.from_slice]
-
-attribute [-progress] Aeneas.Std.Usize.sub_spec
-@[progress] theorem Aeneas.Std.Usize.sub_spec' {x y : Aeneas.Std.Usize} (h : y.val ≤ x.val) :
-  ∃ z, x - y = Std.Result.ok z ∧ z.val = x.val - y.val := by
-  progress as ⟨z, post⟩
-  rw [post]
 
 theorem Aeneas.Std.UScalar.one_ShiftLeft_spec {ty1}(ty0: UScalarTy)(y : UScalar ty1)
   (hy : y.val < ty0.numBits)
