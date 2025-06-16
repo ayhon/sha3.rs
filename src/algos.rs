@@ -272,6 +272,7 @@ fn sponge_absorb(bs: &[u8], r: usize, s: &mut StateArray, extra: u8) {
     sponge_absorb_final(s, rest, extra, r);
 }
 
+/** Assumes `r % 8 == 0` and `r < 200` */
 fn sponge_squeeze(r: usize, z: &mut [u8], s: StateArray) {
     let mut s = s;
     let mut i = 0;
@@ -288,7 +289,7 @@ fn sponge_squeeze(r: usize, z: &mut [u8], s: StateArray) {
     }
 }
 
-/** Assumes `r % 8 == 0` */
+/** Assumes `r % 8 == 0` and `r < 200` */
 fn sponge(r: usize /* u8s */, bs: &[u8], output: &mut [u8], extra: u8) {
     let mut s = StateArray::default();
     sponge_absorb(bs, r, &mut s, extra);

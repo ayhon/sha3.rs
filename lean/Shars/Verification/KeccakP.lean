@@ -67,9 +67,13 @@ theorem algos.keccak_p.spec(input: StateArray)
   progress as ⟨res, res_post⟩
   simp [res_post, Spec.Keccak.P.loop.refinement, res_post]
 
-def IR.keccak_p(l: List Bool): List Bool := 
+def IR.keccak_p(l: List Bool): List Bool :=
   let state := List.toStateArray l
   let state := Spec.Keccak.P 6 24 state.toVector
   state.toList
 
 @[simp] theorem IR.length_keccak_p(l: List Bool): (IR.keccak_p l).length = Spec.b 6 := by simp [IR.keccak_p]
+
+theorem Spec.Keccak.toList_P(state: Spec.Bitstring (Spec.b 6))
+: (Keccak.P 6 24 state).toList = IR.keccak_p state.toList
+:= by simp [IR.keccak_p, List.toStateArray]

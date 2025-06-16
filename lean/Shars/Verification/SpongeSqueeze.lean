@@ -20,8 +20,6 @@ attribute [ext (iff:=false)] List.ext_getElem!
 
 open Aeneas
 
--- attribute [scalar_tac_simps] Nat.pos_of_neZero
-
 /-- The shape of the sponge_squeeze algorithm, operating on bits -/
 def algos.sponge_squeeze.panic_free(r: Nat)[NeZero r](dst s: List Bool)(offset: Nat): List Bool :=
   -- assert! s.length ≥ r
@@ -51,45 +49,7 @@ decreasing_by scalar_decr_tac
 termination_by dst.length - offset
 decreasing_by scalar_tac
 
--- @[simp]
-theorem List.toBits_slice(ls: List (Std.UScalar ty))
-: (ls.slice i j).toBits = ls.toBits.slice (i * ty.numBits) (j * ty.numBits)
-:= by simp only [slice, toBits_take, toBits_drop, Nat.sub_mul]
 
-@[simp]
-theorem List.setSlice!_zero_of_length_le(ls s: List α)
-: ls.length ≤ s.length
-→ ls.setSlice! 0 s = s.take (ls.length)
-:= by intro cond; simp [List.setSlice!, cond]
-
-theorem List.length_slice(ls: List α): (ls.slice a b).length = (b - a) ⊓  (ls.length - a) := by simp [List.slice]
-
-attribute [scalar_tac ls.toBits] List.length_toBits
-attribute [scalar_tac_simps] Std.UScalarTy.numBits
-
--- theorem algos.sponge_squeeze.panic_free.extracted_1 (r i : Std.Usize) (dst : Std.Slice Std.U8) (s : StateArray)
---   (r_pos : 0 < (↑r : ℕ))
-
---   (i1 : Std.Usize)
---   (i1_post : (↑i1 : ℕ) = (↑i : ℕ) + (↑r : ℕ))
---   (h : (↑i1 : ℕ) < (↑dst : List Std.U8).length) -- Needed by A and C
-
---   (__discr_1 : Std.Slice Std.U8) (__discr_2 : Std.Slice Std.U8 → Std.Slice Std.U8) -- Needed by ↓ and 2↓
---   (__discr_post_1 : (↑__discr_1 : List Std.U8) = List.slice (↑i : ℕ) (↑i1 : ℕ) (↑dst : List Std.U8)) -- Needed by A
---   (__discr_post_2 : -- Needed by B
---     ∀ (u : Std.Slice Std.U8),
---       u.length = (↑i1 : ℕ) - (↑i : ℕ) →
---         (↑(__discr_2 u) : List Std.U8) = (↑dst : List Std.U8).setSlice! (↑i : ℕ) (↑u : List Std.U8))
-
---   (s2 : Std.Slice Std.U8) -- Needed by ↓
---   (s2_post : s2.toBits = __discr_1.toBits.setSlice! 0 (Std.Array.toBits s)) -- Needed by A
--- : (↑i1 : ℕ) ≤ (__discr_2 s2).length := by
---     have: s2.length = r := by scalar_tac -- A
---     have: (__discr_2 s2).length = dst.length := by scalar_tac
---     scalar_tac -- C
---     done
-
-set_option pp.coercions.types true in
 set_option maxHeartbeats 1000000 in
 /-- We prove that the algorithm, under certain preconditions, does not panic -/
 theorem algos.sponge_squeeze.panic_free.refinement(r i d: Std.Usize)
@@ -112,7 +72,9 @@ theorem algos.sponge_squeeze.panic_free.refinement(r i d: Std.Usize)
         Std.core.ops.index.IndexSliceInst,
       ]
   progress* by simp
-  · have: s2.length = r := by scalar_tac
+  · have: s2.length = r := by
+      scalar_tac_preprocess
+      scalar_tac
     have: (__discr_2 s2).length = dst.length := by simp [*]
     progress as ⟨res, res_post⟩
     simp [*, le_of_lt]
@@ -133,7 +95,6 @@ theorem algos.sponge_squeeze.panic_free.refinement(r i d: Std.Usize)
 termination_by dst.length - i.val
 decreasing_by scalar_decr_tac
 
-attribute [local scalar_tac_simps] not_le in
 /-- This is a representation of squeeze which is closer to the Spec -/
 def IR.squeeze(d: Nat)(r: Nat)[NeZero r](dst s: List Bool): List Bool :=
   if d ≤ dst.length then
@@ -195,6 +156,7 @@ theorem algos.sponge_squeeze.panic_free.spec(r: Nat)
     intro i i_lt
     simp [List.setSlice!, *]
     assume i < offset + r; case otherwise => simp_lists
+    -- TODO: Is this `List.getElem!_take_eq_ite` really needed?
     simp_lists [List.getElem!_take_eq_ite, List.getElem!_setSlice!_eq_ite]
   case isFalse end_of_processing =>
     unfold IR.squeeze
@@ -208,25 +170,6 @@ theorem algos.sponge_squeeze.panic_free.spec(r: Nat)
       simp_ifs
 termination_by dst.length - offset
 decreasing_by scalar_decr_tac
-
-@[simp]
-theorem Aeneas.Std.Slice.val_drop{T: Type}(s: Slice T)(k: Usize)
-: (s.drop k).val = s.val.drop k.val
-:= by simp [Slice.drop]
-
-attribute [simp_ifs_simps] dite_eq_ite
-@[simp_ifs_simps]
-theorem dite_eq_then {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (e : ¬c → α) (h : c) :
-  dite c t e = t h := by simp only [↓reduceDIte, h]
-
-@[simp_ifs_simps]
-theorem dite_eq_else {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (e : ¬c → α) (h : ¬ c) :
-  dite c t e = e h := by simp only [↓reduceDIte, h]
-
-@[simp]
-theorem Vector.toList_setWidth[Inhabited α](v: Vector α n)(m: Nat)
-: (v.setWidth m).toList = v.toList.setWidth m
-:= by simp [Vector.setWidth, List.setWidth]
 
 def IR.squeeze.refinement(r: { x // 0 < x ∧ x < Spec.b 6 })
     (Z: Spec.Bitstring m)

@@ -16,7 +16,7 @@ theorem Aeneas.Std.UScalar.getElem!_toBits(u: Aeneas.Std.UScalar ty)(i: Nat): u.
 
 def List.toBits(ls: List (Aeneas.Std.UScalar ty)): List Bool := ls.map (·.toBits) |>.flatten
 
-@[scalar_tac_simps]
+@[scalar_tac_simps, scalar_tac ls.toBits]
 theorem List.length_toBits(ls: List (Aeneas.Std.UScalar ty))
 : ls.toBits.length = ls.length * ty.numBits
 := by rw [toBits, List.length_flatten_of_uniform (n := ty.numBits) (by simp)]
@@ -173,3 +173,7 @@ theorem List.toBits_set(ls: List (Std.UScalar ty))(u: Std.UScalar ty)(i: Nat)
     simp
     rw [Nat.mul_comm] at this
     assumption
+
+theorem List.toBits_slice(ls: List (Aeneas.Std.UScalar ty))
+: (ls.slice i j).toBits = ls.toBits.slice (i * ty.numBits) (j * ty.numBits)
+:= by simp only [slice, toBits_take, toBits_drop, Nat.sub_mul]

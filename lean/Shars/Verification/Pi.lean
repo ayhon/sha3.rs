@@ -19,11 +19,6 @@ attribute [ext (iff := false)] List.ext_getElem
 open Aeneas hiding Std.Array
 open Std.alloc.vec
 
-/-
-Spec.Keccak.StateArray.ofFn fun
-  | (x, y, z) => Spec.Keccak.StateArray.get (x + 3 * y) x z A
--/
-
 set_option maxHeartbeats 1000000 in
 @[progress]
 theorem algos.pi.inner_loop.spec(res input : algos.StateArray) (x y : Std.Usize)
@@ -82,11 +77,10 @@ theorem algos.pi_loop.spec(input res : algos.StateArray) (x: Std.Usize)
     case isTrue => simp_ifs
     case isFalse =>
       split <;> simp_ifs
-  · simp_ifs; simp 
+  · simp_ifs; simp
 termination_by 5 - x.val
 decreasing_by scalar_decr_tac
 
-/- set_option maxHeartbeats 10000 in -/
 @[progress]
 theorem algos.pi.spec(input: algos.StateArray)
 : ∃ output,
@@ -95,14 +89,9 @@ theorem algos.pi.spec(input: algos.StateArray)
 := by
   simp [pi, Spec.Keccak.π, ClonealgosStateArray.clone]
   let* ⟨ res, res_post ⟩ ← pi_loop.spec
-  ext i i_idx i_idx_rhs: 1
-  · simp +decide
-  simp at i_idx
-  simp [←getElem!_pos]
-  have ⟨x', y', z', encode_xyz_def⟩:= IR.decode_surjective i i_idx
-  simp only [←encode_xyz_def] at i_idx ⊢
+  apply List.ext_toBits <;> simp +decide [←getElem!_pos]
+  intro x' y' z'
   simp [res_post, Spec.Keccak.StateArray.ofFn]
   rw [Spec.Keccak.StateArray.Vector.getElem!_ofFn', ←Spec.Keccak.StateArray.encodeIndex]
   simp
-  rw [List.get_toStateArray (len_ls := by simp +decide), Fin.getElem!_fin, IR.encodeIndex_spec]
   congr 2; zmodify

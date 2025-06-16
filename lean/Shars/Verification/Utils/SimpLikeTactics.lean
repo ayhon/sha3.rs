@@ -10,6 +10,10 @@ attribute [simp] Id.run Id.pure_eq Id.bind_eq
 attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Aeneas.Std.Slice.set
 
+@[simp]
+theorem Fin.natCast_mod(x n: Nat)[NeZero n]: ((x % n : Nat) : Fin n) = (x : Fin n) := by
+  simp only [Nat.cast, NatCast.natCast, Fin.ofNat', Nat.mod_mod]
+
 end Simp
 
 section SimpLists
@@ -54,30 +58,22 @@ attribute [zmodify_simps] Fin.val_natCast Aeneas.ReduceZMod.reduceZMod ZMod.natC
 
 end ZModIfy
 
+section SimpScalar
 
-/-! ## Moved to ScalarTac.lean -/
--- @[scalar_tac_simps]
--- theorem Nat.div_sub_self(a b: Nat)
--- :(a - b) / b = a / b - 1 := by
---   by_cases b > 0
---   case neg h => simp at h; subst h; simp
---   by_cases a >= b
---   case pos h =>
---     have: a = (a - b) + b := (Nat.sub_eq_iff_eq_add h).mp rfl
---     rw [this, Nat.add_sub_cancel, Nat.add_div_right, Nat.add_sub_cancel]
---     assumption
---   case neg h =>
---     simp at h
---     simp [Nat.div_eq_of_lt h, Nat.sub_eq_zero_of_le (le_of_lt h)]
+attribute [simp_scalar_simps] Nat.add_sub_cancel
 
--- @[scalar_tac_simps]
--- theorem Nat.div_sub_mult_left(a b: Nat)
--- :(a - b*i) / b = a / b - i := by
---   by_cases b > 0
---   case neg h => simp at h; subst h; simp
---   case pos =>
---     cases i
---     case zero => simp
---     case succ i' =>
---       simp [Nat.mul_add, Nat.sub_add_eq, Nat.div_sub_self]
---       rw [Nat.div_sub_mult_left]
+end SimpScalar
+
+section SimpIfs
+
+attribute [simp_ifs_simps] dite_eq_ite
+
+@[simp_ifs_simps]
+theorem dite_eq_then {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (e : ¬c → α) (h : c) :
+  dite c t e = t h := by simp only [↓reduceDIte, h]
+
+@[simp_ifs_simps]
+theorem dite_eq_else {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (e : ¬c → α) (h : ¬ c) :
+  dite c t e = e h := by simp only [↓reduceDIte, h]
+
+end SimpIfs

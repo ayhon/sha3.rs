@@ -11,7 +11,6 @@ import Init.Data.Array
 import Shars.Verification.Utils
 import Shars.Verification.Refinement
 import Shars.Verification.Auxiliary
--- import Shars.Verification.ListIR
 import Shars.Verification.SpongeAbsorb
 import Shars.Verification.SpongeSqueeze
 
@@ -21,49 +20,12 @@ attribute [ext (iff:=false)] List.ext_getElem!
 
 open Aeneas
 
-theorem Nat.cast_mod_Int(a b: Nat)
-: ((a % b).cast: ℤ) = a.cast % b.cast
-:= by simp [Nat.cast]
-
 theorem Spec.«size_pad10*1_of_m_add_2_le_r»(r m: Nat)
 : m + 2 ≤ r → (Spec.«pad10*1» r m).size = r - m
 := by
   intro cond
   rw [Spec.«size_pad10*1_eq_ite»]; case a => omega
   simp [Nat.mod_eq_of_lt, ‹m < r›', ‹m ≠ r - 1›']
-
-theorem Nat.le_mul{a b c: Nat}
-: 0 < c → a ≤ b → a ≤ b * c
-:= by
-  intro pos lt
-  cases c
-  case zero => simp at *
-  case succ c' =>
-    induction c'
-    case zero => simp [*]
-    case succ c'' ih =>
-      simp [Nat.mul_add] at *
-      omega
-
-theorem Nat.add_mul_mod_mul{m x y r: Nat}
-: 0 < r → y < m → (m*x + y) % (m*r) = m * (x % r) + y
-:= by
-  intro r_pos y_lt
-  have m_pos: 0 < m := by omega
-  rw [Nat.add_mod]
-  rw [Nat.mul_mod_mul_left]
-  rw [Nat.mod_eq_of_lt (show y < m * r from by
-    induction r
-    case zero => simp at *
-    case succ n' ih => simp [Nat.mul_add]; omega
-  )]
-  rw [Nat.mod_eq_of_lt]
-  calc
-    _ ≤ m * (r - 1) + y := by simp; apply Nat.mul_le_mul_left; simp [r_pos, Nat.mod_lt, le_sub_one_of_lt]
-    _ < m * (r - 1) + m := by simp [y_lt]
-    _ = m * r := by simp [Nat.mul_sub]; rw [Nat.sub_add_cancel]; apply Nat.le_mul r_pos; simp
-
-attribute [scalar_tac_simps] Aeneas.Std.UScalar.length_toBits List.length_setWidth
 
 set_option maxHeartbeats 1000000 in
 theorem extra_eq_suffix_append_take_padding(extra: Std.U8)(bs: List Bool)(r: Nat)
@@ -128,31 +90,10 @@ theorem extra_eq_suffix_append_take_padding(extra: Std.U8)(bs: List Bool)(r: Nat
       rw [getElem!_neg]; case h => simp; omega
       simp
 
-theorem List.chunks_exact_append{α: Type}(xs ys: List α)(r: Nat)
-: (xs ++ ys).chunks_exact r = xs.chunks_exact r ++ (xs.drop (r*(xs.length/r)) ++ ys).chunks_exact r
-:= by rw [
-    ←List.chunks_exact_split (i := xs.length / r),
-    List.take_append_of_le_length (h := by simp only [Nat.mul_div_le]),
-    List.chunks_exact_truncate,
-    List.drop_append_of_le_length (h := by simp only [Nat.mul_div_le] )
-  ]
-
-theorem List.chunks_exact_of_length_eq{α: Type}(ls: List α)(r: Nat)(r_pos: r > 0)
-: ls.length = r → ls.chunks_exact r = [ls]
-:= by
-  intro eq
-  unfold chunks_exact
-  simp [eq, ‹r ≠ 0›']
-
--- set_option diagnostics true in
 set_option maxRecDepth 7500 in
 set_option maxHeartbeats 1000000 in
 @[progress]
 theorem algos.sponge.spec(r : Std.Usize) (bs input : Std.Slice Std.U8)(extra: Std.U8)
-  -- (suffix_len: Nat)
-  -- (suffix_len_lt: suffix_len < 7 := by omega)
-  -- (extra_spec: extra.toBits.take suffix_len ++ (Spec.«pad10*1» (8*r) (bs.toBits.length + suffix_len)).toList.take (8 - suffix_len) = extra.toBits)
-  -- (last_extra_eq_false: extra.toBits[7]! = false)
   (suffix_len: Nat)
   (suffix_len_lt: suffix_len < 7 := by simp +decide)
   (suffix_len_spec: extra.toBits[suffix_len]! = true ∧ ∀ j < 8, suffix_len < j → extra.toBits[j]! = false)
@@ -180,7 +121,8 @@ theorem algos.sponge.spec(r : Std.Usize) (bs input : Std.Slice Std.U8)(extra: St
   have: r.val * (bs.val.length / r.val) ≤ bs.length := by scalar_tac
   have: bs.length ≤ Std.Usize.max := bs.property
 
-  progress*? by simp [*, ←Nat.mod_eq_sub, Nat.mod_lt]; try omega
+  -- TODO: Why doesn't progress trigger twice?
+  progress* by simp [*, ←Nat.mod_eq_sub, Nat.mod_lt]; try omega
   progress with algos.sponge_squeeze.spec as ⟨res, res_post⟩
 
   simp [*, Spec.sponge, IR.squeeze.refinement, IR.absorb.refinement (r := 8*r.val)]
@@ -207,23 +149,16 @@ theorem algos.sponge.spec(r : Std.Usize) (bs input : Std.Slice Std.U8)(extra: St
 
 attribute [local simp] Std.Array.make Std.Array.to_slice Std.Array.from_slice Std.Array.length Std.Array.repeat Std.Array.to_slice_mut
 attribute [-simp] List.reduceReplicate
-attribute [progress] Std.Array.to_slice_mut.spec'
-attribute [simp] Fin.val_ofNat
-attribute [scalar_tac_simps] Std.Array.to_slice_mut
+
+@[local scalar_tac_simps]
+private theorem Simp.length_toBits_eq(ls: List (Std.UScalar ty))(x: Nat)
+: ls.toBits.length = x → ls.length = x / ty.numBits
+:= by rintro rfl; simp [List.length_toBits]
+
+section Artifacts
 
 attribute [local simp] algos.sha3_224 algos.sha3_256 algos.sha3_384 algos.sha3_512 algos.shake128 algos.shake256
 attribute [local simp] Spec.SHA3_224 Spec.SHA3_256 Spec.SHA3_384 Spec.SHA3_512 Spec.SHAKE128 Spec.SHAKE256
-
-@[scalar_tac_simps]
-theorem Simp.length_toBits_eq(ls: List (Std.UScalar ty))(x: Nat)
-: ls.toBits.length = x → ls.length = x / ty.numBits
-:= by
-  intro eq
-  simp [List.length_toBits] at eq
-  rw [←eq, Nat.mul_div_left]
-  simp only [Std.UScalar.numBits_pos]
-
-section Artifacts
 
 variable (bs: Std.Slice Std.U8)
 

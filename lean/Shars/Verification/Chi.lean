@@ -15,15 +15,9 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [simp] Aeneas.Std.Slice.set
 
 open Aeneas hiding Std.Array
-open Std.alloc.vec
-
-attribute [scalar_tac_simps] Fin.val_natCast
-@[simp]
-theorem Fin.natCast_mod(x n: Nat)[NeZero n]: ((x % n : Nat) : Fin n) = (x : Fin n) := by
-  simp only [Nat.cast, NatCast.natCast, Fin.ofNat', Nat.mod_mod]
 
 @[simp]
-theorem Aeneas.Std.UScalar.getElem!_and_toBits(u1 u2: Std.UScalar ty)(i: Nat)
+private theorem Aeneas.Std.UScalar.getElem!_and_toBits(u1 u2: Std.UScalar ty)(i: Nat)
 : (u1 &&& u2).toBits[i]! = (u1.toBits[i]! && u2.toBits[i]!)
 := by
   if i_idx: i < ty.numBits then
@@ -38,7 +32,7 @@ theorem Aeneas.Std.UScalar.getElem!_and_toBits(u1 u2: Std.UScalar ty)(i: Nat)
     simpa using i_idx
 
 @[simp]
-theorem Aeneas.Std.core.num.U64.getElem!_toBits_MAX
+private theorem Aeneas.Std.core.num.U64.getElem!_toBits_MAX
 : U64.MAX.toBits = List.replicate (Spec.w 6) true
 := by native_decide
 
@@ -57,10 +51,6 @@ theorem algos.chi.inner_loop.spec(res a: StateArray)(x y: Std.Usize)
         (a.toBits[idx]! ^^ ((a.toBits[Spec.Keccak.StateArray.encodeIndex (x' + 1) y' z']! ^^ true) && a.toBits[Spec.Keccak.StateArray.encodeIndex (x' + 2) y' z']!))
       else
         res.toBits[idx]!)
-  /- (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), x = x' ∧ y = y' ∧ z.val ≤ z' → -/
-  /-   output.toSpec.get x' y' z' = (a.toSpec.get x' y' z' ^^ ((a.toSpec.get (x + 1) y' z' ^^ true) && a.toSpec.get (x' + 2) y' z'))) ∧ -/
-  /- (∀ (x' y': Fin 5)(z': Fin (Spec.w 6)), ¬ (x = x' ∧ y = y' ∧ z ≤ z') → -/
-  /-   output.toSpec.get x' y' z' = res.toSpec.get x' y' z') -/
 := by
   intro x_lt y_loop_bnd
   rw [inner_loop]
@@ -84,7 +74,7 @@ theorem algos.chi.inner_loop.spec(res a: StateArray)(x y: Std.Usize)
         simp_lists
         simp [Aeneas.Std.UScalar.getElem!_xor_toBits,
               Aeneas.Std.UScalar.getElem!_and_toBits,
-              Std.core.num.U64.getElem!_toBits_MAX, 
+              Std.core.num.U64.getElem!_toBits_MAX,
               List.getElem!_replicate, Nat.mod_eq_of_lt, z'.isLt,
               Fin.val_add]
       case neg =>
@@ -96,12 +86,6 @@ theorem algos.chi.inner_loop.spec(res a: StateArray)(x y: Std.Usize)
     simp_ifs
 termination_by 5 - y.val
 decreasing_by scalar_decr_tac
-
-/- theorem asdf(z: Std.Usize): z.val < Spec.w 6 → Spec.w 6 - (z.val + 1) < Spec.w 6 - z.val := by -/
-/-   intro z_idx -/
-/-   apply Nat.sub_lt_left_of_lt_add z_idx -/
-/-   rw [←Nat.add_sub_assoc <| le_of_lt z_idx, Nat.add_comm, Nat.succ_eq_add_one, Nat.add_comm z.val, Nat.add_sub_assoc (by omega), Nat.add_sub_cancel] -/
-/-   exact lt_add_one (Spec.w 6) -/
 
 @[progress]
 theorem algos.chi_loop.spec(res a: StateArray)(x: Std.Usize)

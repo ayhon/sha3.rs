@@ -1,11 +1,8 @@
 import Aeneas
-/- import Shars.BitVec -/
 import Shars.Definitions.Algos
 import Shars.Verification.Utils.SimpLikeTactics
 import Aeneas.SimpLists.Init
 import Sha3.Facts
-/- import Init.Data.Vector.Lemmas -/
-/- import Init.Data.Nat.Basic -/
 
 section SimpLemmas
 
@@ -19,6 +16,11 @@ attribute [scalar_tac_simps] Fin.val_ofNat
 attribute [scalar_tac_simps] Spec.w Spec.b
 attribute [scalar_tac_simps] Nat.one_le_two_pow
 attribute [scalar_tac_simps] Nat.mul_add Nat.mul_sub
+attribute [scalar_tac_simps] Nat.div_mul_le_self Nat.mul_div_le
+attribute [scalar_tac_simps] Fin.val_natCast
+attribute [scalar_tac_simps] Fin.natCast_mod
+attribute [scalar_tac_simps] Aeneas.Std.UScalarTy.numBits
+attribute [scalar_tac_simps] Aeneas.Std.Array.to_slice_mut
 
 @[scalar_tac_simps]
 theorem Nat.div_sub_self(a b: Nat)
@@ -91,7 +93,6 @@ for scalar_tac when it detects that there is a term of the form 5 * ?y + ?x
 in the hypothesis. Useful when reasoning about indices to Keccak's state
 array.
 -/
--- @[nonlin_scalar_tac 5 * y + x] -- TODO: Probably, this is better
 @[scalar_tac 5 * y + x]
 theorem scalar_tac_specific_lemma_for_sha3_keccak_state_packing(x: Fin 5)(y: Fin 5)
 : Spec.w 6 * (5 * y + x) ≤ Spec.w 6 * 24

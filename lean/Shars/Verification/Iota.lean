@@ -21,20 +21,6 @@ theorem algos.IOTA_RC.spec
 : ∀ iᵣ < 24, IOTA_RC.val[iᵣ]!.toBits = (Spec.Keccak.ι.RC (l := 6) iᵣ).toList
 := by native_decide
 
-theorem List.ext_toBits{bs1 bs2: List (Bool)}
-  (len_bs1: bs1.length = Spec.b 6)
-  (len_bs2: bs2.length = Spec.b 6)
-  (point_eq: ∀ (x y: Fin 5)(z: Fin (Spec.w 6)), bs1[Spec.Keccak.StateArray.encodeIndex x y z]! = bs2[Spec.Keccak.StateArray.encodeIndex x y z]!)
-: bs1 = bs2
-:= by
-  apply List.ext_getElem
-  · simp [len_bs1, len_bs2]
-  intro idx idx_lt _
-  simp [len_bs1] at idx_lt
-  have ⟨x, y, z, encode_xyz⟩ := IR.decode_surjective idx idx_lt
-  simp [←encode_xyz, ←getElem!_pos, List.getElem!_encodeIndex_toBits]
-  apply point_eq
-
 @[progress]
 theorem algos.iota.spec(ir: Std.Usize)(input: StateArray)
 : ir.val < 24

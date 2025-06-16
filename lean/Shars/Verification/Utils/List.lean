@@ -576,3 +576,97 @@ theorem List.getElem!_setSlice!_eq_ite_getElem!{α : Type u_1} [Inhabited α] (s
     simp [-not_and, not_and_or] at h
     rw [List.getElem!_setSlice!_same]
     omega
+
+theorem List.chunks_exact_truncate{α: Type}(bs: List α)(r: Nat)
+: (bs.take (r*(bs.length/r))).chunks_exact r = bs.chunks_exact r
+:= by
+  assume r_pos: r > 0
+  case otherwise => simp at r_pos; subst r_pos; simp [List.chunks_exact]
+  have r_neZero: NeZero r := NeZero.of_pos r_pos
+  cases bs using List.cases_extract r
+  case onSmall small =>
+    unfold List.chunks_exact
+    simp [*]
+  case onBig chunk rest len_chunk =>
+    unfold List.chunks_exact
+    simp [*, r_neZero.out]
+    have: r <= r*(rest.length / r + 1) := by ring_nf; simp
+    have: rest.length / r + 1 = (chunk ++ rest).length / r := by simp [len_chunk, Nat.add_div_left, r_pos]
+    simp_lists [len_chunk]
+    simp +arith
+    ring_nf
+    simp +arith
+    apply List.chunks_exact_truncate
+termination_by bs.length
+decreasing_by simp [*]
+
+@[simp, simp_lists_simps]
+theorem List.chunks_exact_nil(r: Nat): ([]: List α).chunks_exact r = [] := by unfold List.chunks_exact; simp
+
+theorem List.chunks_exact_split{α: Type}(bs: List α)(r: Nat)(i: Nat)
+: (bs.take (r*i)).chunks_exact r ++ (bs.drop (r*i)).chunks_exact r = bs.chunks_exact r
+:= by
+  assume r_pos: r > 0; case otherwise => simp at r_pos; simp [r_pos]
+  assume i_block_idx: r*i < bs.length; case otherwise => simp_lists
+  have   i_lt: i ≤ bs.length / r := by simp only [Nat.le_div_iff_mul_le r_pos, i_block_idx, le_of_lt, Nat.mul_comm i]
+  have   eq_len: ((bs.take (r*i)).chunks_exact r ++ (bs.drop (r*i)).chunks_exact r).length = (bs.chunks_exact r).length := by
+    simp [*, Nat.min_def, le_of_lt, Nat.add_assoc i, Nat.div_sub_mult_left]
+
+  apply List.ext_getElem <;> simp [eq_len, ←getElem!_pos]
+  intro j j_idx
+
+  by_cases j < i
+  case pos j_lhs =>
+    rw [List.getElem!_append_left ]; case h => simp [*, le_of_lt]
+    rw [List.getElem!_chunks_exact]; case a => simp [*, le_of_lt]
+    rw [List.getElem!_chunks_exact]; case a => simp [*]
+    simp [*, List.take_drop, List.take_take, ‹j + 1 ≤ i›']
+  case neg j_rhs =>
+    simp at j_rhs
+    rw [List.getElem!_append_right]; case h => simp [*, le_of_lt]
+    rw [List.getElem!_chunks_exact]; case a => simp [*, le_of_lt, Nat.div_sub_mult_left]; omega
+    rw [List.getElem!_chunks_exact]; case a => simp [*]
+    simp [*, le_of_lt, Nat.mul_add, Nat.mul_sub]
+
+theorem List.range'_advance_left: len > 0 → List.range' start len = start :: List.range' (start + 1) (len - 1) := by
+  intros
+  have ⟨n, n_val⟩ := Nat.exists_add_one_eq.mpr ‹len > 0›
+  simp only [←n_val]
+  rfl
+
+theorem List.range'_advance_right: len > 0 → List.range' start len = List.range' start (len - 1) ++ [start + len - 1] := by
+  intros
+  have ⟨n, n_val⟩ := Nat.exists_add_one_eq.mpr ‹len > 0›
+  simp only [←n_val, List.range'_concat]
+  simp
+
+theorem List.length_fold_set[Inhabited β](init: List β)(ls: List α)
+  (idx_f: α → Nat)
+  (value_f: α → β)
+: (List.foldl (fun b a => b.set (idx_f a) (value_f a)) (init := init) ls).length = init.length
+:= by induction ls generalizing init <;> simp [*]
+
+
+@[simp] theorem List.setSlice!_zero_of_length_le(ls s: List α)
+: ls.length ≤ s.length
+→ ls.setSlice! 0 s = s.take (ls.length)
+:= by intro cond; simp [List.setSlice!, cond]
+
+theorem List.length_slice(ls: List α): (ls.slice a b).length = (b - a) ⊓  (ls.length - a) := by simp [List.slice]
+
+
+theorem List.chunks_exact_append{α: Type}(xs ys: List α)(r: Nat)
+: (xs ++ ys).chunks_exact r = xs.chunks_exact r ++ (xs.drop (r*(xs.length/r)) ++ ys).chunks_exact r
+:= by rw [
+    ←List.chunks_exact_split (i := xs.length / r),
+    List.take_append_of_le_length (h := by simp only [Nat.mul_div_le]),
+    List.chunks_exact_truncate,
+    List.drop_append_of_le_length (h := by simp only [Nat.mul_div_le] )
+  ]
+
+theorem List.chunks_exact_of_length_eq{α: Type}(ls: List α)(r: Nat)(r_pos: r > 0)
+: ls.length = r → ls.chunks_exact r = [ls]
+:= by
+  intro eq
+  unfold chunks_exact
+  simp [eq, ‹r ≠ 0›']

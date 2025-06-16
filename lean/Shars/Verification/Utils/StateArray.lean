@@ -33,7 +33,7 @@ theorem Spec.Keccak.StateArray.ext{a b: StateArray l}
 @[simp]
 theorem Spec.Keccak.StateArray.get_ofFn{f: Fin 5 × Fin 5 × Fin (w l) → Spec.Bit}(x y: Fin 5)(z: Fin (w l))
 : (StateArray.ofFn f).get x y z = f (x,y,z)
-:= by 
+:= by
   -- TODO: Remove Vector.ofFn' once https://github.com/leanprover/lean4/pull/8499 is included in the used Lean version
   simp [get, ofFn, Vector.ofFn', encode_decode]
 
@@ -178,3 +178,25 @@ theorem Aeneas.Std.UScalar.getElem!_xor_toBits(u1 u2: UScalar ty)(i: Nat)
   assume i_idx: i < ty.numBits; case otherwise => simp [getElem!_neg, *]
   simp [toBits, i_idx]
 
+
+theorem Spec.Keccak.StateArray.toBits_set(state: Spec.Keccak.StateArray 6)(x y: Fin 5)(z: Fin (Spec.w 6))(b: Bool)
+: (state.set x y z b).toBits = state.toBits.set (encodeIndex x y z) b
+:= by simp [toBits, StateArray.set]
+
+attribute [-simp] List.getElem!_eq_getElem?_getD in
+theorem List.ext_toBits{bs1 bs2: List (Bool)}
+  (len_bs1: bs1.length = Spec.b 6)
+  (len_bs2: bs2.length = Spec.b 6)
+  (point_eq: ∀ (x y: Fin 5)(z: Fin (Spec.w 6)), bs1[Spec.Keccak.StateArray.encodeIndex x y z]! = bs2[Spec.Keccak.StateArray.encodeIndex x y z]!)
+: bs1 = bs2
+:= by
+  apply List.ext_getElem <;> simp [len_bs1, len_bs2]
+  intro idx idx_lt idx_lt2
+  have ⟨x, y, z, encode_xyz⟩ := IR.decode_surjective idx idx_lt
+  simp [Fin.getElem!_fin, IR.encodeIndex_spec] at point_eq
+  simp [←encode_xyz, List.getElem!_encodeIndex_toBits, idx_lt, ←getElem!_pos, point_eq]
+
+@[scalar_tac_simps]
+theorem IR.encodeIndex_lt(x y: Fin 5)(z: Fin (Spec.w 6))
+: encodeIndex x y z < Spec.b 6
+:= by simp [←IR.encodeIndex_spec]

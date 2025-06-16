@@ -241,6 +241,34 @@ theorem IR.xor_assoc(s0 s1 s2: List Bool)
   simp [IR.getElem!_xor, i_idx]
   by_cases i < s2.length <;> by_cases i < s1.length <;> simp [*, getElem!_neg]
 
+set_option maxHeartbeats 1000000 in
+@[simp]
+theorem IR.xor_append(state: List Bool)
+: IR.xor state (bs1 ++ bs2) = IR.xor (IR.xor state  bs1) (List.replicate bs1.length false ++ bs2)
+:= by
+  apply List.ext_getElem <;> simp [←getElem!_pos]
+  intro i i_idx
+  unfold IR.xor
+  if left: i < bs1.length then
+    simp_lists
+    simp
+  else if right: i < bs2.length then
+    simp_lists
+    simp
+  else
+    simp_lists
+    simp
+
+@[simp]
+theorem IR.xor_zero(state: List Bool)
+: IR.xor state (List.replicate n false) = state
+:= by
+  apply List.ext_getElem <;> simp [←getElem!_pos]
+  intro i i_idx
+  unfold IR.xor
+  by_cases cond: i < n
+  · simp [*, List.getElem!_append_left, List.getElem!_zipWith]
+  · simp [*, not_lt.mp, List.getElem!_append_right]; congr; omega
 end IR
 
 -- @[progress]
