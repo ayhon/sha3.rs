@@ -18,12 +18,3 @@ jobs:
           lake-package-directory: "lean"
           auto-config: "false"
           use-github-cache: "false"
-
-        # with:
-        #   auto-config: "false"
-        #   use-github-cache: "false"
-        #   build: "false"
-      # - run: |
-        #   cd lean
-        #   lake update
-        #   lake build
