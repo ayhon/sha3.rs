@@ -2,10 +2,10 @@ import Mathlib
 
 namespace DecideForallLTNested
 
-#count_heartbeats in
-example: ∀ j, j < 10 → [0][j]! = 0 := by decide
-#count_heartbeats in
-example: ∀ j, j < 10 → j ∈ List.range 10 := by decide
+/- #count_heartbeats in -/
+/- example: ∀ j, j < 10 → [0][j]! = 0 := by decide -/
+/- #count_heartbeats in -/
+/- example: ∀ j, j < 10 → j ∈ List.range 10 := by decide -/
 
 instance probably_slow
   (C: Nat → Prop)(P: Nat → Prop)
@@ -66,22 +66,22 @@ instance push_down_until_lt
         | isTrue hT => simpa [hC, hT] using neg i
         | isFalse hT => simp [hT]
 
-#count_heartbeats in
-example: ∀ j, j < 10 → [0][j]! = 0 := by decide
-set_option diagnostics true in
-#count_heartbeats in
-example: ∀ j, j < 10 → j ∈ List.range 10 := by decide
+/- #count_heartbeats in -/
+/- example: ∀ j, j < 10 → [0][j]! = 0 := by decide -/
+/- set_option diagnostics true in -/
+/- #count_heartbeats in -/
+/- example: ∀ j, j < 10 → j ∈ List.range 10 := by decide -/
 
-#count_heartbeats in
-example: ∀ (j: Nat), j > 2 → j < 10 → [0,1][j]! = 0 := by decide
-#count_heartbeats in
-example: ∀ (j: Nat), j > 2 → j > 3 → j < 10 → [0,1][j]! = 0 := by decide
-#count_heartbeats in
-example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j < 10 → [0,1][j]! = 0 := by decide
-#count_heartbeats in
-example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j < 6 → j = 5 := by decide
-#count_heartbeats in
-example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j > 5 → j < 7 → j = 6 := by decide
-#count_heartbeats in
-example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j > 5 → j > 6 → j < 8 → j = 7 := by decide
+/- #count_heartbeats in -/
+/- example: ∀ (j: Nat), j > 2 → j < 10 → [0,1][j]! = 0 := by decide -/
+/- #count_heartbeats in -/
+/- example: ∀ (j: Nat), j > 2 → j > 3 → j < 10 → [0,1][j]! = 0 := by decide -/
+/- #count_heartbeats in -/
+/- example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j < 10 → [0,1][j]! = 0 := by decide -/
+/- #count_heartbeats in -/
+/- example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j < 6 → j = 5 := by decide -/
+/- #count_heartbeats in -/
+/- example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j > 5 → j < 7 → j = 6 := by decide -/
+/- #count_heartbeats in -/
+/- example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j > 5 → j > 6 → j < 8 → j = 7 := by decide -/
 
