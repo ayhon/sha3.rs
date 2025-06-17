@@ -198,7 +198,7 @@ theorem Aeneas.Std.core.num.U64.getElem_toBits_getElem_to_le_bytes(u: Std.U64)(i
     simp
   rw [getElem!_pos]; case h => simp [i_lt]
   have ij_idx: 8 * i + j < 64 := by
-    have: 8 * i ≤ 8 * 7 := Nat.mul_le_mul_left 8 (by omega)
+    have: 8 * i ≤ 8 * 7 := by scalar_tac +nonLin
     omega
 
   rw [getElem!_pos]; case h => simp [UScalar.toBits, ij_idx]
@@ -559,10 +559,7 @@ theorem algos.StateArray.copy_to_loop.spec
     rw [List.setSlice!_of_length_le]
     scalar_tac
   . -- There are no bits left to copy from `src`
-    have: 64 * i.val ≥ 1600 := by
-      change 64 * i.val ≥ 64 * 25
-      apply Nat.mul_le_mul_left
-      omega
+    have: 64 * i.val ≥ 1600 := by scalar_tac +nonLin
     simp [*]
 termination_by input.length - i.val
 decreasing_by
