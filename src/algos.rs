@@ -160,15 +160,20 @@ fn theta(a: StateArray) -> StateArray {
     return res;
 }
 
+const RHO_OFFSETS: [[u32; 5]; 5] = [
+     [0, 36, 3, 41, 18],
+     [1, 44, 10, 45, 2],
+     [62, 6, 43, 15, 61],
+     [28, 55, 25, 21, 56],
+     [27, 20, 39, 8, 14]
+];
+
 fn rho(a: StateArray) -> StateArray {
-    fn offset(t: u32) -> u32 {
-        ((t+1) * (t+2) / 2) % 64
-    }
     let (mut x, mut y) = (1, 0);
     let mut res = a; // Since (0,0) is never touched.
-    let mut t = 0;
+    let mut t = 0u32;
     while t < 24 {
-        res[(x,y)] = a[(x,y)].rotate_left(offset(t));
+        res[(x,y)] = a[(x,y)].rotate_left(RHO_OFFSETS[x][y]);
         (x, y) = (y, (2*x + 3*y) % 5);
         t += 1;
     }

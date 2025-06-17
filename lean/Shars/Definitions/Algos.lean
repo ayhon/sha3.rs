@@ -413,18 +413,24 @@ def theta (a : StateArray) : Result StateArray :=
   let res ← DefaultalgosStateArray.default
   theta_loop a res 0#usize
 
-/- [algos::rho::offset]:
-   Source: 'src/algos.rs', lines 164:4-166:5 -/
-def rho.offset (t : U32) : Result U32 :=
-  do
-  let i ← t + 1#u32
-  let i1 ← t + 2#u32
-  let i2 ← i * i1
-  let i3 ← i2 / 2#u32
-  i3 % 64#u32
+/- [algos::RHO_OFFSETS]
+   Source: 'src/algos.rs', lines 163:0-169:2 -/
+@[global_simps]
+def RHO_OFFSETS_body : Result (Array (Array U32 5#usize) 5#usize) :=
+  ok
+    (Array.make 5#usize [
+      Array.make 5#usize [ 0#u32, 36#u32, 3#u32, 41#u32, 18#u32 ],
+      Array.make 5#usize [ 1#u32, 44#u32, 10#u32, 45#u32, 2#u32 ],
+      Array.make 5#usize [ 62#u32, 6#u32, 43#u32, 15#u32, 61#u32 ],
+      Array.make 5#usize [ 28#u32, 55#u32, 25#u32, 21#u32, 56#u32 ],
+      Array.make 5#usize [ 27#u32, 20#u32, 39#u32, 8#u32, 14#u32 ]
+      ])
+@[global_simps, irreducible]
+def RHO_OFFSETS : Array (Array U32 5#usize) 5#usize :=
+  eval_global RHO_OFFSETS_body
 
 /- [algos::rho]: loop 0:
-   Source: 'src/algos.rs', lines 170:4-174:5 -/
+   Source: 'src/algos.rs', lines 175:4-179:5 -/
 def rho_loop
   (a : StateArray) (x : Usize) (y : Usize) (a1 : StateArray) (t : U32) :
   Result StateArray
@@ -433,7 +439,8 @@ def rho_loop
   then
     do
     let i ← IndexalgosStateArrayPairUsizeUsizeU64.index a (x, y)
-    let i1 ← rho.offset t
+    let a2 ← Array.index_usize RHO_OFFSETS x
+    let i1 ← Array.index_usize a2 y
     let i2 ← (↑(core.num.U64.rotate_left i i1) : Result U64)
     let (_, index_mut_back) ←
       IndexMutalgosStateArrayPairUsizeUsizeU64.index_mut a1 (x, y)
@@ -448,13 +455,13 @@ def rho_loop
 partial_fixpoint
 
 /- [algos::rho]:
-   Source: 'src/algos.rs', lines 163:0-176:1 -/
+   Source: 'src/algos.rs', lines 171:0-181:1 -/
 @[reducible]
 def rho (a : StateArray) : Result StateArray :=
   rho_loop a 1#usize 0#usize a 0#u32
 
 /- [algos::pi::inner]: loop 0:
-   Source: 'src/algos.rs', lines 184:12-189:13 -/
+   Source: 'src/algos.rs', lines 189:12-194:13 -/
 def pi.inner_loop
   (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) :
   Result StateArray
@@ -475,14 +482,14 @@ def pi.inner_loop
 partial_fixpoint
 
 /- [algos::pi::inner]:
-   Source: 'src/algos.rs', lines 182:18-190:9 -/
+   Source: 'src/algos.rs', lines 187:18-195:9 -/
 @[reducible]
 def pi.inner
   (res : StateArray) (a : StateArray) (x : Usize) : Result StateArray :=
   pi.inner_loop res a x 0#usize
 
 /- [algos::pi]: loop 0:
-   Source: 'src/algos.rs', lines 181:4-192:5 -/
+   Source: 'src/algos.rs', lines 186:4-197:5 -/
 def pi_loop
   (a : StateArray) (a1 : StateArray) (x : Usize) : Result StateArray :=
   if x < 5#usize
@@ -494,12 +501,12 @@ def pi_loop
 partial_fixpoint
 
 /- [algos::pi]:
-   Source: 'src/algos.rs', lines 178:0-194:1 -/
+   Source: 'src/algos.rs', lines 183:0-199:1 -/
 @[reducible] def pi (a : StateArray) : Result StateArray :=
                pi_loop a a 0#usize
 
 /- [algos::chi::inner]: loop 0:
-   Source: 'src/algos.rs', lines 202:12-207:13 -/
+   Source: 'src/algos.rs', lines 207:12-212:13 -/
 def chi.inner_loop
   (res : StateArray) (a : StateArray) (x : Usize) (y : Usize) :
   Result StateArray
@@ -526,14 +533,14 @@ def chi.inner_loop
 partial_fixpoint
 
 /- [algos::chi::inner]:
-   Source: 'src/algos.rs', lines 200:18-208:9 -/
+   Source: 'src/algos.rs', lines 205:18-213:9 -/
 @[reducible]
 def chi.inner
   (res : StateArray) (a : StateArray) (x : Usize) : Result StateArray :=
   chi.inner_loop res a x 0#usize
 
 /- [algos::chi]: loop 0:
-   Source: 'src/algos.rs', lines 199:4-210:5 -/
+   Source: 'src/algos.rs', lines 204:4-215:5 -/
 def chi_loop
   (a : StateArray) (a1 : StateArray) (x : Usize) : Result StateArray :=
   if x < 5#usize
@@ -545,13 +552,13 @@ def chi_loop
 partial_fixpoint
 
 /- [algos::chi]:
-   Source: 'src/algos.rs', lines 196:0-212:1 -/
+   Source: 'src/algos.rs', lines 201:0-217:1 -/
 @[reducible]
 def chi (a : StateArray) : Result StateArray :=
   chi_loop a a 0#usize
 
 /- [algos::IOTA_RC]
-   Source: 'src/algos.rs', lines 214:0-214:508 -/
+   Source: 'src/algos.rs', lines 219:0-219:508 -/
 @[global_simps]
 def IOTA_RC_body : Result (Array U64 24#usize) :=
   ok
@@ -569,7 +576,7 @@ def IOTA_RC_body : Result (Array U64 24#usize) :=
 def IOTA_RC : Array U64 24#usize := eval_global IOTA_RC_body
 
 /- [algos::iota]:
-   Source: 'src/algos.rs', lines 216:0-220:1 -/
+   Source: 'src/algos.rs', lines 221:0-225:1 -/
 def iota (ir : Usize) (a : StateArray) : Result StateArray :=
   do
   let i ← IndexalgosStateArrayPairUsizeUsizeU64.index a (0#usize, 0#usize)
@@ -580,7 +587,7 @@ def iota (ir : Usize) (a : StateArray) : Result StateArray :=
   ok (index_mut_back i2)
 
 /- [algos::round]:
-   Source: 'src/algos.rs', lines 222:0-229:1 -/
+   Source: 'src/algos.rs', lines 227:0-234:1 -/
 def round (a : StateArray) (ir : Usize) : Result StateArray :=
   do
   let a1 ← theta a
@@ -590,7 +597,7 @@ def round (a : StateArray) (ir : Usize) : Result StateArray :=
   iota ir a13
 
 /- [algos::keccak_p]: loop 0:
-   Source: 'src/algos.rs', lines 233:4-236:5 -/
+   Source: 'src/algos.rs', lines 238:4-241:5 -/
 def keccak_p_loop (s : StateArray) (ir : Usize) : Result StateArray :=
   if ir < 24#usize
   then do
@@ -601,13 +608,13 @@ def keccak_p_loop (s : StateArray) (ir : Usize) : Result StateArray :=
 partial_fixpoint
 
 /- [algos::keccak_p]:
-   Source: 'src/algos.rs', lines 231:0-237:1 -/
+   Source: 'src/algos.rs', lines 236:0-242:1 -/
 @[reducible]
 def keccak_p (s : StateArray) : Result StateArray :=
   keccak_p_loop s 0#usize
 
 /- [algos::sponge_absorb_initial]: loop 0:
-   Source: 'src/algos.rs', lines 243:4-248:5 -/
+   Source: 'src/algos.rs', lines 248:4-253:5 -/
 def sponge_absorb_initial_loop
   (bs : Slice U8) (r : Usize) (s : StateArray) (n : Usize) (i : Usize) :
   Result StateArray
@@ -629,7 +636,7 @@ def sponge_absorb_initial_loop
 partial_fixpoint
 
 /- [algos::sponge_absorb_initial]:
-   Source: 'src/algos.rs', lines 240:0-249:1 -/
+   Source: 'src/algos.rs', lines 245:0-254:1 -/
 def sponge_absorb_initial
   (bs : Slice U8) (r : Usize) (s : StateArray) : Result StateArray :=
   do
@@ -638,7 +645,7 @@ def sponge_absorb_initial
   sponge_absorb_initial_loop bs r s n 0#usize
 
 /- [algos::sponge_absorb_final]:
-   Source: 'src/algos.rs', lines 252:0-265:1 -/
+   Source: 'src/algos.rs', lines 257:0-270:1 -/
 def sponge_absorb_final
   (s : StateArray) (rest : Slice U8) (extra : U8) (r : Usize) :
   Result StateArray
@@ -652,7 +659,7 @@ def sponge_absorb_final
   keccak_p s3
 
 /- [algos::sponge_absorb]:
-   Source: 'src/algos.rs', lines 268:0-273:1 -/
+   Source: 'src/algos.rs', lines 273:0-278:1 -/
 def sponge_absorb
   (bs : Slice U8) (r : Usize) (s : StateArray) (extra : U8) :
   Result StateArray
@@ -668,7 +675,7 @@ def sponge_absorb
   sponge_absorb_final s1 rest extra r
 
 /- [algos::sponge_squeeze]: loop 0:
-   Source: 'src/algos.rs', lines 279:4-288:5 -/
+   Source: 'src/algos.rs', lines 285:4-294:5 -/
 def sponge_squeeze_loop
   (r : Usize) (z : Slice U8) (s : StateArray) (i : Usize) (d : Usize) :
   Result (Slice U8)
@@ -696,14 +703,14 @@ def sponge_squeeze_loop
 partial_fixpoint
 
 /- [algos::sponge_squeeze]:
-   Source: 'src/algos.rs', lines 275:0-289:1 -/
+   Source: 'src/algos.rs', lines 281:0-295:1 -/
 def sponge_squeeze
   (r : Usize) (z : Slice U8) (s : StateArray) : Result (Slice U8) :=
   let d := Slice.len z
   sponge_squeeze_loop r z s 0#usize d
 
 /- [algos::sponge]:
-   Source: 'src/algos.rs', lines 292:0-296:1 -/
+   Source: 'src/algos.rs', lines 298:0-302:1 -/
 def sponge
   (r : Usize) (bs : Slice U8) (output : Slice U8) (extra : U8) :
   Result (Slice U8)
@@ -714,12 +721,12 @@ def sponge
   sponge_squeeze r output s1
 
 /- [algos::SHA3_EXTRA]
-   Source: 'src/algos.rs', lines 298:0-298:35 -/
+   Source: 'src/algos.rs', lines 304:0-304:35 -/
 @[global_simps] def SHA3_EXTRA_body : Result U8 := ok 6#u8
 @[global_simps, irreducible] def SHA3_EXTRA : U8 := eval_global SHA3_EXTRA_body
 
 /- [algos::sha3_224]:
-   Source: 'src/algos.rs', lines 299:0-299:123 -/
+   Source: 'src/algos.rs', lines 305:0-305:123 -/
 def sha3_224 (bs : Slice U8) : Result (Array U8 28#usize) :=
   do
   let output := Array.repeat 28#usize 0#u8
@@ -730,7 +737,7 @@ def sha3_224 (bs : Slice U8) : Result (Array U8 28#usize) :=
   ok (to_slice_mut_back s1)
 
 /- [algos::sha3_256]:
-   Source: 'src/algos.rs', lines 300:0-300:123 -/
+   Source: 'src/algos.rs', lines 306:0-306:123 -/
 def sha3_256 (bs : Slice U8) : Result (Array U8 32#usize) :=
   do
   let output := Array.repeat 32#usize 0#u8
@@ -741,7 +748,7 @@ def sha3_256 (bs : Slice U8) : Result (Array U8 32#usize) :=
   ok (to_slice_mut_back s1)
 
 /- [algos::sha3_384]:
-   Source: 'src/algos.rs', lines 301:0-301:123 -/
+   Source: 'src/algos.rs', lines 307:0-307:123 -/
 def sha3_384 (bs : Slice U8) : Result (Array U8 48#usize) :=
   do
   let output := Array.repeat 48#usize 0#u8
@@ -752,7 +759,7 @@ def sha3_384 (bs : Slice U8) : Result (Array U8 48#usize) :=
   ok (to_slice_mut_back s1)
 
 /- [algos::sha3_512]:
-   Source: 'src/algos.rs', lines 302:0-302:122 -/
+   Source: 'src/algos.rs', lines 308:0-308:122 -/
 def sha3_512 (bs : Slice U8) : Result (Array U8 64#usize) :=
   do
   let output := Array.repeat 64#usize 0#u8
@@ -763,18 +770,18 @@ def sha3_512 (bs : Slice U8) : Result (Array U8 64#usize) :=
   ok (to_slice_mut_back s1)
 
 /- [algos::SHAKE_EXTRA]
-   Source: 'src/algos.rs', lines 304:0-304:35 -/
+   Source: 'src/algos.rs', lines 310:0-310:35 -/
 @[global_simps] def SHAKE_EXTRA_body : Result U8 := ok 31#u8
 @[global_simps, irreducible]
 def SHAKE_EXTRA : U8 := eval_global SHAKE_EXTRA_body
 
 /- [algos::shake128]:
-   Source: 'src/algos.rs', lines 305:0-305:87 -/
+   Source: 'src/algos.rs', lines 311:0-311:87 -/
 def shake128 (bs : Slice U8) (output : Slice U8) : Result (Slice U8) :=
   sponge 168#usize bs output SHAKE_EXTRA
 
 /- [algos::shake256]:
-   Source: 'src/algos.rs', lines 306:0-306:87 -/
+   Source: 'src/algos.rs', lines 312:0-312:87 -/
 def shake256 (bs : Slice U8) (output : Slice U8) : Result (Slice U8) :=
   sponge 136#usize bs output SHAKE_EXTRA
 
