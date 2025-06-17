@@ -2,7 +2,6 @@ import Aeneas
 import Shars.BitVec
 import Shars.Definitions.Algos
 import Sha3.Spec
-/- import Sha3.Utils -/
 import Aeneas.SimpLists.Init
 import Sha3.Facts
 import Init.Data.Vector.Lemmas
@@ -12,8 +11,6 @@ import Shars.Verification.Refinement
 
 set_option maxHeartbeats 1000000
 attribute [-simp] List.getElem!_eq_getElem?_getD List.ofFn_succ
-attribute [simp] Aeneas.Std.Slice.set
-attribute [scalar_tac_simps] Nat.mul_add Nat.mul_sub
 
 attribute [-progress] Aeneas.Std.core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec
 
@@ -396,7 +393,6 @@ theorem algos.StateArray.xor_lane.spec(input : Std.U64) (src : Std.Slice Std.U8)
 theorem algos.StateArray.xor.inner_loop.spec (input : algos.StateArray) (other : Std.Slice Std.U8) (block_idx : Std.Usize)
 : 8*block_idx.val ≤ other.val.length
 → other.toBits.length ≤ input.toBits.length
--- → 8 ∣ other.length
 → ∃ output leftover,
   inner_loop input block_idx other = .ok (output, leftover) ∧
   leftover = other.length / 8 ∧
@@ -529,7 +525,6 @@ theorem algos.StateArray.xor.spec (input : algos.StateArray) (other : Std.Slice 
   simp [←getElem!_pos] at j_idx ⊢
   simp [*, IR.getElem!_xor]
 
--- set_option trace.Progress true in
 theorem algos.StateArray.copy_to_loop.spec
   (src : StateArray) (input : Std.Slice Std.U8) (i : Std.Usize)
 : ∃ output,
