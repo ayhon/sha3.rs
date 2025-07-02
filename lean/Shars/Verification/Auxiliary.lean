@@ -413,7 +413,7 @@ theorem algos.StateArray.xor.inner_loop.spec (input : algos.StateArray) (other :
     split
     case isTrue prev =>
       simp_ifs
-      -- simp_lists -- TODO: Check how much more inefficient it is with `
+      -- simp_lists -- TODO: Check how much more inefficient it is with `simp_lists`. Maybe it's best to just leave `simp_lists`.
       rw [List.getElem!_setSlice!_same]; case h => scalar_tac
     case isFalse not_prev =>
       simp [-not_and, not_and_or] at not_prev
@@ -538,7 +538,7 @@ theorem algos.StateArray.copy_to_loop.spec
         Aeneas.Std.core.ops.index.Index.index,
         Std.core.ops.index.IndexSliceInst,
       ]
-  progress*? by simp [*]; scalar_tac
+  progress* by simp [*]; scalar_tac
   · -- Copying over a chunk from `src` to `input`
     simp +arith [*, Std.Array.toBits, Std.Slice.toBits] at *
     simp_lists

@@ -77,12 +77,6 @@ theorem BitVec.toList_cast(bv: BitVec n)(h: n = m)
 : (bv.cast h).toList = bv.toList
 := by subst h; simp [toList]
 
-/- theorem BitVec.toBitVec_toList(bv: BitVec n) -/
-/- : bv.toList.toBitVec = bv.cast (by simp) -/
-/- := by -/
-/-   ext i i_idx -/
-/-   simp [BitVec.toList] -/
-
 theorem BitVec.toList_inj{bv bv2: BitVec n}
 : bv.toList = bv2.toList → bv = bv2
 := by

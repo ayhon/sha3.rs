@@ -3,7 +3,6 @@ import Shars.ArrayExtract
 import Shars.Verification.Utils.Notation
 import Shars.Verification.Utils.List
 import Sha3.Utils
--- import Shars.Verification.Utils.Extract
 
 
 set_option maxHeartbeats 100000
@@ -101,7 +100,7 @@ theorem Array.foldl_mk(ls: List α)
   simp only [List.size_toArray, List.foldl_toArray']
 
 @[elab_as_elim, cases_eliminator]
-def Array.cases_extract(k: Nat)[NeZero k]
+theorem Array.cases_extract(k: Nat)[NeZero k]
   {motive : Array α → Prop}
   (onSmall: (rest: Array α) → (small: rest.size < k) → motive rest)
   (onBig: (chunk: Vector α k) → (rest: Array α) → motive (chunk.toArray ++ rest))

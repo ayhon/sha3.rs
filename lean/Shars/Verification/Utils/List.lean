@@ -307,16 +307,6 @@ theorem List.setWidth_of_length_eq[Inhabited α](ls: List α)(n: Nat)
 : ls.length = n → ls.setWidth n = ls
 := by rintro rfl; simp [setWidth]
 
-/- @[simp] -/
-/- theorem List.toList_toBitVec(ls: List Bool) -/
-/- : ls.toBitVec.toList = ls -/
-/- := by -/
-/-   simp [toBitVec, BitVec.toList, finRange] -/
-/-   apply List.ext_getElem -/
-/-   · simp [toBitVec, BitVec.toList] -/
-/-   intros -/
-/-   simp -/
-
 @[simp] abbrev List.uniform(n: Nat)(ls: List (List α)) := ∀ xs ∈ ls, xs.length = n
 
 @[simp] theorem List.uniform_cons(n: Nat)(hd: List α)(tl: List (List α))
@@ -337,19 +327,19 @@ theorem List.length_flatten_of_uniform{n: Nat}{ls: List (List Bool)}
     · simp
     · intros; simp [*]
 
-def List.matrix_idx(ls: List (List α))(i: Nat)(acc: Nat := 0): Nat × Nat :=
+def List.matrixIdx(ls: List (List α))(i: Nat)(acc: Nat := 0): Nat × Nat :=
   match ls with
   | [] => (acc, i)
   | hd :: tl =>
     if i < hd.length then
       (acc, i)
     else
-      List.matrix_idx tl (i - hd.length) (acc + 1)
+      List.matrixIdx tl (i - hd.length) (acc + 1)
 
 theorem List.acc_le_matrix_idx_1(ls: List (List α))(i acc: Nat)
-: acc ≤ (ls.matrix_idx i acc).1
+: acc ≤ (ls.matrixIdx i acc).1
 := by
-  unfold List.matrix_idx
+  unfold List.matrixIdx
   match ls with
   | [] => simp
   | hd :: tl =>
@@ -361,7 +351,7 @@ theorem List.acc_le_matrix_idx_1(ls: List (List α))(i acc: Nat)
       omega
 
 theorem List.getElem!_flatten (ls: List (List Bool))(i: Nat)(acc: Nat := 0)
-: let (x,y) := ls.matrix_idx i acc
+: let (x,y) := ls.matrixIdx i acc
   ls.flatten[i]! = (ls[x - acc]!)[y]!
 := by
   simp only
@@ -370,9 +360,9 @@ theorem List.getElem!_flatten (ls: List (List Bool))(i: Nat)(acc: Nat := 0)
   | hd :: tl =>
     simp
     if i < hd.length then
-      simp [List.matrix_idx, *]
+      simp [List.matrixIdx, *]
     else
-      simp [List.matrix_idx, *]
+      simp [List.matrixIdx, *]
       simp_lists
       rw [List.getElem!_flatten tl (acc := acc + 1)]
       conv => enter [2, 1, 2, 2]; rw [show acc = (acc + 1) - 1 from rfl]
@@ -387,7 +377,7 @@ theorem List.matrix_idx_of_uniform{ls: List (List Bool)}
   (acc: Nat := 0)
 : n > 0
 → ∀ i < ls.flatten.length,
-  ls.matrix_idx i acc = (acc + i / n, i % n)
+  ls.matrixIdx i acc = (acc + i / n, i % n)
 := by
   intro n_pos i i_idx
   simp [List.length_flatten_of_uniform uniform] at i_idx
@@ -398,10 +388,10 @@ theorem List.matrix_idx_of_uniform{ls: List (List Bool)}
     replace ⟨len_hd, uniform_tl⟩ := uniform
     if h: i < hd.length then
       rw [len_hd] at h
-      simp [*, matrix_idx, Nat.div_eq_of_lt, Nat.mod_eq_of_lt]
+      simp [*, List.matrixIdx, Nat.div_eq_of_lt, Nat.mod_eq_of_lt]
     else
       rw [len_hd] at h
-      simp [*, matrix_idx]
+      simp [*, List.matrixIdx]
       have ih := List.matrix_idx_of_uniform (n := n) (i := i - n) (ls := tl) (acc := acc + 1)
       rw [ih]
       · simp +arith [Nat.div_sub_self]
@@ -432,11 +422,6 @@ theorem List.uniform_zero{ls: List (List α)}
     rw [uniform_tl x x_in]
     simp
 
-/- example(a b: Nat): a < b → a % b = a := by exact? -/
-/- example(a b: Nat): a < b → a / b = 0 := by exact? -/
-/- example(a b: Nat): a ≥ b → a % b = (a - b) % b := by exact fun a_1 => Nat.mod_eq_sub_mod a_1 -/
-
-/- set_option diagnostics true in -/
 theorem List.getElem!_flatten_of_uniform {ls: List (List Bool)}{n: Nat}
 : ls.uniform n
 → ∀ i, ls.flatten[i]! = (ls[i / n]!)[i % n]!
