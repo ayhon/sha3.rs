@@ -7,7 +7,7 @@ namespace DecideForallLTNested
 /- #count_heartbeats in -/
 /- example: ∀ j, j < 10 → j ∈ List.range 10 := by decide -/
 
-instance probably_slow
+instance move_non_LT_condition_to_conclusion
   (C: Nat → Prop)(P: Nat → Prop)
  [cond: DecidablePred C]:[Decidable (∀ i, P i ∨ (¬ C i) )] → Decidable (∀ i, C i → P i)
  | isTrue h => isTrue <| by
@@ -20,7 +20,7 @@ instance probably_slow
       intro i
       cases cond i <;> simp [*]
 
-instance finish
+instance forall_with_LT_condition_on_left_conjunct
   (C: Nat → Prop)(P: Nat → Prop)(n: Nat)
   [cond: DecidablePred C]: [Decidable (∀ i, i < n → P i ∨ C i)] → Decidable (∀ i, (i < n → P i) ∨ C i)
   | isTrue h => isTrue <| by
@@ -41,7 +41,7 @@ instance finish
         | isFalse h =>
           simpa [h, lt] using neg i
 
-instance push_down_until_lt
+instance pop_non_LT_condition_to_conjunction
   (C P T: Nat → Prop)
   [decC: DecidablePred C][decT: DecidablePred T]
   : [Decidable (∀ i, P i ∨ (C i ∨ (¬ T i)))] → Decidable (∀ i, (T i → P i) ∨ C i)
@@ -84,4 +84,3 @@ instance push_down_until_lt
 /- example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j > 5 → j < 7 → j = 6 := by decide -/
 /- #count_heartbeats in -/
 /- example: ∀ (j: Nat), j > 2 → j > 3 → j > 4 → j > 5 → j > 6 → j < 8 → j = 7 := by decide -/
-
