@@ -1,7 +1,7 @@
 cargo-features = ["edition2024"]
 
 [package]
-name = "sha3"
+name = "shars"
 version = "0.1.0"
 edition = "2024"
 
