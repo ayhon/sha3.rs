@@ -317,52 +317,8 @@ mod tests {
 
     use super::*;
     use crate::simple;
+    use crate::{compress_u8, compress_u64, decompress_u8, decompress_u64};
 
-    fn compress_u64(a: &[bool]) -> Vec<u64> {
-        let width = 64;
-        let mut res = Vec::with_capacity(a.len() / width);
-        for lane_bits in a.chunks_exact(width) {
-            let mut lane: u64 = 0;
-            for (i, bit) in lane_bits.iter().enumerate() {
-                lane = lane | (u64::from(*bit) << i);
-            }
-            res.push(lane);
-        }
-        return res;
-    }
-    fn compress_u8(a: &[bool]) -> Vec<u8> {
-        let mut res = Vec::with_capacity(a.len() / 8);
-        for byte_bits in a.chunks_exact(8) {
-            let mut lane: u8 = 0;
-            for (i, bit) in byte_bits.iter().enumerate() {
-                lane = lane | (u8::from(*bit) << i);
-            }
-            res.push(lane);
-        }
-        return res;
-    }
-    fn decompress_u64(a: &[u64]) -> Vec<bool> {
-        let width = 64;
-        let mut res = Vec::with_capacity(a.len() * width);
-        for byte in a {
-            for i in 0..width {
-                let bit = (byte >> i) % 2 == 1;
-                res.push(bit);
-            }
-        }
-        return res;
-    }
-    fn decompress_u8(a: &[u8]) -> Vec<bool> {
-        let width = 8;
-        let mut res = Vec::with_capacity(a.len() * width);
-        for byte in a {
-            for i in 0..width {
-                let bit = (byte >> i) % 2 == 1;
-                res.push(bit);
-            }
-        }
-        return res;
-    }
     #[test] fn theta_works() {
         let buf: [u64; 25] = [1851876684, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let expected = "4c65616e000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc0000000000000000000000004c65616e000000000000000000000000000000000000000098cac2dc00000000";
