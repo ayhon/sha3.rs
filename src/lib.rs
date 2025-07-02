@@ -1,6 +1,5 @@
 #![feature(random)]
 pub mod algos;
-pub mod shars;
 pub mod simple;
 
 pub fn get_vec_of_bits(s: &str) -> Vec<bool> {
