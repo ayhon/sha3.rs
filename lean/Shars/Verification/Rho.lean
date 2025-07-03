@@ -20,33 +20,16 @@ open Std.alloc.vec
 -- TODO: Move this elsewhere
 instance[Inhabited T]: Inhabited (Aeneas.Std.Array T n) where default := ⟨List.replicate n.val default, by simp⟩
 
-@[scalar_tac_simps]
-def Spec.Keccak.ρ.sequence: Array (Fin 5 × Fin 5) := #[(1,0), (0,2), (2,1), (1,2), (2,3), (3,3), (3,0), (0,1), (1,3), (3,1), (1,4), (4,4), (4,0), (0,3), (3,4), (4,3), (3,2), (2,2), (2,0), (0,4), (4,2), (2,4), (4,1), (1,1)]
-@[simp] theorem Spec.Keccak.ρ.size_sequence: ρ.sequence.size = 24 := by simp [sequence]
+@[simp]
+def Spec.Keccak.ρ.sequence: Nat → (Fin 5 × Fin 5)
+| 0 => (1, 0)
+| t+1 => let (x,y) := sequence t; (y, 2*x + 3*y)
 
-@[simp] def Spec.Keccak.ρ.sequence.step(t: Nat)
-  (t_succ_idx: t + 1 < 24)
-: let (x,y) := sequence[t]!
-  let (x', y') := sequence[t+1]!
-  x'.val = y.val ∧ y'.val = (2*x + 3*y).val
-:= by simp [Nat.add_lt_iff_lt_sub_right] at t_succ_idx;
-      revert t; native_decide
-
-theorem algos.RHO_OFFSETS.spec'(t: Fin 24)
-: let (x,y) := Spec.Keccak.ρ.sequence[t]!
-  algos.RHO_OFFSETS.val[x]!.val[y]!.val = Spec.Keccak.ρ.offset (l:= 6) t.val
+theorem algos.RHO_OFFSETS.spec(t: Nat)
+: (t_idx: t < 24)
+→ let (x,y) := Spec.Keccak.ρ.sequence t
+  algos.RHO_OFFSETS.val[x.val]!.val[y.val]!.val = Spec.Keccak.ρ.offset (l:= 6) t
 := by revert t; native_decide
-
-theorem algos.RHO_OFFSETS.spec(t x y: Nat)
-  (t_idx: t < 24)
-: Spec.Keccak.ρ.sequence[t]!.1.val = x
-→ Spec.Keccak.ρ.sequence[t]!.2.val = y
-→ algos.RHO_OFFSETS.val[x]!.val[y]!.val = Spec.Keccak.ρ.offset (l:= 6) t
-:= by
-  intro x_val y_val
-  have:= algos.RHO_OFFSETS.spec' ⟨t, t_idx⟩
-  simpa [*] using this
-
 
 def IR.rho.bitmangling(state res: List Bool)(x y offset: Nat)(z_start: Nat := 0): List Bool := Id.run do
   let mut res := res
@@ -195,7 +178,7 @@ theorem algos.rho_loop.spec(input res : StateArray) (x y : Std.Usize) (t: Std.U3
 : t.val <= 24
 → x.val < 5
 → y.val < 5
-→ ((h: t.val < 24) → Spec.Keccak.ρ.sequence[t.val]!.1.val = x.val ∧ Spec.Keccak.ρ.sequence[t.val]!.2.val = y.val )
+→ (Spec.Keccak.ρ.sequence t.val).1.val = x.val ∧ (Spec.Keccak.ρ.sequence t.val).2.val = y.val
 → ∃ output,
   rho_loop input x y res t = .ok output ∧
   output.toBits = IR.rho.loop input.toBits res.toBits t.val x.val y.val
@@ -203,12 +186,6 @@ theorem algos.rho_loop.spec(input res : StateArray) (x y : Std.Usize) (t: Std.U3
   intro t_lt x_lt y_lt sequence_prev
   rw [rho_loop]
   progress*
-  · simp [*]
-    intro t_succ_idx
-    have prev:= sequence_prev (by omega)
-    have:= Spec.Keccak.ρ.sequence.step t (by assumption)
-    simpa [prev, Fin.eq_of_val_eq, Fin.val_add, Fin.val_mul] using this
-
   · simp only [*, Std.Array.toBits]
     simp only [IR.rho.loop, Id.run, Fin.isValue, Id.pure_eq, Id.bind_eq,
       Std.Range.forIn_eq_forIn_range', Std.Range.size, List.forIn_yield_eq_foldl]
@@ -216,8 +193,8 @@ theorem algos.rho_loop.spec(input res : StateArray) (x y : Std.Usize) (t: Std.U3
     simp only [List.range'_advance_left (show 24 - t.val > 0 from by scalar_tac)]
     simp only [Fin.isValue, List.foldl_cons, Fin.val_natCast]
     congr 2
-    · have prev:= sequence_prev (by scalar_tac)
-      have := algos.RHO_OFFSETS.spec t x y (by scalar_tac) prev.left prev.right
+    · have := algos.RHO_OFFSETS.spec t (by scalar_tac)
+      simp only [sequence_prev] at this
       simp [*]
       apply List.ext_toBits <;> simp [List.length_toBits, IR.rho.length_bitmangling]
       intro x' y' z'
