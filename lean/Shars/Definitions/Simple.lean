@@ -16,7 +16,7 @@ namespace simple
 /- [simple::W]
    Source: 'src/simple.rs', lines 4:0-4:23 -/
 @[global_simps] def W_body : Result Usize := 1#usize <<< L
-@[global_simps, irreducible] def W : Usize := eval_global W_body
+@[global_simps, irreducible] def W : Usize := eval_global W_body (by native_decide)
 
 /- [simple::B]
    Source: 'src/simple.rs', lines 5:0-5:24 -/
@@ -24,7 +24,7 @@ namespace simple
 def B_body : Result Usize := do
                              let i ← 5#usize * 5#usize
                              i * W
-@[global_simps, irreducible] def B : Usize := eval_global B_body
+@[global_simps, irreducible] def B : Usize := eval_global B_body (by native_decide)
 
 /- [simple::NR]
    Source: 'src/simple.rs', lines 6:0-6:21 -/

@@ -7,8 +7,10 @@ name = "Shars"
 
 [[require]]
 name = "aeneas"
-path = "/home/ayhon/inria/aeneas/backends/lean"
+git = { url = "https://github.com/ayhon/aeneas", subDir = "backends/lean" }
+rev = "c54602cd49422a2e9dfe10447eb50a90ba59f32d"
 
 [[require]]
 name = "Sha3"
-path = "/home/ayhon/inria/sha3-lean"
+git = "https://github.com/ayhon/sha3.lean"
+rev = "6a3fbab9edcdbf7c304d87790264eceb452325f3"

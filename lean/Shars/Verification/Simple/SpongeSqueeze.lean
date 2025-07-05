@@ -178,8 +178,6 @@ theorem simple.sponge_squeeze.panic_free.refinement(r i: Std.Usize)
     simp_ifs
     simp [*]
     simp_ifs
-    simp [List.setSlice!, *]
-    simp_lists
 termination_by dst.length - i
 decreasing_by scalar_decr_tac
 
